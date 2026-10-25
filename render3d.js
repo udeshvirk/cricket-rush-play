@@ -1,0 +1,418 @@
+// Cricket Rush: the 3D view (three.js). The game itself (index.html) runs the match and the 2D guides;
+// this file only draws the world from the game's state: the same camera, ball and player joints.
+// The game calls Cricket3D(G) with a view of its state; it returns null if WebGL isn't available (the game keeps its 2D picture).
+window.Cricket3D = function (G) {
+  'use strict';
+  if (!window.THREE) return null;
+  const { touch, LIGHTS, BOARDS, STAND_IN, STAND_OUT, STAND_H, PITCH, CREASE, ROPE, lerp, people, ballPos, cam, deg, $ } = G;
+  const T = THREE;
+  if (T.ColorManagement) T.ColorManagement.legacyMode = false;   // colours given as '#hex' are sRGB, as in CSS
+  const view = document.getElementById('view3d');
+  let renderer;
+  try {
+    renderer = new T.WebGLRenderer({ canvas: view, antialias: true, powerPreference: 'high-performance' });
+  } catch (e) { view.style.display = 'none'; return null; }
+
+  // ---------------------------------------------------------------- settings
+  const KEY = 'cricket-rush-gfx';
+  let on = true;
+  try { on = localStorage.getItem(KEY) !== '2d'; } catch (e) {}
+  const lowEnd = touch;   // phones and tablets: lighter shadows and resolution
+  renderer.outputEncoding = T.sRGBEncoding;
+  renderer.toneMapping = T.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = T.PCFSoftShadowMap;
+
+  const scene = new T.Scene();
+  scene.fog = new T.Fog(0x0a1024, 160, 420);
+  const camera = new T.PerspectiveCamera(30, 1, 0.3, 900);
+  const V = (a) => new T.Vector3(a[0], a[1], a[2]);
+
+  // canvas textures
+  function canvasTex(w, h, draw, repeat) {
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    draw(c.getContext('2d'), w, h);
+    const t = new T.CanvasTexture(c);
+    t.encoding = T.sRGBEncoding;
+    t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    if (repeat) { t.wrapS = t.wrapT = T.RepeatWrapping; }
+    return t;
+  }
+  const glowTex = canvasTex(128, 128, (g, w) => {
+    const r = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2);
+    r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.2, 'rgba(255,248,225,0.55)'); r.addColorStop(1, 'rgba(255,240,200,0)');
+    g.fillStyle = r; g.fillRect(0, 0, w, w);
+  });
+  const blobTex = canvasTex(64, 64, (g, w) => {
+    const r = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2);
+    r.addColorStop(0, 'rgba(0,0,0,0.55)'); r.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = r; g.fillRect(0, 0, w, w);
+  });
+  const noise = (g, w, h, n, cols, size) => {
+    for (let i = 0; i < n; i++) { g.fillStyle = cols[(Math.random() * cols.length) | 0]; g.fillRect(Math.random() * w, Math.random() * h, size, size); }
+  };
+
+  // ---------------------------------------------------------------- sky
+  const sky = new T.Mesh(new T.SphereGeometry(600, 32, 16), new T.ShaderMaterial({
+    side: T.BackSide, depthWrite: false, fog: false,
+    uniforms: { top: { value: new T.Color(0x02050f) }, mid: { value: new T.Color(0x0c1638) }, bot: { value: new T.Color(0x1d2c5e) } },
+    vertexShader: 'varying float h; void main(){ h = normalize(position).y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+    fragmentShader: 'uniform vec3 top; uniform vec3 mid; uniform vec3 bot; varying float h; void main(){ vec3 c = h > 0.12 ? mix(mid, top, smoothstep(0.12, 0.6, h)) : mix(bot, mid, smoothstep(-0.05, 0.12, h)); gl_FragColor = vec4(c, 1.0); }',
+  }));
+  scene.add(sky);
+  {
+    const n = 900, pos = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, e = 0.18 + Math.random() * 1.2, r = 560;
+      pos[i * 3] = Math.cos(e) * Math.sin(a) * r; pos[i * 3 + 1] = Math.sin(e) * r; pos[i * 3 + 2] = Math.cos(e) * Math.cos(a) * r;
+    }
+    const g = new T.BufferGeometry(); g.setAttribute('position', new T.BufferAttribute(pos, 3));
+    scene.add(new T.Points(g, new T.PointsMaterial({ color: 0xc8d2ff, size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.7 })));
+  }
+
+  // ---------------------------------------------------------------- lights: four floodlight towers
+  scene.add(new T.HemisphereLight(0x8ea4ff, 0x1c2e1c, 0.35));
+  const lightDirs = [];
+  LIGHTS.forEach((L, i) => {
+    const top = [L[0], 46, L[2]];
+    const d = new T.DirectionalLight(0xfff3dd, i === 0 ? 1.15 : 0.32);
+    d.position.set(top[0], top[1], top[2]); d.target.position.set(0, 0, 8);
+    scene.add(d); scene.add(d.target);
+    if (i === 0) {
+      d.castShadow = true;
+      const s = lowEnd ? 1024 : 2048;
+      d.shadow.mapSize.set(s, s);
+      const c = d.shadow.camera; c.left = -60; c.right = 60; c.top = 60; c.bottom = -60; c.near = 20; c.far = 260;
+      d.shadow.bias = -0.0004; d.shadow.normalBias = 0.03;
+    }
+    lightDirs.push(d);
+    // the tower and its lamp bank
+    const tower = new T.Mesh(new T.CylinderGeometry(0.5, 1.1, 46, 8), new T.MeshStandardMaterial({ color: 0x222a44, roughness: 0.8, metalness: 0.3 }));
+    tower.position.set(L[0], 23, L[2]); scene.add(tower);
+    const bank = new T.Mesh(new T.BoxGeometry(11, 6, 0.8), new T.MeshBasicMaterial({ map: canvasTex(128, 64, (g, w, h) => {
+      g.fillStyle = '#2a3150'; g.fillRect(0, 0, w, h);
+      for (let y = 0; y < 4; y++) for (let x = 0; x < 8; x++) { g.fillStyle = '#fffbe8'; g.fillRect(4 + x * 15.5, 4 + y * 15, 11, 11); }
+    }) }));
+    bank.position.set(top[0], top[1] + 2, top[2]); bank.lookAt(0, 0, 8); scene.add(bank);
+    const glow = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: 0xfff4d8, transparent: true, depthWrite: false, blending: T.AdditiveBlending, fog: false }));
+    glow.position.copy(bank.position).multiplyScalar(0.985); glow.scale.set(60, 60, 1); scene.add(glow);
+  });
+
+  // ---------------------------------------------------------------- ground
+  const outside = new T.Mesh(new T.CircleGeometry(300, 48), new T.MeshStandardMaterial({ color: 0x0b160f, roughness: 1 }));
+  outside.rotation.x = -Math.PI / 2; outside.position.y = -0.06; scene.add(outside);
+
+  const grassTex = canvasTex(1024, 1024, (g, w, h) => {
+    g.fillStyle = '#2b7d37'; g.fillRect(0, 0, w, h);
+    const k = w / (BOARDS * 2), band = 4 * k;
+    for (let x = 0; x < w; x += band * 2) { g.fillStyle = '#25722f'; g.fillRect(x, 0, band, h); }
+    noise(g, w, h, 26000, ['rgba(255,255,255,0.035)', 'rgba(0,0,0,0.05)', 'rgba(20,60,20,0.08)'], 2);
+    const r = g.createRadialGradient(w / 2, h / 2, w * 0.1, w / 2, h / 2, w / 2);
+    r.addColorStop(0, 'rgba(255,255,220,0.06)'); r.addColorStop(1, 'rgba(0,0,0,0.25)');
+    g.fillStyle = r; g.fillRect(0, 0, w, h);
+  });
+  const field = new T.Mesh(new T.CircleGeometry(BOARDS, 128), new T.MeshStandardMaterial({ map: grassTex, roughness: 0.95 }));
+  field.rotation.x = -Math.PI / 2; field.receiveShadow = true; scene.add(field);
+  const apron = new T.Mesh(new T.RingGeometry(BOARDS, STAND_IN + 0.5, 128, 1), new T.MeshStandardMaterial({ color: 0x1d5a2a, roughness: 1 }));
+  apron.rotation.x = -Math.PI / 2; apron.position.y = -0.01; apron.receiveShadow = true; scene.add(apron);
+
+  // the square and the pitch (with the creases painted on)
+  const PW = 3.7, PL = PITCH + 3.2, z0 = -1.6;
+  const pitchTex = canvasTex(256, 2048, (g, w, h) => {
+    const X = x => (x + PW / 2) / PW * w, Z = z => (z - z0) / PL * h;
+    g.clearRect(0, 0, w, h);
+    g.fillStyle = '#c7b185'; g.fillRect(X(-1.52), 0, X(1.52) - X(-1.52), h);
+    g.fillStyle = '#d3bf95'; g.fillRect(X(-1.2), Z(2), X(1.2) - X(-1.2), Z(PITCH - 2) - Z(2));
+    g.save(); g.beginPath(); g.rect(X(-1.52), 0, X(1.52) - X(-1.52), h); g.clip();
+    noise(g, w, h, 9000, ['rgba(120,90,50,0.10)', 'rgba(255,255,240,0.06)'], 2); g.restore();
+    // worn patches where the bowlers land and the batters stand
+    for (const zc of [1.2, 3.5, PITCH - 1.2, PITCH - 3.5]) { g.fillStyle = 'rgba(130,100,60,0.16)'; g.beginPath(); g.ellipse(X(0), Z(zc), w * 0.16, h * 0.035, 0, 0, Math.PI * 2); g.fill(); }
+    g.fillStyle = '#f6f2e6';
+    const t = 0.05;   // crease lines are 5 cm wide
+    const line = (xa, za, xb, zb) => za === zb ? g.fillRect(X(xa), Z(za - t / 2), X(xb) - X(xa), Z(za + t / 2) - Z(za - t / 2))
+                                               : g.fillRect(X(xa - t / 2), Z(za), X(xa + t / 2) - X(xa - t / 2), Z(zb) - Z(za));
+    for (const z of [0, PITCH]) line(-1.32, z, 1.32, z);
+    for (const z of [CREASE, PITCH - CREASE]) line(-1.83, z, 1.83, z);
+    for (const x of [-1.32, 1.32]) { line(x, -1.22, x, CREASE); line(x, PITCH - CREASE, x, PITCH + 1.22); }
+  });
+  pitchTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  const pitch = new T.Mesh(new T.PlaneGeometry(PW, PL), new T.MeshStandardMaterial({ map: pitchTex, roughness: 0.85, transparent: true, depthWrite: false }));
+  pitch.rotation.x = -Math.PI / 2; pitch.position.set(0, 0.008, z0 + PL / 2); pitch.receiveShadow = true; scene.add(pitch);
+
+  // rope, advertising boards, sight screens
+  const rope = new T.Mesh(new T.TorusGeometry(ROPE, 0.09, 6, 220), new T.MeshStandardMaterial({ color: 0xf2eee2, roughness: 0.6 }));
+  rope.rotation.x = Math.PI / 2; rope.position.y = 0.09; scene.add(rope);
+  const ADS = [['CRICKET RUSH', '#0a1024', '#ffb02e'], ['FLOODLIGHT FM', '#13306e', '#f3efe4'], ['SIXER COLA', '#c43a4d', '#ffffff'],
+               ['GULLY BANK', '#0f5b57', '#f6d36b'], ['NIGHT OWL TEA', '#ffb02e', '#0a1024'], ['SPIN KING', '#5a47b8', '#ffffff']];
+  const adTex = canvasTex(3072, 64, (g, w, h) => {
+    const pw = w / ADS.length;
+    ADS.forEach(([t, bg, fg], i) => {
+      g.fillStyle = bg; g.fillRect(i * pw, 0, pw, h);
+      g.fillStyle = fg; g.font = '900 40px "Big Shoulders Display", Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(t, i * pw + pw / 2, h / 2 + 2);
+    });
+  }, true);
+  adTex.repeat.set(-4, 1);
+  const boards = new T.Mesh(new T.CylinderGeometry(BOARDS, BOARDS, 1, 160, 1, true), new T.MeshBasicMaterial({ map: adTex, side: T.BackSide }));
+  boards.position.y = 0.5; scene.add(boards);
+  for (const z of [-(BOARDS - 1.2), PITCH + BOARDS - 21.3]) {
+    const ss = new T.Mesh(new T.BoxGeometry(9, 3.6, 0.4), new T.MeshBasicMaterial({ color: 0x05070d }));
+    ss.position.set(0, 1.8, z); scene.add(ss);
+  }
+
+  // ---------------------------------------------------------------- stands and crowd
+  let standMesh;
+  {
+    const pts = [new T.Vector2(STAND_IN, 0), new T.Vector2(STAND_IN, 1.4)];
+    const steps = 14;
+    for (let i = 0; i < steps; i++) {
+      const r = lerp(STAND_IN, STAND_OUT, i / steps), r2 = lerp(STAND_IN, STAND_OUT, (i + 1) / steps), y = lerp(1.4, STAND_H, (i + 1) / steps);
+      pts.push(new T.Vector2(r, y), new T.Vector2(r2, y));
+    }
+    pts.push(new T.Vector2(STAND_OUT + 0.5, STAND_H + 5), new T.Vector2(STAND_OUT + 8, STAND_H + 6));
+    const seats = canvasTex(1024, 512, (g, w, h) => {
+      g.fillStyle = '#141c36'; g.fillRect(0, 0, w, h);
+      const cols = ['#cfc8b8', '#d9963a', '#2aa59b', '#c9475a', '#6c78bd', '#d8bc5e', '#3a6fd8', '#8a93ad', '#e6e1d6', '#5a3f30'];
+      for (let i = 0; i < 26000; i++) {
+        g.globalAlpha = 0.35 + Math.random() * 0.45; g.fillStyle = cols[(Math.random() * cols.length) | 0];
+        const x = Math.random() * w, y = Math.random() * h; g.fillRect(x, y, 2 + Math.random() * 2, 3 + Math.random() * 2);
+      }
+      g.globalAlpha = 1;
+    }, true);
+    seats.repeat.set(30, 1);
+    const stand = new T.Mesh(new T.LatheGeometry(pts, 96), new T.MeshBasicMaterial({ map: seats, side: T.DoubleSide, color: 0x9aa3c0 }));
+    scene.add(stand); standMesh = stand;
+    // a lit strip along the front of the upper deck
+    const strip = new T.Mesh(new T.CylinderGeometry(STAND_OUT + 0.6, STAND_OUT + 0.6, 0.5, 96, 1, true), new T.MeshBasicMaterial({ color: 0x2ed3c6, side: T.BackSide }));
+    strip.position.y = STAND_H + 0.8; scene.add(strip);
+  }
+  const standMat = standMesh.material;
+  const standBase = standMat.color.clone();
+  function updateCrowd() {
+    const c = G.cheer > 0.02 ? G.cheer * (0.55 + 0.45 * Math.sin(G.clock * 18)) : 0;
+    standMat.color.copy(standBase).multiplyScalar(1 + c * 0.45);
+    if (standMat.map) standMat.map.offset.y = c ? Math.sin(G.clock * 24) * 0.004 * c : 0;
+  }
+
+  // ---------------------------------------------------------------- stumps
+  const stumpMat = new T.MeshStandardMaterial({ color: 0xf1e6c8, roughness: 0.5 });
+  const stumpGeo = new T.CylinderGeometry(0.018, 0.018, 0.71, 8); stumpGeo.translate(0, 0.355, 0);
+  const bailGeo = new T.CylinderGeometry(0.011, 0.011, 0.11, 6); bailGeo.rotateZ(Math.PI / 2);
+  function makeStumps(z) {
+    const s = [], b = [];
+    for (let i = -1; i <= 1; i++) { const m = new T.Mesh(stumpGeo, stumpMat); m.position.set(i * 0.1, 0, z); m.castShadow = true; scene.add(m); s.push(m); }
+    for (const x of [-0.055, 0.055]) { const m = new T.Mesh(bailGeo, stumpMat); m.position.set(x, 0.72, z); m.castShadow = true; scene.add(m); b.push(m); }
+    return { s, b, z };
+  }
+  const stumpsNear = makeStumps(0), stumpsFar = makeStumps(PITCH);
+
+  // ---------------------------------------------------------------- the ball
+  const ballMesh = new T.Mesh(new T.SphereGeometry(0.045, 14, 10), new T.MeshBasicMaterial({ color: 0xffffff }));
+  scene.add(ballMesh);
+  const ballGlow = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: 0xffffff, transparent: true, opacity: 0.7, depthWrite: false, blending: T.AdditiveBlending }));
+  ballGlow.scale.set(0.55, 0.55, 1); scene.add(ballGlow);
+  const blobGeo = new T.PlaneGeometry(1, 1); blobGeo.rotateX(-Math.PI / 2);
+  const blobMat = new T.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false });
+  const ballShadow = new T.Mesh(blobGeo, blobMat); ballShadow.scale.set(0.2, 1, 0.2); scene.add(ballShadow);
+  const TRAIL = 12, trailPos = new Float32Array(TRAIL * 3), trailGeo = new T.BufferGeometry();
+  trailGeo.setAttribute('position', new T.BufferAttribute(trailPos, 3));
+  const trail = new T.Line(trailGeo, new T.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, blending: T.AdditiveBlending }));
+  trail.frustumCulled = false; scene.add(trail);
+
+  // ---------------------------------------------------------------- players
+  const SKIN = ['#8d5a3b', '#b07650', '#c99872', '#e0b48f', '#6b4029'].map(c => new T.MeshStandardMaterial({ color: c, roughness: 0.7 }));
+  const hash = s => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
+  const mat = c => new T.MeshStandardMaterial({ color: c, roughness: 0.7 });
+  const M3 = {
+    batShirt: mat('#3d7dff'), batPants: mat('#173f99'), bowlShirt: mat('#ffd23c'), bowlPants: mat('#0e6b40'),
+    helmet: new T.MeshStandardMaterial({ color: 0x173f99, roughness: 0.35, metalness: 0.2 }), grille: new T.MeshStandardMaterial({ color: 0x9aa0aa, metalness: 0.8, roughness: 0.3 }),
+    pads: mat('#f6f4ee'), gloves: mat('#f6f4ee'), shoe: mat('#f0f0f0'), sole: mat('#222222'),
+    blade: new T.MeshStandardMaterial({ color: 0xe3c58e, roughness: 0.55 }), grip: mat('#26221e'), cap: mat('#ffd23c'),
+  };
+  const cyl = new T.CylinderGeometry(1, 1, 1, 10);                 // limbs: scaled to (r, length, r)
+  const torsoGeo = new T.CylinderGeometry(0.5, 0.4, 1, 14);       // scaled by a basis
+  const sph = new T.SphereGeometry(1, 14, 10);
+  const helmetGeo = new T.SphereGeometry(1, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.56);
+  const box = new T.BoxGeometry(1, 1, 1);
+  const UP = new T.Vector3(0, 1, 0);
+  const va = new T.Vector3(), vb = new T.Vector3(), vd = new T.Vector3(), vs = new T.Vector3(), vf = new T.Vector3(), vu = new T.Vector3();
+  const mB = new T.Matrix4();
+
+  function part(geo, m, parent) { const x = new T.Mesh(geo, m); x.castShadow = true; x.matrixAutoUpdate = true; parent.add(x); return x; }
+  function seg(mesh, a, b, r) {
+    va.set(a[0], a[1], a[2]); vb.set(b[0], b[1], b[2]); vd.subVectors(vb, va);
+    const L = vd.length() || 1e-3;
+    mesh.position.addVectors(va, vb).multiplyScalar(0.5);
+    mesh.quaternion.setFromUnitVectors(UP, vd.divideScalar(L));
+    mesh.scale.set(r, L, r);
+  }
+  function ball3(mesh, p, sx, sy, sz) { mesh.position.set(p[0], p[1], p[2]); mesh.scale.set(sx, sy === undefined ? sx : sy, sz === undefined ? sx : sz); }
+
+  class Person {
+    constructor() {
+      const g = this.g = new T.Group(); scene.add(g);
+      const P = (geo, m) => part(geo, m, g);
+      this.thighL = P(cyl, M3.batPants); this.thighR = P(cyl, M3.batPants);
+      this.shinL = P(cyl, M3.batPants); this.shinR = P(cyl, M3.batPants);
+      this.kneeL = P(sph, M3.batPants); this.kneeR = P(sph, M3.batPants);
+      this.footL = P(box, M3.shoe); this.footR = P(box, M3.shoe);
+      this.hips = P(sph, M3.batPants);
+      this.torso = P(torsoGeo, M3.batShirt); this.torso.matrixAutoUpdate = false;
+      this.upL = P(cyl, M3.batShirt); this.upR = P(cyl, M3.batShirt); this.foreL = P(cyl, SKIN[2]); this.foreR = P(cyl, SKIN[2]);
+      this.elbL = P(sph, M3.batShirt); this.elbR = P(sph, M3.batShirt);
+      this.handL = P(sph, SKIN[2]); this.handR = P(sph, SKIN[2]);
+      this.neck = P(cyl, SKIN[2]); this.head = P(sph, SKIN[2]);
+      this.helmet = P(helmetGeo, M3.helmet); this.grille = P(box, M3.grille);
+      this.cap = P(helmetGeo, M3.cap); this.brim = P(box, M3.cap);
+      this.handle = P(cyl, M3.grip); this.blade = P(box, M3.blade);
+    }
+    set(pr) {
+      const j = pr.j, bat = pr.team === 'bat', keeper = !!pr.keeper;
+      const shirt = bat ? M3.batShirt : M3.bowlShirt, pants = bat ? M3.batPants : M3.bowlPants;
+      const skin = SKIN[hash(pr.pid || 'x') % SKIN.length];
+      this.g.visible = true;
+      // legs: batters and the keeper wear pads on the shins
+      const padded = bat || keeper;
+      for (const [th, sh, kn, ft, hip, knee, foot] of [[this.thighL, this.shinL, this.kneeL, this.footL, j.hipL, j.kneeL, j.footL],
+                                                      [this.thighR, this.shinR, this.kneeR, this.footR, j.hipR, j.kneeR, j.footR]]) {
+        th.material = pants; seg(th, hip, knee, 0.075);
+        sh.material = padded ? M3.pads : pants; seg(sh, knee, [foot[0], foot[1] + 0.07, foot[2]], padded ? 0.075 : 0.058);
+        kn.material = padded ? M3.pads : pants; ball3(kn, knee, padded ? 0.085 : 0.065);
+        ft.position.set(foot[0], foot[1] + 0.04, foot[2]); ft.scale.set(0.1, 0.08, 0.26);
+      }
+      // body: a tapered trunk set from the shoulder line and the spine
+      vu.set(j.neck[0] - j.pelvis[0], j.neck[1] - j.pelvis[1], j.neck[2] - j.pelvis[2]);
+      const Lt = vu.length(); vu.normalize();
+      vs.set(j.shL[0] - j.shR[0], j.shL[1] - j.shR[1], j.shL[2] - j.shR[2]);
+      vs.addScaledVector(vu, -vs.dot(vu)).normalize();
+      vf.crossVectors(vs, vu).normalize();
+      mB.makeBasis(vs.clone().multiplyScalar(0.44), vu.clone().multiplyScalar(Lt * 1.02), vf.clone().multiplyScalar(0.25));
+      mB.setPosition((j.pelvis[0] + j.neck[0]) / 2, (j.pelvis[1] + j.neck[1]) / 2 + 0.02, (j.pelvis[2] + j.neck[2]) / 2);
+      this.torso.matrix.copy(mB); this.torso.material = shirt;
+      this.hips.material = pants; this.hips.position.set(j.pelvis[0], j.pelvis[1] - 0.02, j.pelvis[2]);
+      this.hips.quaternion.setFromRotationMatrix(mB.makeBasis(vs, vu, vf)); this.hips.scale.set(0.2, 0.13, 0.13);
+      // arms
+      for (const [up, fo, el, hd, sh, elb, hand] of [[this.upL, this.foreL, this.elbL, this.handL, j.shL, j.elL, j.handL],
+                                                    [this.upR, this.foreR, this.elbR, this.handR, j.shR, j.elR, j.handR]]) {
+        up.material = shirt; seg(up, sh, elb, 0.055);
+        fo.material = bat || keeper ? shirt : skin; seg(fo, elb, hand, 0.045);
+        el.material = shirt; ball3(el, elb, 0.055);
+        hd.material = (bat && pr.gloves) || keeper ? M3.gloves : skin; ball3(hd, hand, (bat && pr.gloves) || keeper ? 0.058 : 0.045);
+      }
+      // head, then a helmet (batters, keeper) or a cap
+      const hp = j.head;
+      this.neck.material = skin; seg(this.neck, j.neck, [hp[0], hp[1] - 0.08, hp[2]], 0.045);
+      this.head.material = skin; ball3(this.head, hp, 0.105, 0.12, 0.11);
+      const lookDir = pr.look ? vd.set(pr.look[0], pr.look[1], pr.look[2]) : vd.copy(vf).setY(0).normalize();
+      const yaw = Math.atan2(lookDir.x, lookDir.z);
+      const helm = bat || keeper;
+      this.helmet.visible = this.grille.visible = helm; this.cap.visible = this.brim.visible = !helm;
+      if (helm) {
+        this.helmet.position.set(hp[0], hp[1] - 0.01, hp[2]); this.helmet.rotation.set(-0.15, yaw, 0, 'YXZ'); this.helmet.scale.set(0.13, 0.14, 0.135);
+        this.grille.position.set(hp[0] + Math.sin(yaw) * 0.12, hp[1] - 0.04, hp[2] + Math.cos(yaw) * 0.12); this.grille.rotation.set(0, yaw, 0);
+        this.grille.scale.set(0.17, 0.1, 0.02);
+      } else {
+        this.cap.material = this.brim.material = M3.cap;
+        this.cap.position.set(hp[0], hp[1] + 0.02, hp[2]); this.cap.rotation.set(0, yaw, 0); this.cap.scale.set(0.115, 0.1, 0.12);
+        this.brim.position.set(hp[0] + Math.sin(yaw) * 0.12, hp[1] + 0.03, hp[2] + Math.cos(yaw) * 0.12); this.brim.rotation.set(0.12, yaw, 0, 'YXZ');
+        this.brim.scale.set(0.16, 0.012, 0.12);
+      }
+      // the bat
+      const hasBat = !!pr.bat;
+      this.handle.visible = this.blade.visible = hasBat;
+      if (hasBat) {
+        const h = pr.bat.hands, t = pr.bat.tip, k = 0.32, mid = [h[0] + (t[0] - h[0]) * k, h[1] + (t[1] - h[1]) * k, h[2] + (t[2] - h[2]) * k];
+        seg(this.handle, [h[0] - (t[0] - h[0]) * 0.06, h[1] - (t[1] - h[1]) * 0.06, h[2] - (t[2] - h[2]) * 0.06], mid, 0.017);
+        seg(this.blade, mid, t, 1); this.blade.scale.x = 0.108; this.blade.scale.z = 0.045;
+      }
+    }
+  }
+  const pool = [];
+  for (let i = 0; i < 14; i++) pool.push(new Person());
+  const blobs = [];
+  for (let i = 0; i < 14; i++) { const b = new T.Mesh(blobGeo, blobMat); b.scale.set(0.9, 1, 0.9); b.position.y = 0.012; scene.add(b); blobs.push(b); }
+
+  // ---------------------------------------------------------------- each frame
+  let lastW = 0, lastH = 0, maxRatio = lowEnd ? 1.5 : 2;
+  function size() {
+    const w = view.clientWidth, h = view.clientHeight;
+    if (w === lastW && h === lastH) return;
+    lastW = w; lastH = h;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxRatio));
+    renderer.setSize(w, h, false);
+  }
+  // keep it smooth on slow devices: if frames take too long for a few seconds, draw fewer pixels, then drop the shadows
+  let qLevel = 0, qT = 0, qN = 0, qLast = 0;
+  function quality(now) {
+    if (qLast) { const dt = now - qLast; if (dt < 250) { qT += dt; qN++; } }   // ignore pauses (hidden tab)
+    qLast = now;
+    if (qN < 150) return;
+    const avg = qT / qN; qT = 0; qN = 0;
+    if (avg > 38 && qLevel < 2) {
+      qLevel++;
+      if (qLevel === 1) { maxRatio = 1; lastW = 0; }
+      if (qLevel === 2) { renderer.shadowMap.enabled = false; scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); }
+    }
+  }
+  function teamColours() {
+    const bat = G.inn ? G.inn.bat : null, bowl = G.inn ? G.inn.bowl : null;
+    M3.batShirt.color.set(bat ? bat.col : '#3d7dff'); M3.batPants.color.set(bat ? bat.dark : '#173f99');
+    M3.helmet.color.set(bat ? (bat.helmet || bat.dark) : '#173f99');
+    M3.bowlShirt.color.set(bowl ? bowl.col : '#ffd23c'); M3.bowlPants.color.set(bowl ? bowl.dark : '#0e6b40');
+    M3.cap.color.set(bowl ? bowl.dark : '#0e6b40');
+  }
+  function setStumps(st, tilt, bails) {
+    st.s.forEach((m, i) => { const a = tilt ? tilt[i] : 0; m.rotation.set(-a, 0, -(i - 1) * 0.25 * a); });
+    st.b.forEach((m, i) => {
+      if (bails && bails[i]) { m.position.set(bails[i].p[0], bails[i].p[1], bails[i].p[2]); m.rotation.y = bails[i].p[1] > 0.05 ? G.clock * 9 : 0.4; }
+      else { m.position.set(i ? 0.055 : -0.055, 0.72, st.z); m.rotation.y = 0; }
+    });
+  }
+
+  function render3d() {
+    quality(performance.now());
+    size();
+    // the game's camera (the same maths as its 2D projection, so the guides line up)
+    const aspect = G.W / Math.max(1, G.H);
+    let fov = cam.fov;
+    if (aspect < 1.35) fov = 2 * Math.atan(Math.tan(cam.fov * deg / 2) / (aspect / 1.35)) / deg;
+    camera.fov = fov; camera.aspect = aspect; camera.updateProjectionMatrix();
+    camera.position.set(cam.pos[0], cam.pos[1], cam.pos[2]); camera.lookAt(cam.tgt[0], cam.tgt[1], cam.tgt[2]);
+
+    teamColours();
+    updateCrowd();
+    setStumps(stumpsNear, G.ball && G.ball.tilt ? G.ball.tilt.map(a => a * (G.ball.tiltT || 0)) : null, G.ball && G.ball.bails);
+    setStumps(stumpsFar, null, null);
+
+    const list = G.M ? people() : [];
+    pool.forEach((p, i) => { if (i < list.length) p.set(list[i]); else p.g.visible = false; });
+    blobs.forEach((b, i) => { b.visible = i < list.length; if (b.visible) b.position.set(list[i].at[0], 0.012, list[i].at[2]); });
+
+    const bp = G.M ? ballPos() : null;
+    ballMesh.visible = ballGlow.visible = ballShadow.visible = !!bp;
+    if (bp) {
+      ballMesh.position.set(bp[0], bp[1], bp[2]); ballGlow.position.copy(ballMesh.position);
+      ballShadow.position.set(bp[0], 0.013, bp[2]);
+    }
+    const tr = G.ball && G.ball.trail;
+    trail.visible = !!(tr && tr.length > 1);
+    if (trail.visible) {
+      for (let i = 0; i < TRAIL; i++) { const q = tr[Math.max(0, tr.length - TRAIL + i)] || tr[0]; trailPos[i * 3] = q[0]; trailPos[i * 3 + 1] = q[1]; trailPos[i * 3 + 2] = q[2]; }
+      trailGeo.attributes.position.needsUpdate = true;
+    }
+    if (bp && G.ball && G.ball.play) { const t2 = G.ball.trail || (G.ball.trail = []); t2.push(bp.slice()); if (t2.length > 12) t2.shift(); }
+    renderer.render(scene, camera);
+  }
+
+  // ---------------------------------------------------------------- switch
+  function apply() { view.style.display = on ? 'block' : 'none'; const b = $('gfxToggle'); if (b) b.textContent = on ? 'Graphics: 3D' : 'Graphics: simple'; }
+  const btn = $('gfxToggle');
+  if (btn) {
+    btn.hidden = false;
+    btn.addEventListener('click', () => { on = !on; try { localStorage.setItem(KEY, on ? '3d' : '2d'); } catch (e) {} apply(); });
+  }
+  view.addEventListener('webglcontextlost', e => { e.preventDefault(); on = false; apply(); });
+  apply();
+  return { active: () => on, render: render3d };
+};

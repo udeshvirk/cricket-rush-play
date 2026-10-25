@@ -36,7 +36,8 @@
   body { background: var(--night); color: var(--chalk); font-family: var(--ui); overflow: hidden;
          -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   #game { position: relative; width: 100%; height: 100%; overflow: hidden; touch-action: none; }
-  #view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #view, #view3d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #view3d { pointer-events: none; }
 
   /* ---------- HUD ---------- */
   .hud { position: absolute; pointer-events: none; }
@@ -283,6 +284,7 @@
 <body>
 
 <div id="game">
+  <canvas id="view3d" aria-hidden="true"></canvas>
   <canvas id="view"></canvas>
 
   <div id="chase" class="hud">
@@ -425,6 +427,7 @@
         <button class="btn ghost" id="autoOver" type="button">Auto-play this over</button>
         <button class="btn ghost" id="autoInn" type="button">Simulate this innings</button>
         <button class="btn ghost" id="autoBowlToggle" type="button">Computer bowls for me</button>
+        <button class="btn ghost" id="gfxToggle" type="button" hidden>Graphics: 3D</button>
         <button class="btn ghost" id="quit" type="button">Quit match</button>
       </div>
       <div class="tabs" id="pauseTabs"></div>
@@ -447,6 +450,8 @@
   </div>
 </div>
 
+<script src="vendor/three.min.js"></script>
+<script src="render3d.js"></script>
 <script>
 (() => {
 'use strict';
@@ -2090,6 +2095,13 @@ function ballPos() {
 function render() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   setupCamera();
+  if (R3D && R3D.active()) {   // the 3D view draws the world; this canvas only adds the guides on top
+    ctx.clearRect(0, 0, W, H);
+    R3D.render();
+    drawAimGuide(); drawBounceMark(); drawSwipe();
+    renderMap(ballPos());
+    return;
+  }
   drawScenery(clock);
   drawAimGuide(); drawBounceMark();
 
@@ -2099,74 +2111,17 @@ function render() {
   push([0, 0, 0], () => drawStumps(0, ball && ball.tilt ? ball.tilt.map(a => a * (ball.tiltT || 0)) : null, ball && ball.bails));
   push([0, 0, PITCH], () => drawStumps(PITCH, null, null));
 
-  // batters: striker (with the swing) and the non-striker, who run on a hit
-  const helmet = helmetCol();
-  const runT = ball && ball.play && ball.play.res.kind === 'runs' ? ball.play.t - 0.35 : -1;
-  const runs = ball && ball.play ? ball.play.res.runs : 0;
-  const runner = (startZ, x) => {
-    if (runT <= 0 || !(ball.play.res.kind === 'runs') || runs === 0) return null;
-    const total = runs, dur = t => t < RUN1 ? t / RUN1 : 1 + (t - RUN1) / RUN_MORE;
-    const prog = Math.min(total, dur(runT));
-    const leg = Math.floor(prog), f = prog - leg;
-    const from = (leg % 2 === 0) ? startZ : (startZ < 10 ? PITCH - 0.6 : 0.6);
-    const to = (leg % 2 === 0) ? (startZ < 10 ? PITCH - 0.6 : 0.6) : startZ;
-    const z = prog >= total ? (total % 2 ? (startZ < 10 ? PITCH - 0.6 : 0.6) : startZ) : lerp(from, to, smooth(f));
-    return { pos: [x, 0, z], face: to > from ? 0 : Math.PI, moving: prog < total };
-  };
-  const sr = runner(0.6, 0.55);
-  push(sr ? sr.pos : [0.6 + guard, 0, 0.75], () => {
-    shadow(sr ? sr.pos : [0.6 + guard, 0, 0.75 + (ball && ball.charge ? STEP * smooth(clamp(ball.charge.t / 0.4, 0, 1)) : 0)], 0.45);
-    if (sr) {
-      const j = figure(sr.pos, sr.face, { run: sr.moving ? 1 : 0, phase: clock * 11 });
-      drawFigure(j, KIT.bat, { pads: KIT.pads, helmet });
-      const hand = j.handR; line3(hand, add(hand, [0, -0.7, sr.face ? -0.3 : 0.3]), 0.07, '#d9b77a');
-    } else {
-      let { j, hands, tip } = batterPose(ball && ball.swing ? ball.swing : null);
-      if (ball && ball.left) {   // bat up out of the way; duck under a bouncer
-        const k = clamp((ball.t - ball.left) / 0.2, 0, 1);
-        hands = lerp3(hands, [0.52, 1.5, 0.78], k); tip = lerp3(tip, [0.62, 2.1, 0.55], k);
-        j.handL = add(hands, [0, 0.04, 0.05]); j.handR = add(hands, [0, -0.04, -0.03]);
-        j.elL = lerp3(j.shL, j.handL, 0.5); j.elR = lerp3(j.shR, j.handR, 0.5);
-        if (ball.atBat[1] > 1.45) for (const n of ['neck', 'head', 'shL', 'shR', 'elL', 'elR', 'handL', 'handR']) j[n][1] -= 0.45 * k;
-        if (ball.atBat[1] > 1.45) { hands = add(hands, [0, -0.45 * k, 0]); tip = add(tip, [0, -0.45 * k, 0]); }
-      }
-      if (guard) { const o = [guard, 0, 0]; for (const n in j) j[n] = add(j[n], o); hands = add(hands, o); tip = add(tip, o); }
-      if (ball && ball.charge) {   // down the pitch
-        const dz = STEP * smooth(clamp(ball.charge.t / 0.4, 0, 1)), o = [0, 0, dz];
-        for (const n in j) j[n] = add(j[n], o);
-        hands = add(hands, o); tip = add(tip, o);
-        if (ball.charge.t < 0.4) { const ph = Math.sin(ball.charge.t * 24) * 0.12; j.footL[2] += ph; j.footR[2] -= ph; j.kneeL[2] += ph / 2; j.kneeR[2] -= ph / 2; }
-      }
-      drawFigure(j, KIT.bat, { pads: KIT.pads, helmet, gloves: '#ffffff' });
-      line3(hands, lerp3(hands, tip, 0.3), 0.04, '#3a2a1a');
-      line3(lerp3(hands, tip, 0.3), tip, 0.1, '#d9b77a');
-    }
-  });
-  const ns = runner(PITCH - 0.6, -1.5);
-  const nsPos = ns ? ns.pos : [-1.7, 0, PITCH - 0.4];
-  push(nsPos, () => {
-    shadow(nsPos, 0.45);
-    const j = figure(nsPos, ns ? ns.face : Math.PI, { run: ns && ns.moving ? 1 : 0, phase: clock * 11 + 1 });
-    drawFigure(j, KIT.bat, { pads: KIT.pads, helmet });
-    line3(j.handL, add(j.handL, [0.1, -0.75, ns && ns.face === 0 ? 0.25 : -0.25]), 0.07, '#d9b77a');
-  });
-
-  // bowler
+  // the players, drawn back to front
   const fc = fieldCol(), fd = fieldDark();
-  const afterHit = !!(ball && ball.play);   // once the ball is hit, the bowler is one of the fielders
-  if (!afterHit) {
-    const bw = bowlerState();
-    push(bw.pos, () => { shadow(bw.pos, 0.45); drawFigure(bw.j, fc, { legs: fd }); });
-  }
-  // fielders
-  for (const f of fielders) {
-    if (f.bowler && !afterHit) continue;
-    push(f.pos, () => {
-      shadow(f.pos, 0.45);
-      const j = figure(f.pos, f.face, { run: f.run, phase: f.phase, crouch: f.crouch });
-      drawFigure(j, fc, { legs: fd, gloves: f.keeper ? '#f3efe4' : null, pads: f.keeper ? '#f3efe4' : null, helmet: f.keeper ? fd : null });
-    });
-  }
+  for (const pr of people()) push(pr.at, () => {
+    shadow(pr.at, 0.45);
+    if (pr.team === 'bat') {
+      drawFigure(pr.j, KIT.bat, { pads: KIT.pads, helmet: pr.helmet, gloves: pr.gloves ? '#ffffff' : null });
+      if (pr.bat.carry) line3(pr.bat.hands, pr.bat.tip, 0.07, '#d9b77a');
+      else { line3(pr.bat.hands, lerp3(pr.bat.hands, pr.bat.tip, 0.3), 0.04, '#3a2a1a'); line3(lerp3(pr.bat.hands, pr.bat.tip, 0.3), pr.bat.tip, 0.1, '#d9b77a'); }
+    } else if (pr.keeper) drawFigure(pr.j, fc, { legs: fd, gloves: '#f3efe4', pads: '#f3efe4', helmet: fd });
+    else drawFigure(pr.j, fc, { legs: fd });
+  });
   // the ball
   const bp = ballPos();
   if (bp) {
@@ -2196,6 +2151,67 @@ function render() {
   }
   drawSwipe();
   renderMap(bp);
+}
+
+// everyone on the field this frame: joints (world metres), team ('bat' | 'bowl'), bat, keeper; `at` = where they stand
+function people() {
+  const out = [], helmet = helmetCol();
+  const runT = ball && ball.play && ball.play.res.kind === 'runs' ? ball.play.t - 0.35 : -1;
+  const runs = ball && ball.play ? ball.play.res.runs : 0;
+  const runner = (startZ, x) => {
+    if (runT <= 0 || !(ball.play.res.kind === 'runs') || runs === 0) return null;
+    const total = runs, dur = t => t < RUN1 ? t / RUN1 : 1 + (t - RUN1) / RUN_MORE;
+    const prog = Math.min(total, dur(runT));
+    const leg = Math.floor(prog), f = prog - leg;
+    const from = (leg % 2 === 0) ? startZ : (startZ < 10 ? PITCH - 0.6 : 0.6);
+    const to = (leg % 2 === 0) ? (startZ < 10 ? PITCH - 0.6 : 0.6) : startZ;
+    const z = prog >= total ? (total % 2 ? (startZ < 10 ? PITCH - 0.6 : 0.6) : startZ) : lerp(from, to, smooth(f));
+    return { pos: [x, 0, z], face: to > from ? 0 : Math.PI, moving: prog < total };
+  };
+  const pid = k => inn && inn.bat.players[k] ? inn.bat.players[k].name : 'x';
+  // the striker: in his stance and swing, or running
+  const sr = runner(0.6, 0.55);
+  if (sr) {
+    const j = figure(sr.pos, sr.face, { run: sr.moving ? 1 : 0, phase: clock * 11 });
+    const hand = j.handR;
+    out.push({ j, at: sr.pos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look: null,
+               bat: { carry: true, hands: hand, tip: add(hand, [0, -0.7, sr.face ? -0.3 : 0.3]) } });
+  } else {
+    let { j, hands, tip } = batterPose(ball && ball.swing ? ball.swing : null);
+    if (ball && ball.left) {   // bat up out of the way; duck under a bouncer
+      const k = clamp((ball.t - ball.left) / 0.2, 0, 1);
+      hands = lerp3(hands, [0.52, 1.5, 0.78], k); tip = lerp3(tip, [0.62, 2.1, 0.55], k);
+      j.handL = add(hands, [0, 0.04, 0.05]); j.handR = add(hands, [0, -0.04, -0.03]);
+      j.elL = lerp3(j.shL, j.handL, 0.5); j.elR = lerp3(j.shR, j.handR, 0.5);
+      if (ball.atBat[1] > 1.45) for (const n of ['neck', 'head', 'shL', 'shR', 'elL', 'elR', 'handL', 'handR']) j[n][1] -= 0.45 * k;
+      if (ball.atBat[1] > 1.45) { hands = add(hands, [0, -0.45 * k, 0]); tip = add(tip, [0, -0.45 * k, 0]); }
+    }
+    let at = [0.6 + guard, 0, 0.75];
+    if (guard) { const o = [guard, 0, 0]; for (const n in j) j[n] = add(j[n], o); hands = add(hands, o); tip = add(tip, o); }
+    if (ball && ball.charge) {   // down the pitch
+      const dz = STEP * smooth(clamp(ball.charge.t / 0.4, 0, 1)), o = [0, 0, dz];
+      for (const n in j) j[n] = add(j[n], o);
+      hands = add(hands, o); tip = add(tip, o); at = add(at, o);
+      if (ball.charge.t < 0.4) { const ph = Math.sin(ball.charge.t * 24) * 0.12; j.footL[2] += ph; j.footR[2] -= ph; j.kneeL[2] += ph / 2; j.kneeR[2] -= ph / 2; }
+    }
+    out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look: [0, 0, 1], bat: { carry: false, hands, tip } });
+  }
+  // the non-striker
+  const ns = runner(PITCH - 0.6, -1.5);
+  const nsPos = ns ? ns.pos : [-1.7, 0, PITCH - 0.4];
+  const nj = figure(nsPos, ns ? ns.face : Math.PI, { run: ns && ns.moving ? 1 : 0, phase: clock * 11 + 1 });
+  out.push({ j: nj, at: nsPos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.non : 1), look: null,
+             bat: { carry: true, hands: nj.handL, tip: add(nj.handL, [0.1, -0.75, ns && ns.face === 0 ? 0.25 : -0.25]) } });
+  // the bowler, then the fielders (once the ball is hit, the bowler is one of the fielders)
+  const afterHit = !!(ball && ball.play);
+  const fid = w => inn && w !== null && w !== undefined && inn.bowl.players[w] ? inn.bowl.players[w].name : 'f' + w;
+  if (!afterHit) { const bw = bowlerState(); out.push({ j: bw.j, at: bw.pos, team: 'bowl', pid: fid(inn ? inn.bowler : 0), look: null }); }
+  for (const f of fielders) {
+    if (f.bowler && !afterHit) continue;
+    out.push({ j: figure(f.pos, f.face, { run: f.run, phase: f.phase, crouch: f.crouch }), at: f.pos, team: 'bowl', keeper: !!f.keeper,
+               pid: fid(f.who), look: null });
+  }
+  return out;
 }
 
 // what you swiped: an arrow under your finger, the shot's name, and the direction drawn on the field
@@ -2528,6 +2544,15 @@ $('again').addEventListener('click', () => { audio(); if (M && M.mode === 'match
 $('toMenu').addEventListener('click', toMenu);
 document.addEventListener('gesturestart', e => e.preventDefault());   // no pinch zoom on iPad
 
+// the 3D view (render3d.js): it reads the game's state through these
+let R3D = null;
+try {
+  R3D = window.Cricket3D ? window.Cricket3D({
+    touch, LIGHTS, BOARDS, STAND_IN, STAND_OUT, STAND_H, PITCH, CREASE, ROPE, lerp, people, ballPos, cam, deg, $,
+    get cheer() { return cheer; }, get clock() { return clock; }, get inn() { return inn; }, get M() { return M; },
+    get ball() { return ball; }, get W() { return W; }, get H() { return H; },
+  }) : null;
+} catch (e) { R3D = null; }
 newFielders();
 renderRecord();
 requestAnimationFrame(frame);
