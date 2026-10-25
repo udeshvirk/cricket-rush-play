@@ -186,6 +186,9 @@
   .opt.on { border-color: var(--amber); background: rgba(255, 176, 46, 0.2); }
   .opt:disabled { opacity: 0.35; cursor: default; }
   .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
+  /* our own team badges: a small two-colour shield with the team code */
+  .badge { display: inline-grid; place-items: center; width: 30px; height: 34px; margin-right: 8px; vertical-align: middle;
+           clip-path: polygon(0 0, 100% 0, 100% 62%, 50% 100%, 0 62%); font: 800 10px var(--ui); letter-spacing: 0.04em; padding-bottom: 6px; }
   .result { font-family: var(--display); font-weight: 900; font-size: clamp(48px, 10vw, 84px); line-height: 0.9; }
   .result.win { color: var(--teal); }
   .result.lose { color: var(--red); }
@@ -501,35 +504,55 @@ const BOWL_TYPES = {
   L: { name: 'Leg-spin', speed: [75, 87], start: 27, turn: -1, vars: ['Stock', 'Flighted', 'Quicker', 'Googly'] },
 };
 
-// made-up teams: [name, batting 0-100, bowling style, bowling 0-100]; wk = the wicketkeeper's place in the order
+// Country sides in our own kit colours (no official badges or logos). Player names are made up, styled on today's squads.
+// [name, batting 0-100, bowling style, bowling 0-100]; wk = the wicketkeeper's place in the order
 const TEAMS = [
-  { id: 'bolts', name: 'Bay City Bolts', short: 'BCB', col: '#2ed3c6', dark: '#127a72', wk: 5, players: [
-    ['K. Mehra', 84], ['T. Okafor', 78], ['D. Fernando', 86, 'O', 42], ['S. Hollis', 75, 'M', 50], ['R. Bakshi', 70, 'L', 60],
-    ['J. Whitlock', 66], ['A. Qureshi', 52, 'F', 80], ['M. Donnelly', 40, 'M', 72], ['P. Sandhu', 27, 'L', 78],
-    ['L. Barrow', 19, 'F', 82], ['N. Achterberg', 12, 'F', 76]] },
-  { id: 'royals', name: 'Northfield Royals', short: 'NFR', col: '#a08bff', dark: '#5a47b8', wk: 5, players: [
-    ['H. Pemberton', 80], ['V. Iyengar', 83], ['C. Ndlovu', 79, 'M', 42], ['O. Lindqvist', 77], ['F. Ansari', 71, 'O', 64],
-    ['G. Haverford', 64], ['B. Castellino', 50, 'F', 77], ['Y. Desai', 36, 'L', 75], ['E. Kowalski', 26, 'M', 73],
-    ['I. Raza', 18, 'F', 81], ['W. Duffield', 11, 'F', 78]] },
-  { id: 'strikers', name: 'Sunset Strikers', short: 'SUN', col: '#ffb02e', dark: '#b86d0b', wk: 5, players: [
-    ['A. Varghese', 81], ['L. Mwangi', 79], ['R. Castillo', 84, 'M', 40], ['Z. Hamid', 74, 'O', 57], ['T. Brennan', 72],
-    ['K. Nakamura', 63], ['S. Oduya', 55, 'F', 77], ['D. Pillai', 37, 'L', 79], ['J. Farrow', 25, 'M', 72],
-    ['M. Otieno', 17, 'F', 80], ['C. Reyes', 10, 'F', 76]] },
-  { id: 'rhinos', name: 'Riverside Rhinos', short: 'RVR', col: '#ff4d5e', dark: '#a3202f', wk: 5, players: [
-    ['G. Banerjee', 82], ['E. Harland', 77], ['S. Venkat', 85, 'O', 45], ['A. Moreau', 73, 'M', 52], ['T. Joshi', 70, 'L', 61],
-    ['B. Ellery', 65], ['F. Dlamini', 48, 'F', 79], ['R. Sutcliffe', 39, 'M', 70], ['H. Prakash', 28, 'O', 77],
-    ['K. Lowe', 18, 'F', 83], ['V. Nair', 12, 'F', 74]] },
-  { id: 'tigers', name: 'Highland Tigers', short: 'HLT', col: '#4da3ff', dark: '#1f5fa8', wk: 5, players: [
-    ['M. Strachan', 83], ['A. Siddiqui', 79], ['J. Ferreira', 82, 'M', 44], ['R. Talwar', 75], ['C. Abernethy', 69, 'L', 62],
-    ['D. Mukherjee', 64], ['L. Asante', 53, 'F', 78], ['N. Grewal', 38, 'O', 75], ['P. Calloway', 27, 'M', 72],
-    ['S. Kariuki', 19, 'F', 80], ['T. Halvorsen', 11, 'F', 77]] },
-  { id: 'comets', name: 'Coastline Comets', short: 'CLC', col: '#a6e05a', dark: '#5e8f22', wk: 5, players: [
-    ['R. Dsouza', 80], ['B. Okonkwo', 81], ['I. Haddad', 83, 'O', 40], ['E. Prentice', 76, 'M', 48], ['S. Rajan', 71, 'L', 63],
-    ['F. Kingsley', 62], ['A. Bose', 51, 'F', 77], ['G. Whitfield', 38, 'M', 71], ['K. Menon', 26, 'O', 76],
-    ['J. Abara', 18, 'F', 81], ['O. Lyle', 11, 'F', 79]] },
+  { id: 'ind', name: 'India', short: 'IND', col: '#3d7dff', dark: '#173f99', wk: 4, players: [
+    ['S. Gilmann', 85], ['Y. Jaiswar', 82], ['V. Kohlee', 88], ['S. Yadhav', 80], ['R. Pantt', 79],
+    ['H. Pandiya', 74, 'F', 72], ['R. Jadeyja', 68, 'L', 78], ['A. Patell', 58, 'L', 76], ['K. Yadev', 22, 'L', 80],
+    ['J. Bumrar', 14, 'F', 92], ['M. Siraaj', 12, 'F', 80]] },
+  { id: 'aus', name: 'Australia', short: 'AUS', col: '#ffd23c', dark: '#0e6b40', wk: 4, players: [
+    ['T. Hedd', 84], ['M. Marsch', 78, 'M', 55], ['S. Smithe', 86], ['M. Labuchane', 80], ['J. Inglish', 76],
+    ['G. Maxwel', 75, 'O', 62], ['C. Greene', 72, 'F', 66], ['P. Cummings', 40, 'F', 88], ['M. Starke', 32, 'F', 87],
+    ['A. Zamper', 15, 'L', 80], ['J. Hazelwod', 12, 'F', 86]] },
+  { id: 'eng', name: 'England', short: 'ENG', col: '#ef4b5b', dark: '#1c2a66', wk: 4, players: [
+    ['P. Salte', 80], ['B. Duckitt', 80], ['J. Roote', 87], ['H. Brooke', 85], ['J. Butlar', 82],
+    ['B. Stoaks', 76, 'F', 70], ['W. Jacques', 70, 'O', 60], ['B. Carsey', 25, 'F', 76], ['A. Rashed', 30, 'L', 82],
+    ['J. Archar', 28, 'F', 87], ['M. Wode', 18, 'F', 84]] },
+  { id: 'pak', name: 'Pakistan', short: 'PAK', col: '#3cc35a', dark: '#0d5c2a', wk: 3, players: [
+    ['S. Ayube', 78, 'O', 50], ['F. Zammaan', 79], ['B. Azaam', 86], ['M. Rizwaan', 82], ['S. Aghaa', 75, 'O', 58],
+    ['F. Ashraff', 62, 'F', 70], ['S. Khaan', 64, 'L', 76], ['S. Afridee', 30, 'F', 87], ['N. Shahh', 22, 'F', 84],
+    ['H. Rauff', 14, 'F', 82], ['A. Ahmedd', 10, 'L', 80]] },
+  { id: 'rsa', name: 'South Africa', short: 'RSA', col: '#2fd6a3', dark: '#0c6b50', wk: 0, players: [
+    ['Q. de Cok', 82], ['A. Markrum', 81, 'O', 55], ['R. Rickleton', 78], ['T. Stubbes', 76], ['H. Klaasan', 84],
+    ['D. Millar', 79], ['M. Jansan', 62, 'F', 80], ['K. Maharajh', 28, 'L', 80], ['K. Rabadaa', 25, 'F', 88],
+    ['L. Ngidee', 12, 'F', 80], ['T. Shamsee', 10, 'L', 78]] },
+  { id: 'nz', name: 'New Zealand', short: 'NZ', col: '#9fb3c8', dark: '#1a1f2b', wk: 4, players: [
+    ['D. Conwey', 80], ['R. Ravindr', 82, 'L', 60], ['K. Williamsen', 86], ['D. Mitchel', 80], ['T. Lathem', 77],
+    ['G. Philipps', 76, 'O', 58], ['M. Santnar', 58, 'L', 78], ['K. Jamiesen', 30, 'F', 80], ['M. Henri', 25, 'F', 84],
+    ['L. Fergusen', 15, 'F', 84], ['W. Rourke', 10, 'F', 80]] },
+  { id: 'sl', name: 'Sri Lanka', short: 'SL', col: '#6f7dff', dark: '#2a3399', wk: 1, players: [
+    ['P. Nisanka', 82], ['K. Mendiss', 80], ['K. Pereira', 76], ['C. Asalanke', 79, 'O', 40], ['S. Samarawick', 72],
+    ['D. de Silvaa', 72, 'O', 62], ['W. Hasarenga', 60, 'L', 84], ['D. Wellalagey', 45, 'L', 72], ['M. Theekshane', 22, 'O', 80],
+    ['M. Pathirena', 10, 'F', 82], ['D. Madushanke', 10, 'F', 78]] },
+  { id: 'wi', name: 'West Indies', short: 'WI', col: '#c2335e', dark: '#5a0f28', wk: 1, players: [
+    ['B. Kingg', 79], ['S. Hoape', 83], ['N. Pooraan', 83], ['S. Hetmyre', 77], ['R. Powel', 75],
+    ['S. Rutherfrd', 72], ['R. Chace', 64, 'O', 70], ['J. Holdar', 58, 'F', 76], ['A. Hossein', 25, 'L', 80],
+    ['A. Josef', 22, 'F', 84], ['G. Motee', 15, 'L', 77]] },
+  { id: 'ban', name: 'Bangladesh', short: 'BAN', col: '#ff8a3d', dark: '#0f6b3a', wk: 1, players: [
+    ['T. Hassan', 76], ['L. Daas', 78], ['N. Shantoo', 79], ['T. Hridoye', 77], ['M. Raheem', 78],
+    ['M. Mirazz', 70, 'O', 74], ['R. Hossein', 40, 'L', 76], ['T. Islaam', 25, 'F', 74], ['T. Ahmmed', 20, 'F', 80],
+    ['M. Rahmann', 12, 'F', 82], ['N. Raana', 10, 'F', 80]] },
+  { id: 'afg', name: 'Afghanistan', short: 'AFG', col: '#ff6fae', dark: '#7a1846', wk: 0, players: [
+    ['R. Gurbaaz', 80], ['I. Zadraan', 81], ['S. Attal', 74], ['H. Shahidee', 76], ['A. Omarzay', 72, 'F', 74],
+    ['M. Nabbi', 70, 'O', 74], ['G. Naeb', 62, 'M', 60], ['R. Khaan', 50, 'L', 92], ['N. Ahmadd', 18, 'L', 82],
+    ['F. Farooqee', 12, 'F', 82], ['N. Ulhaq', 15, 'F', 78]] },
 ];
+const badgeHTML = t => '<span class="badge" style="background:linear-gradient(135deg,' + t.col + ' 0 55%,' + t.dark + ' 55%);color:' + onCol(t.col) + '">' + esc(t.short) + '</span>';
+// text colour that reads on a team colour
+const onCol = c => { const n = parseInt(c.slice(1), 16), l = (0.299 * (n >> 16) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255; return l > 0.55 ? '#0a1024' : '#f3efe4'; };
 for (const t of TEAMS) t.players = t.players.map(([name, bat, type, bowl]) => ({ name, bat, type: type || '', bowl: bowl || 0 }));
-// Quick chase: you against the Strikers' quicks
+// Quick chase: you against England's quicks
 const YOU = { id: 'you', name: 'You', short: 'YOU', col: '#2ed3c6', helmet: '#18245a', wk: 0,
               players: Array.from({ length: 11 }, () => ({ name: 'You', bat: 70, type: '', bowl: 0 })) };
 const CHASE_OPP = TEAMS[2];
@@ -1491,7 +1514,7 @@ function updateScore() {
   if (!inn) return;
   const i = inn, match = M.mode === 'match';
   const tag = $('teamTag');
-  tag.textContent = i.bat.short; tag.style.background = i.bat.col;
+  tag.textContent = i.bat.short; tag.style.background = i.bat.col; tag.style.color = onCol(i.bat.col);
   $('scoreText').textContent = i.runs + '/' + i.wkts;
   $('oversText').textContent = ovStr(i.balls) + (match ? ' / ' + M.overs : '') + ' ov';
   const left = i.maxBalls - i.balls, crr = i.balls ? (i.runs / i.balls * 6).toFixed(2) : '0.00';
@@ -1782,7 +1805,7 @@ function optButtons(boxId, items, isOn, onPick) {
   });
 }
 function renderSetup() {
-  const teamItems = TEAMS.map(t => ({ html: '<span class="sw" style="background:' + t.col + '"></span>' + esc(t.name) }));
+  const teamItems = TEAMS.map(t => ({ html: badgeHTML(t) + esc(t.name) }));
   optButtons('teamA', teamItems, (it, k) => k === setup.a, (it, k) => { if (k === setup.b) setup.b = setup.a; setup.a = k; saveSetup(); renderSetup(); });
   optButtons('teamB', teamItems, (it, k) => k === setup.b, (it, k) => { if (k === setup.a) setup.a = setup.b; setup.b = k; saveSetup(); renderSetup(); });
   optButtons('oversPick', [2, 5, 10, 20].map(v => ({ v, html: v + ' overs' })), it => it.v === setup.overs, it => { setup.overs = it.v; saveSetup(); renderSetup(); });

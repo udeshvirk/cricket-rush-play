@@ -1,5 +1,5 @@
 // Offline support. Bump VERSION when releasing so players get the new game.
-const VERSION = 'cricket-rush-1';
+const VERSION = 'cricket-rush-2';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
