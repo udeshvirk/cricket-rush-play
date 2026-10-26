@@ -457,8 +457,14 @@ window.Cricket3D = function (G) {
     // the game's camera (the same maths as its 2D projection, so the guides line up)
     const aspect = G.W / Math.max(1, G.H);
     let fov = cam.fov;
-    if (aspect < 1.35) fov = 2 * Math.atan(Math.tan(cam.fov * deg / 2) / (aspect / 1.35)) / deg;
-    camera.fov = fov; camera.aspect = aspect; camera.updateProjectionMatrix();
+    if (aspect < 1.35) fov = 2 * Math.atan(Math.tan(cam.fov * deg / 2) / Math.pow(aspect / 1.35, 0.5)) / deg;
+    // the game may move the picture's centre up (upright screens): render a taller view and show its lower part
+    const sh = G.camShift || 0, fullH = G.H + 2 * sh;
+    if (sh) {
+      fov = 2 * Math.atan(Math.tan(fov * deg / 2) * fullH / G.H) / deg;
+      camera.setViewOffset(G.W, fullH, 0, 2 * sh, G.W, G.H);
+    } else if (camera.view) camera.clearViewOffset();
+    camera.fov = fov; camera.aspect = G.W / Math.max(1, sh ? fullH : G.H); camera.updateProjectionMatrix();
     camera.position.set(cam.pos[0], cam.pos[1], cam.pos[2]); camera.lookAt(cam.tgt[0], cam.tgt[1], cam.tgt[2]);
 
     teamColours();

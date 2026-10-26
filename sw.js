@@ -1,5 +1,5 @@
 // Offline support. VERSION is stamped with the commit when the game is published (tools/build-play.sh), so players get the new game.
-const VERSION = 'cricket-rush-772a345';
+const VERSION = 'cricket-rush-c43fafc';
 const SHELL = ['./', 'index.html', 'render3d.js', 'vendor/three.min.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {

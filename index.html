@@ -301,6 +301,56 @@
     .var { height: 27px; font-size: 12px; }
     #meter { bottom: calc(44px + env(safe-area-inset-bottom, 0px)); }
   }
+  /* ---------- slim HUD: one TV-style score strip top left, small icon tools and map top right, a lower-third card ---------- */
+  #chase { display: none; }
+  #tvbar { top: calc(10px + env(safe-area-inset-top, 0px)); left: calc(10px + env(safe-area-inset-left, 0px));
+           display: flex; flex-direction: column; gap: 0; max-width: calc(100% - 140px); }
+  #tvbar #scorebar, #tvbar #batline, #tvbar #overchips { position: static; left: auto; bottom: auto; }
+  #tvbar #scorebar > div { padding: 2px 8px; }
+  #tvbar #scorebar .team { font-size: 12px; } #tvbar #scorebar .runs { font-size: 21px; }
+  #tvbar #scorebar .overs, #tvbar #scorebar .need { font-size: 13px; }
+  #tvbar #batline { font-size: 12px; padding: 1px 8px 2px; line-height: 1.3; background: rgba(10, 16, 36, 0.66); display: flex; gap: 10px; }
+  #tvbar #batline[hidden] { display: none; }
+  #tvbar #overchips { gap: 3px; padding: 3px 0 0; }
+  #tvbar .chip { min-width: 18px; height: 18px; font-size: 11px; padding: 0 4px; border-radius: 9px; }
+  #mapwrap { top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); }
+  #minimap { width: 76px; height: 76px; opacity: 0.85; margin-left: auto; }
+  .tools { position: static; display: flex; gap: 4px; justify-content: flex-end; margin-bottom: 4px; }
+  .tools button { width: 30px; height: 30px; padding: 0; font-size: 13px; letter-spacing: 0; border-radius: 8px; display: grid; place-items: center; }
+  #mapwrap { display: flex; flex-direction: column; align-items: flex-end; }
+  #tvcard { top: auto; left: calc(10px + env(safe-area-inset-left, 0px)); bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+            transform: translate(-10px, 0); max-width: min(420px, calc(100% - 20px)); }
+  #tvcard.show { transform: translate(0, 0); }
+  #tvcard .t { font-size: 18px; } #tvcard .s { font-size: 12px; } #tvcard .body { padding: 3px 10px 4px; }
+  #banner .head { font-size: clamp(44px, 9vw, 96px); }
+  #banner.small .head { font-size: clamp(28px, 5vw, 48px); }
+  .shotsel button { width: min(22vw, 108px); height: 46px; font-size: 19px; border-radius: 12px; background: rgba(10, 16, 36, 0.45); border-width: 1.5px; }
+  .batside { width: 96px; } .batside button { height: 34px; font-size: 13px; border-radius: 9px; background: rgba(10, 16, 36, 0.45); border-width: 1.5px; }
+  #swipeHint { bottom: calc(68px + env(safe-area-inset-bottom, 0px)); font-size: 13px; }
+  .autopad button { height: 38px; font-size: 13px; padding: 0 11px; background: rgba(10, 16, 36, 0.5); }
+  @media (max-width: 720px) and (orientation: portrait) {
+    #tvbar { max-width: calc(100% - 110px); }
+    #delivery { top: auto; bottom: calc(118px + env(safe-area-inset-bottom, 0px)); font-size: 13px; padding: 2px 10px; }
+    #tvcard { bottom: auto; top: calc(96px + env(safe-area-inset-top, 0px)); }
+    .shotsel { gap: 6px; } .shotsel button { width: 28vw; height: 44px; }
+    .batside { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); }
+    #swipeHint { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); right: 112px; font-size: 12px; }
+  }
+  @media (max-height: 460px) {
+    #tvbar { top: calc(5px + env(safe-area-inset-top, 0px)); left: calc(6px + env(safe-area-inset-left, 0px)); max-width: 46vw; }
+    #tvbar #scorebar > div { padding: 1px 5px; } #tvbar #scorebar .runs { font-size: 16px; }
+    #tvbar #scorebar .team, #tvbar #scorebar .overs, #tvbar #scorebar .need { font-size: 10px; }
+    #tvbar #batline { font-size: 10px; padding: 0 5px 1px; gap: 6px; }
+    #tvbar #overchips { padding-top: 2px; } #tvbar .chip { min-width: 15px; height: 15px; font-size: 9px; }
+    #mapwrap { top: calc(5px + env(safe-area-inset-top, 0px)); right: calc(6px + env(safe-area-inset-right, 0px)); flex-direction: row; align-items: flex-start; gap: 4px; }
+    .tools { margin: 0; } .tools button { width: 24px; height: 24px; font-size: 10px; }
+    #minimap { width: 52px; height: 52px; }
+    #tvcard { bottom: calc(6px + env(safe-area-inset-bottom, 0px)); max-width: 34vw; } #tvcard .t { font-size: 13px; } #tvcard .s { font-size: 10px; } #tvcard .body { padding: 1px 7px 2px; }
+    .shotsel button { width: 80px; height: 30px; font-size: 14px; }
+    .batside button { height: 28px; font-size: 11px; }
+    #swipeHint { top: calc(30px + env(safe-area-inset-top, 0px)); bottom: auto; font-size: 10px; }
+    .autopad button { height: 28px; font-size: 11px; }
+  }
 </style>
 </head>
 <body>
@@ -317,8 +367,8 @@
   <div id="mapwrap" class="hud">
     <canvas id="minimap" width="240" height="240" aria-label="Field map"></canvas>
     <div class="tools">
-      <button id="pauseBtn" type="button" aria-label="Pause and scorecard">PAUSE</button>
-      <button id="mute" type="button">SOUND ON</button>
+      <button id="pauseBtn" type="button" aria-label="Pause and scorecard">❚❚</button>
+      <button id="mute" type="button" aria-label="Sound">🔊</button>
       <button id="fsBtn" type="button" aria-label="Full screen" hidden>⛶</button>
     </div>
   </div>
@@ -330,14 +380,16 @@
   <div id="wipe" class="hud"></div>
   <div id="timing" class="hud"></div>
   <div id="meter" class="hud" hidden><div class="zone"></div><div class="needle"></div></div>
-  <div id="batline" class="hud" hidden><div id="batters"></div><div id="bowlerLine" class="bw"></div></div>
+  <div id="tvbar" class="hud">
   <div id="scorebar" class="hud">
     <div class="team" id="teamTag">YOU</div>
     <div class="runs" id="scoreText">0/0</div>
     <div class="overs" id="oversText">0.0 ov</div>
     <div class="need" id="needText">Need 30 off 12</div>
   </div>
+  <div id="batline" class="hud" hidden><div id="batters"></div><div id="bowlerLine" class="bw"></div></div>
   <div id="overchips" class="hud"></div>
+  </div>
 
   <div id="batpad">
     <div id="swipeHint" class="hud" hidden></div>
@@ -645,15 +697,18 @@ function setupCamera() {
   cu = cross(cr, cf);
   let f = (H / 2) / Math.tan(cam.fov * deg / 2);
   const aspect = W / H;
-  if (aspect < 1.35) f *= aspect / 1.35;   // portrait: keep the pitch in view
+  if (aspect < 1.35) f *= Math.pow(aspect / 1.35, 0.5);   // portrait: zoom out, but less than the width alone would need
   focal = f;
+  // an upright screen: the picture's centre sits higher, so the field fills the middle instead of the stands
+  camShift = aspect < 0.8 ? H * 0.09 : 0; cy = H / 2 - camShift;
 }
+let camShift = 0, cy = 0;
 function toCam(p) { const d = sub(p, cam.pos); return [dot(d, cr), dot(d, cu), dot(d, cf)]; }
-function proj(c) { return [W / 2 + c[0] / c[2] * focal, H / 2 - c[1] / c[2] * focal]; }
+function proj(c) { return [W / 2 + c[0] / c[2] * focal, cy - c[1] / c[2] * focal]; }
 // a point on the screen to the spot on the ground under it
 function screenToGround(sx, sy) {
   setupCamera();
-  const d = add(cf, add(mul(cr, (sx - W / 2) / focal), mul(cu, -(sy - H / 2) / focal)));
+  const d = add(cf, add(mul(cr, (sx - W / 2) / focal), mul(cu, -(sy - cy) / focal)));
   if (d[1] >= -1e-4) return null;
   return add(cam.pos, mul(d, -cam.pos[1] / d[1]));
 }
@@ -2372,7 +2427,7 @@ function update(dt) {
     const mv = canMove();
     if ($('moveL').disabled === mv) { $('moveL').disabled = !mv; $('moveR').disabled = !mv; }
   }
-  const hint = $('swipeHint'), showHint = inn && inn.userBats && (M.batBalls || 0) < 8 && ['wait', 'runup', 'flight'].includes(phase) && !(ball && (ball.swing || ball.left));
+  const hint = $('swipeHint'), showHint = inn && inn.userBats && (M.batBalls || 0) < 4 && ['wait', 'runup', 'flight'].includes(phase) && !(ball && (ball.swing || ball.left));
   if (showHint) {
     const t = shotType === 'defend' ? 'DEFEND' : shotType === 'loft' ? 'LOFT' : 'SHOT';
     const txt = touch ? t + ' chosen · swipe where you want it as the ball arrives'
@@ -2966,7 +3021,7 @@ window.addEventListener('blur', () => held.clear());
 $('mute').addEventListener('click', () => {
   soundOn = !soundOn; audio();
   if (master) master.gain.value = soundOn ? 0.9 : 0;
-  $('mute').textContent = soundOn ? 'SOUND ON' : 'SOUND OFF';
+  $('mute').textContent = soundOn ? '🔊' : '🔇';
 });
 // full screen (Android, iPad, laptops; iPhone Safari can't, but the installed app opens full screen anyway)
 const fsEl = document.documentElement;
@@ -3013,7 +3068,7 @@ try {
   R3D = window.Cricket3D ? window.Cricket3D({
     touch, LIGHTS, BOARDS, STAND_IN, STAND_OUT, STAND_H, PITCH, CREASE, ROPE, lerp, people, ballPos, cam, deg, $,
     get cheer() { return cheer; }, get clock() { return clock; }, get inn() { return inn; }, get M() { return M; },
-    get ball() { return RP ? RP.snap : ball; }, get W() { return W; }, get H() { return H; },
+    get ball() { return RP ? RP.snap : ball; }, get W() { return W; }, get H() { return H; }, get camShift() { return camShift; },
   }) : null;
 } catch (e) { R3D = null; }
 if (R3D) { const rb = $('replayToggle'); rb.hidden = false; setReplays(replaysOn); rb.addEventListener('click', () => setReplays(!replaysOn)); }
