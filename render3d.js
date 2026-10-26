@@ -104,9 +104,14 @@ window.Cricket3D = function (G) {
   outside.rotation.x = -Math.PI / 2; outside.position.y = -0.06; scene.add(outside);
 
   const grassTex = canvasTex(1024, 1024, (g, w, h) => {
-    g.fillStyle = '#2b7d37'; g.fillRect(0, 0, w, h);
-    const k = w / (BOARDS * 2), band = 4 * k;
-    for (let x = 0; x < w; x += band * 2) { g.fillStyle = '#25722f'; g.fillRect(x, 0, band, h); }
+    g.fillStyle = '#2c6e33'; g.fillRect(0, 0, w, h);
+    const k = w / (BOARDS * 2), band = 5 * k;
+    // mowing stripes across the field (light, dark, light ...), with soft edges
+    for (let y = 0; y < h; y += band * 2) {
+      const gr = g.createLinearGradient(0, y, 0, y + band);
+      gr.addColorStop(0, 'rgba(18,48,22,0)'); gr.addColorStop(0.12, 'rgba(18,48,22,0.30)'); gr.addColorStop(0.88, 'rgba(18,48,22,0.30)'); gr.addColorStop(1, 'rgba(18,48,22,0)');
+      g.fillStyle = gr; g.fillRect(0, y, w, band);
+    }
     noise(g, w, h, 26000, ['rgba(255,255,255,0.035)', 'rgba(0,0,0,0.05)', 'rgba(20,60,20,0.08)'], 2);
     const r = g.createRadialGradient(w / 2, h / 2, w * 0.1, w / 2, h / 2, w / 2);
     r.addColorStop(0, 'rgba(255,255,220,0.06)'); r.addColorStop(1, 'rgba(0,0,0,0.25)');
@@ -157,7 +162,7 @@ window.Cricket3D = function (G) {
   const boards = new T.Mesh(new T.CylinderGeometry(BOARDS, BOARDS, 1, 160, 1, true), new T.MeshBasicMaterial({ map: adTex, side: T.BackSide }));
   boards.position.y = 0.5; scene.add(boards);
   for (const z of [-(BOARDS - 1.2), PITCH + BOARDS - 21.3]) {
-    const ss = new T.Mesh(new T.BoxGeometry(9, 3.6, 0.4), new T.MeshBasicMaterial({ color: 0x05070d }));
+    const ss = new T.Mesh(new T.BoxGeometry(9, 3.6, 0.4), new T.MeshStandardMaterial({ color: 0x1a2140, roughness: 0.9 }));
     ss.position.set(0, 1.8, z); scene.add(ss);
   }
 
@@ -414,6 +419,30 @@ window.Cricket3D = function (G) {
   const blobs = [];
   for (let i = 0; i < 14; i++) { const b = new T.Mesh(blobGeo, blobMat); b.scale.set(0.9, 1, 0.9); b.position.y = 0.012; scene.add(b); blobs.push(b); }
 
+  // ---------------------------------------------------------------- the TV look (pmndrs postprocessing, vendor/)
+  // glow around the floodlights and the ball, filmic tone mapping, a slightly calmer colour grade and a soft vignette
+  const PP = window.POSTPROCESSING;
+  let composer = null;
+  function makeComposer() {
+    if (!PP) return null;
+    try {
+      const gl2 = renderer.capabilities.isWebGL2;
+      const c = new PP.EffectComposer(renderer, { frameBufferType: gl2 ? T.HalfFloatType : T.UnsignedByteType,
+                                                  multisample: gl2 && !lowEnd ? Math.min(4, renderer.capabilities.maxSamples || 0) : 0 });
+      c.addPass(new PP.RenderPass(scene, camera));
+      const bloom = new PP.BloomEffect({ intensity: 1.15, luminanceThreshold: 0.78, luminanceSmoothing: 0.25, mipmapBlur: true, radius: 0.72 });
+      const tone = new PP.ToneMappingEffect({ mode: PP.ToneMappingMode.ACES_FILMIC });
+      const grade = new PP.HueSaturationEffect({ saturation: -0.1 });
+      const contrast = new PP.BrightnessContrastEffect({ brightness: 0.0, contrast: 0.1 });
+      const vignette = new PP.VignetteEffect({ offset: 0.3, darkness: 0.62 });
+      c.addPass(new PP.EffectPass(camera, bloom, tone, grade, contrast, vignette));
+      renderer.toneMapping = T.NoToneMapping;   // done in the effect pass instead
+      return c;
+    } catch (e) { renderer.toneMapping = T.ACESFilmicToneMapping; return null; }
+  }
+  composer = makeComposer();
+  function dropComposer() { if (!composer) return; composer.dispose(); composer = null; renderer.toneMapping = T.ACESFilmicToneMapping; scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); }
+
   // ---------------------------------------------------------------- each frame
   let lastW = 0, lastH = 0, maxRatio = lowEnd ? 1.5 : 2;
   function size() {
@@ -422,18 +451,20 @@ window.Cricket3D = function (G) {
     lastW = w; lastH = h;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxRatio));
     renderer.setSize(w, h, false);
+    if (composer) composer.setSize(w, h, false);
   }
-  // keep it smooth on slow devices: if frames take too long for a few seconds, draw fewer pixels, then drop the shadows
+  // keep it smooth on slow devices: if frames take too long for a few seconds, drop the TV look, then draw fewer pixels, then drop the shadows
   let qLevel = 0, qT = 0, qN = 0, qLast = 0;
   function quality(now) {
     if (qLast) { const dt = now - qLast; if (dt < 250) { qT += dt; qN++; } }   // ignore pauses (hidden tab)
     qLast = now;
     if (qN < 150) return;
     const avg = qT / qN; qT = 0; qN = 0;
-    if (avg > 38 && qLevel < 2) {
+    if (avg > 38 && qLevel < 3) {
       qLevel++;
-      if (qLevel === 1) { maxRatio = 1; lastW = 0; }
-      if (qLevel === 2) { renderer.shadowMap.enabled = false; scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); }
+      if (qLevel === 1) { if (composer) dropComposer(); else qLevel++; }
+      if (qLevel === 2) { maxRatio = 1; lastW = 0; }
+      if (qLevel === 3) { renderer.shadowMap.enabled = false; scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); }
     }
   }
   function teamColours() {
@@ -457,7 +488,7 @@ window.Cricket3D = function (G) {
     // the game's camera (the same maths as its 2D projection, so the guides line up)
     const aspect = G.W / Math.max(1, G.H);
     let fov = cam.fov;
-    if (aspect < 1.35) fov = 2 * Math.atan(Math.tan(cam.fov * deg / 2) / Math.pow(aspect / 1.35, 0.5)) / deg;
+    if (aspect < 1.35) fov = 2 * Math.atan(Math.tan(cam.fov * deg / 2) / Math.pow(aspect / 1.35, aspect < 0.8 ? 0.72 : 0.5)) / deg;
     // the game may move the picture's centre up (upright screens): render a taller view and show its lower part
     const sh = G.camShift || 0, fullH = G.H + 2 * sh;
     if (sh) {
@@ -489,7 +520,7 @@ window.Cricket3D = function (G) {
       trailGeo.attributes.position.needsUpdate = true;
     }
     if (bp && G.ball && G.ball.play) { const t2 = G.ball.trail || (G.ball.trail = []); t2.push(bp.slice()); if (t2.length > 12) t2.shift(); }
-    renderer.render(scene, camera);
+    if (composer) composer.render(); else renderer.render(scene, camera);
   }
 
   // ---------------------------------------------------------------- switch

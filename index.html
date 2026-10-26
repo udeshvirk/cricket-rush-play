@@ -529,6 +529,7 @@
 </div>
 
 <script src="vendor/three.min.js"></script>
+<script src="vendor/postprocessing.min.js"></script>
 <script src="render3d.js"></script>
 <script>
 (() => {
@@ -686,7 +687,7 @@ const ovStr = b => Math.floor(b / 6) + (b % 6 ? '.' + (b % 6) : '');
 const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
 
 // ======================================================================= camera and projection
-const BOWL_CAM = { pos: [0, 5.2, 46], tgt: [0, 0.9, 1.5], fov: 14.5 };   // the TV angle, from far behind the bowler
+const BOWL_CAM = { pos: [0, 8.5, 36], tgt: [0, 0.6, 2.2], fov: 13 };   // the TV angle: high behind the bowler, looking down the pitch
 const cam = { pos: BOWL_CAM.pos.slice(), tgt: BOWL_CAM.tgt.slice(), fov: BOWL_CAM.fov };
 let cr, cu, cf, focal;
 const NEAR = 0.3;
@@ -697,10 +698,10 @@ function setupCamera() {
   cu = cross(cr, cf);
   let f = (H / 2) / Math.tan(cam.fov * deg / 2);
   const aspect = W / H;
-  if (aspect < 1.35) f *= Math.pow(aspect / 1.35, 0.5);   // portrait: zoom out, but less than the width alone would need
+  if (aspect < 1.35) f *= Math.pow(aspect / 1.35, aspect < 0.8 ? 0.72 : 0.5);   // portrait: zoom out, but less than the width alone would need
   focal = f;
   // an upright screen: the picture's centre sits higher, so the field fills the middle instead of the stands
-  camShift = aspect < 0.8 ? H * 0.09 : 0; cy = H / 2 - camShift;
+  camShift = aspect < 0.8 ? H * 0.06 : 0; cy = H / 2 - camShift;
 }
 let camShift = 0, cy = 0;
 function toCam(p) { const d = sub(p, cam.pos); return [dot(d, cr), dot(d, cu), dot(d, cf)]; }
