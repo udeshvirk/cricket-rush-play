@@ -239,7 +239,27 @@
     .sc td.how { display: none; }
     .sc th.how { display: none; }
   }
-  @media (prefers-reduced-motion: reduce) { #banner { transition: opacity 0.18s; } }
+  /* TV touches: the info card, the replay badge, letterbox bars and a quick flash between live and replay */
+  #tvcard { left: 50%; top: calc(56px + env(safe-area-inset-top, 0px)); transform: translate(-50%, -10px); opacity: 0; display: flex;
+            transition: opacity 0.25s, transform 0.25s; max-width: calc(100vw - 32px); pointer-events: none; }
+  #tvcard.show { opacity: 1; transform: translate(-50%, 0); }
+  #tvcard .bar { width: 7px; background: var(--c); flex: none; }
+  #tvcard .body { background: var(--panel); padding: 5px 14px 6px; min-width: 0; }
+  #tvcard .t { font-family: var(--display); font-weight: 800; font-size: 22px; text-transform: uppercase; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #tvcard .s { font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #replayTag { left: 50%; top: calc(12px + env(safe-area-inset-top, 0px) + 6vh); transform: translateX(-50%); background: var(--panel);
+               font-family: var(--display); font-weight: 800; font-size: 20px; letter-spacing: 0.12em; padding: 3px 12px; display: flex; align-items: center; gap: 8px; }
+  #replayTag .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); animation: blink 1s steps(2) infinite; }
+  #replayTag .skip { font-family: inherit; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: var(--muted); }
+  @keyframes blink { 50% { opacity: 0.2; } }
+  body.replaying::before, body.replaying::after { content: ''; position: fixed; left: 0; right: 0; height: 6vh; background: #000; z-index: 4; pointer-events: none; }
+  body.replaying::before { top: 0; } body.replaying::after { bottom: 0; }
+  body.replaying .hud:not(#replayTag):not(#wipe), body.replaying #batpad, body.replaying .autopad { visibility: hidden; }
+  #wipe { inset: 0; background: #f3efe4; opacity: 0; pointer-events: none; z-index: 6; }
+  #wipe.go { animation: wipe 0.35s ease-out; }
+  @keyframes wipe { 0% { opacity: 0.55; } 100% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { #banner { transition: opacity 0.18s; } #wipe.go { animation: none; } }
+  @media (max-width: 720px) and (orientation: portrait) { #tvcard { top: calc(118px + env(safe-area-inset-top, 0px)); } }
 
   /* short screens (a phone held sideways): smaller scoreboard and map, shot buttons in a column on the right,
      the move / step-out buttons in a small row at the bottom, hint at the top */
@@ -269,6 +289,8 @@
     #ffTag { top: calc(30px + env(safe-area-inset-top, 0px)); font-size: 10px; }
     #timing { bottom: calc(46px + env(safe-area-inset-bottom, 0px)); font-size: 13px; }
     #banner { top: 42%; }
+    #tvcard { top: calc(54px + env(safe-area-inset-top, 0px)); } #tvcard .t { font-size: 15px; } #tvcard .s { font-size: 11px; } #tvcard .body { padding: 2px 9px 3px; }
+    #replayTag { font-size: 14px; padding: 2px 8px; }
     #banner .head { font-size: clamp(34px, 10vh, 60px); }
     #banner.small .head { font-size: clamp(24px, 8vh, 40px); }
     #banner .line { font-size: 12px; padding: 2px 8px; margin-top: 3px; }
@@ -303,6 +325,9 @@
   <div id="delivery" class="hud"></div>
   <div id="ffTag" class="hud" hidden>FAST-FORWARD ▸▸</div>
   <div id="banner" class="hud"><div class="head"></div><div class="line"></div></div>
+  <div id="tvcard" class="hud"><div class="bar"></div><div class="body"><div class="t"></div><div class="s"></div></div></div>
+  <div id="replayTag" class="hud" hidden><span class="dot"></span>REPLAY<span class="skip">tap to skip</span></div>
+  <div id="wipe" class="hud"></div>
   <div id="timing" class="hud"></div>
   <div id="meter" class="hud" hidden><div class="zone"></div><div class="needle"></div></div>
   <div id="batline" class="hud" hidden><div id="batters"></div><div id="bowlerLine" class="bw"></div></div>
@@ -428,6 +453,7 @@
         <button class="btn ghost" id="autoInn" type="button">Simulate this innings</button>
         <button class="btn ghost" id="autoBowlToggle" type="button">Computer bowls for me</button>
         <button class="btn ghost" id="gfxToggle" type="button" hidden>Graphics: 3D</button>
+        <button class="btn ghost" id="replayToggle" type="button" hidden>Replays: on</button>
         <button class="btn ghost" id="quit" type="button">Quit match</button>
       </div>
       <div class="tabs" id="pauseTabs"></div>
@@ -1595,6 +1621,7 @@ function contact() {
   if (d.kind === 'miss') return;
   sndBat(d.kind === 'edge' ? 'edge' : d.defend ? 'block' : 'middle', d.q * (d.loft ? 1 : 0.8) * (d.power || 1));
   if (d.kind === 'edge') sndOoh(0.55);
+  rec.hit = rec.t;
   const h = strike();
   if (h.playedOn) return;
   const { fp, res, angle } = h;
@@ -1644,7 +1671,10 @@ function recordBall(o) {
     i.fow.push({ w: i.wkts, r: i.runs, k: i.striker, b: i.balls });
     if (i.wkts < i.maxWkts && i.next < i.cards.length) { i.striker = i.next++; i.cards[i.striker].in = true; }
   } else if (o.runs % 2) [i.striker, i.non] = [i.non, i.striker];
-  if (i.balls % 6 === 0) { [i.striker, i.non] = [i.non, i.striker]; i.overDone = true; i.lastBowler = k; }
+  if (i.balls % 6 === 0) {
+    [i.striker, i.non] = [i.non, i.striker]; i.overDone = true; i.lastBowler = k;
+    i.lastOver = { runs: i.over.reduce((s, v) => s + (v === 'wd' ? 1 : v === 'W' ? 0 : +v), 0), wkts: i.over.filter(v => v === 'W').length };
+  }
 }
 
 // ----------------------------------------------------------------------- overs and bowlers
@@ -1681,11 +1711,18 @@ function startOver() {
 function beginBall(delay, announce) {
   newFielders();
   pending = null; ball = null; preBall = null; wantCharge = false; guard = 0; camMode = 'bowl'; meter = null; swipeVis = null;
+  endReplay(); recReset();
   setFF(!!(M.watchFast && autoBowling()));
   hideBanner(); $('timing').classList.remove('show'); $('meter').hidden = true; $('meter').classList.remove('locked');
   if (announce && M.mode === 'match') {
-    const b = bowlerP();
-    showBanner('OVER ' + (Math.floor(inn.balls / 6) + 1), b.name + ' · ' + BOWL_TYPES[btype(b)].name + ' · ' + FIELD_INFO[inn.field][0] + ' field', 'small', 1.5);
+    const b = bowlerP(), f = inn.bowlers[inn.bowler], ov = Math.floor(inn.balls / 6);
+    const fig = f && f.balls ? ' · ' + f.wkts + '–' + f.runs + ' (' + ovStr(f.balls) + ')' : '';
+    const last = inn.lastOver ? 'Last over ' + plural(inn.lastOver.runs, 'run') + (inn.lastOver.wkts ? ', ' + plural(inn.lastOver.wkts, 'wicket') : '') + ' · ' : '';
+    tvCard('Over ' + (ov + 1) + ' · ' + b.name, last + BOWL_TYPES[btype(b)].name + fig + ' · ' + FIELD_INFO[inn.field][0] + ' field', inn.bowl.col);
+  } else if (M.mode === 'match' && inn.balls > 0 && inn.cards[inn.striker].balls === 0 && !inn.cards[inn.striker].out && inn.lastIn !== inn.striker) {
+    inn.lastIn = inn.striker;
+    const p = batterP(inn.striker);
+    tvCard('New batter · ' + p.name, inn.bat.name + ' ' + inn.runs + '/' + inn.wkts + ' · ' + ovStr(inn.balls) + ' overs', inn.bat.col);
   }
   if (userBowling()) {
     phase = 'aim'; phaseT = 0;
@@ -1724,7 +1761,7 @@ function release() {
     }
     ball.aiPress = aiPlan(ball, batSkill(inn.striker), aggression());
   }
-  phase = 'flight'; phaseT = 0;
+  phase = 'flight'; phaseT = 0; rec.rel = rec.t;
   showDelivery(ball);
 }
 
@@ -1897,6 +1934,7 @@ function lockFeedback(e) {
 // ----------------------------------------------------------------------- result of a ball (animated)
 function finishBall(o, line) {
   const i = inn, k = i.striker, chaseMode = M.mode === 'chase';
+  recMark(o, line);
   recordBall(o);
   updateScore();
   const c = i.cards[k], who = chaseMode ? '' : surname(batterP(k).name) + ' ';
@@ -2217,6 +2255,7 @@ function update(dt) {
   cheer = Math.max(0, cheer - dt * 0.4);
   if (bannerUntil && clock > bannerUntil) hideBanner();
 
+  if (cardUntil && clock > cardUntil) hideCard();
   if (phase === 'wait' && phaseT >= 0) { phase = 'runup'; phaseT = 0; $('delivery').classList.remove('show'); sndBuzz(0.07); }
   else if (phase === 'aim') {
     const [x, y] = keyAxes();
@@ -2340,7 +2379,8 @@ function update(dt) {
 }
 
 // where the ball is now
-function ballPos() {
+function ballPos() { return RP ? RP.ball : liveBallPos(); }
+function liveBallPos() {
   if (!ball) return null;
   if (ball.frozenAt) return ball.frozenAt;
   if (ball.play) {
@@ -2367,6 +2407,7 @@ function render() {
   if (R3D && R3D.active()) {   // the 3D view draws the world; this canvas only adds the guides on top
     ctx.clearRect(0, 0, W, H);
     R3D.render();
+    if (RP) { renderMap(ballPos()); return; }
     drawAimGuide(); drawBounceMark(); drawSwipe();
     renderMap(ballPos());
     return;
@@ -2423,7 +2464,8 @@ function render() {
 }
 
 // everyone on the field this frame: joints (world metres), team ('bat' | 'bowl'), bat, keeper; `at` = where they stand
-function people() {
+function people() { return RP ? RP.people : livePeople(); }
+function livePeople() {
   const out = [], helmet = helmetCol();
   const runT = ball && ball.play && ball.play.res.kind === 'runs' ? ball.play.t - 0.35 : -1;
   const runs = ball && ball.play ? ball.play.res.runs : 0;
@@ -2582,13 +2624,120 @@ function renderMap(bp) {
 
 // ======================================================================= loop and input
 let last = performance.now();
+// ======================================================================= TV touches: info cards and replays
+// a card at the top (the bowler for this over, the last over, the new batter), in the batting side's colour
+let cardUntil = 0;
+function tvCard(title, sub, col, dur = 3.4) {
+  const c = $('tvcard');
+  if (quiet || !c) return;
+  c.querySelector('.t').textContent = title; c.querySelector('.s').textContent = sub || ''; c.querySelector('.s').hidden = !sub;
+  c.style.setProperty('--c', col || 'var(--amber)');
+  c.classList.add('show'); cardUntil = clock + dur;
+}
+const hideCard = () => { cardUntil = 0; $('tvcard').classList.remove('show'); };
+
+// Replays (3D view): every frame of the ball is recorded (everyone's pose, the ball, the stumps), and after a wicket,
+// a six or a dropped catch it plays again, slowed down around the key moment, from TV angles. Tap or press a key to skip.
+const REPLAY_KEY = 'cricket-rush-replays';
+let replaysOn = true;
+try { replaysOn = localStorage.getItem(REPLAY_KEY) !== 'off'; } catch (e) {}
+const rec = { frames: [], t: 0, acc: 0, rel: null, hit: null, end: null, kind: null, shown: false };
+let RP = null;   // the replay on screen
+function recReset() { rec.frames = []; rec.t = 0; rec.acc = 0; rec.rel = rec.hit = rec.end = rec.kind = null; rec.shown = false; }
+function recFrame(dt) {
+  if (!ball && phase !== 'runup') return;
+  rec.t += dt; rec.acc += dt;
+  if (rec.acc < 1 / 30 || rec.frames.length > 420) return;
+  rec.acc = 0;
+  const bp = liveBallPos();
+  rec.frames.push({ t: rec.t, people: livePeople(), ball: bp && bp.slice(),
+    tilt: ball && ball.tilt ? ball.tilt.slice() : null, tiltT: ball ? ball.tiltT || 0 : 0,
+    bails: ball && ball.bails ? ball.bails.map(b => ({ p: b.p.slice() })) : null, play: !!(ball && ball.play) });
+}
+// what's worth a replay (called with the ball's outcome)
+function recMark(o, line) {
+  rec.end = rec.t;
+  rec.kind = o.out ? (o.out.how === 'caught' ? 'catch' : 'stumps') : o.runs === 6 ? 'six' : /^Dropped/.test(line) ? 'catch' : null;
+}
+const canReplay = () => replaysOn && R3D && R3D.active() && !quiet && !ff && !M.autoplay && rec.frames.length > 20;
+function startReplay() {
+  const f = rec.frames, last = f[f.length - 1].t;
+  const start = Math.max(f[0].t, (rec.rel !== null ? rec.rel : rec.end) - 0.6);
+  const end = Math.min(last, rec.end + (rec.kind === 'six' ? 1.4 : 0.9));
+  if (end - start < 0.8) return;
+  RP = { t: start, start, end, kind: rec.kind, pivot: rec.hit !== null ? rec.hit : rec.end, i: 0, trail: [], saved: { pos: cam.pos.slice(), tgt: cam.tgt.slice(), fov: cam.fov },
+         people: [], ball: null, snap: {}, look: null };
+  replayPose(); replayCam();
+  hideBanner(); hideCard();
+  $('replayTag').hidden = false; document.body.classList.add('replaying');
+  wipe();
+}
+function endReplay() {
+  if (!RP) return;
+  Object.assign(cam, { pos: RP.saved.pos, tgt: RP.saved.tgt, fov: RP.saved.fov });
+  RP = null;
+  $('replayTag').hidden = true; document.body.classList.remove('replaying');
+  wipe();
+}
+function wipe() { const w = $('wipe'); w.classList.remove('go'); void w.offsetWidth; w.classList.add('go'); }
+function replayStep(dt) {
+  // slow motion around the shot (or the ball hitting the stumps), normal speed either side
+  const near = Math.abs(RP.t - RP.pivot);
+  RP.t += dt * lerp(0.28, 1, smooth(clamp((near - 0.12) / 0.4, 0, 1)));
+  if (RP.t >= RP.end) return endReplay();
+  replayPose();
+  replayCam();
+}
+function replayPose() {
+  const f = rec.frames;
+  while (RP.i < f.length - 2 && f[RP.i + 1].t <= RP.t) RP.i++;
+  const a = f[RP.i], b = f[RP.i + 1] || a, u = b.t > a.t ? clamp((RP.t - a.t) / (b.t - a.t), 0, 1) : 0;
+  const same = a.people.length === b.people.length && a.people.every((p, k) => p.pid === b.people[k].pid && p.team === b.people[k].team);
+  RP.people = !same ? a.people : a.people.map((p, k) => {
+    const q = b.people[k];
+    return { ...p, j: mixJoints(p.j, q.j, u), at: lerp3(p.at, q.at, u),
+             bat: p.bat && q.bat ? { ...p.bat, hands: lerp3(p.bat.hands, q.bat.hands, u), tip: lerp3(p.bat.tip, q.bat.tip, u) } : p.bat };
+  });
+  RP.ball = a.ball && b.ball ? lerp3(a.ball, b.ball, u) : a.ball;
+  RP.snap = { tilt: a.tilt, tiltT: lerp(a.tiltT, b.tiltT, u), bails: a.bails, play: a.play, trail: RP.trail };
+}
+function replayCam() {
+  const bp = RP.ball;
+  if (RP.t < RP.pivot + (RP.kind === 'stumps' ? -0.32 : 0.12)) {
+    // the bowler's end, high and tight on the batter
+    cam.pos = [0.6, 4.6, 32]; cam.tgt = [0.45, 1.0, 1.4]; cam.fov = 8.5;
+  } else if (RP.kind === 'stumps') {
+    // side on from the off side, low, at the stumps
+    cam.pos = [-6.8, 1.0, 2.4]; cam.tgt = [0.1, 0.55, 0.5]; cam.fov = 30;
+  } else if (bp) {
+    // high behind the batter, following the ball but keeping the field in the picture
+    const g = [bp[0], bp[1] * 0.6, bp[2]], from = [0, 8.5, -15], d = Math.max(6, len(sub(g, from)));
+    cam.pos = from; RP.look = RP.look ? lerp3(RP.look, g, 0.25) : g; cam.tgt = RP.look;
+    cam.fov = clamp(2 * Math.atan(26 / d) / deg, 22, 58);
+  }
+}
+function setReplays(on) {
+  replaysOn = on; try { localStorage.setItem(REPLAY_KEY, on ? 'on' : 'off'); } catch (e) {}
+  $('replayToggle').textContent = 'Replays: ' + (on ? 'on' : 'off');
+}
+// tap or press a key to skip a replay
+for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, e => { if (RP) { e.preventDefault(); e.stopPropagation(); endReplay(); } }, true);
+
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  if (paused) { /* frozen */ }
-  else if (ACTIVE.has(phase)) { const n = ff ? 4 : 1; for (let s = 0; s < n && ACTIVE.has(phase); s++) update(dt); }
-  else { clock += dt; update0(dt); }
+  tick(dt);
   render();
   requestAnimationFrame(frame);
+}
+function tick(dt) {
+  if (RP) replayStep(dt);
+  else if (paused) { /* frozen */ }
+  else if (ACTIVE.has(phase)) {
+    const n = ff ? 4 : 1; for (let s = 0; s < n && ACTIVE.has(phase); s++) update(dt);
+    if (R3D && R3D.active()) recFrame(dt * n);
+    if (phase === 'result' && rec.kind && !rec.shown && phaseT > 1.0) { rec.shown = true; if (canReplay()) startReplay(); }
+  }
+  else { clock += dt; update0(dt); }
 }
 function update0(dt) {   // behind the menus: slow drift of the camera
   const a = clock * 0.05;
@@ -2784,9 +2933,10 @@ try {
   R3D = window.Cricket3D ? window.Cricket3D({
     touch, LIGHTS, BOARDS, STAND_IN, STAND_OUT, STAND_H, PITCH, CREASE, ROPE, lerp, people, ballPos, cam, deg, $,
     get cheer() { return cheer; }, get clock() { return clock; }, get inn() { return inn; }, get M() { return M; },
-    get ball() { return ball; }, get W() { return W; }, get H() { return H; },
+    get ball() { return RP ? RP.snap : ball; }, get W() { return W; }, get H() { return H; },
   }) : null;
 } catch (e) { R3D = null; }
+if (R3D) { const rb = $('replayToggle'); rb.hidden = false; setReplays(replaysOn); rb.addEventListener('click', () => setReplays(!replaysOn)); }
 // a soft click for buttons
 document.addEventListener('pointerdown', e => { if (e.target.closest && e.target.closest('button')) sndTick(); }, true);
 newFielders();
