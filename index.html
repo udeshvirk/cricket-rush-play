@@ -809,35 +809,190 @@ function shadow(p, r) {
   ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(s[0], s[1], rx, ry, 0, 0, Math.PI * 2); ctx.fill();
 }
 
-// the batter: fixed stance (faces the off side, front shoulder to the bowler), swing keyframes for the hands and bat
-const STANCE = { pelvis: [0.62, 0.95, 0.75], neck: [0.55, 1.47, 0.84], head: [0.5, 1.66, 0.92],
-  shL: [0.56, 1.43, 1.0], shR: [0.56, 1.43, 0.66], hipL: [0.62, 0.95, 0.87], hipR: [0.62, 0.95, 0.63],
-  footL: [0.58, 0, 1.08], footR: [0.62, 0, 0.42] };
-function batterPose(sw) {
-  const j = {};
-  for (const k in STANCE) j[k] = STANCE[k].slice();
-  let hands = [0.36, 0.86, 0.76], tip = [0.13, 0.05, 0.9];
-  if (sw) {
-    const p = sw.t / 0.55;   // the swing takes 0.55 s
-    const back = { h: [0.5, 1.28, 0.55], t: [0.6, 1.62, -0.22] };
-    const hitT = { h: [0.24, 0.86, 1.02], t: [-0.02, 0.14, 1.06] };
-    const dir = [Math.sin(sw.angle * deg), 0, Math.cos(sw.angle * deg)];
-    const up = sw.loft ? 0.95 : 0.7;
-    const thruH = [0.32 + dir[0] * 0.2, 1.38, 0.9 + dir[2] * 0.2];
-    const thru = { h: thruH, t: add(thruH, mul(norm([dir[0] * 0.5, up, dir[2] * 0.5]), 0.85)) };
-    const lag = SWING_LAG / 0.55;   // fraction of the swing at which the bat reaches the ball
-    if (p < lag * 0.55) { const t = smooth(Math.max(0, p) / (lag * 0.55)); hands = lerp3(hands, back.h, t); tip = lerp3(tip, back.t, t); }
-    else if (p < lag) { const t = smooth((p - lag * 0.55) / (lag * 0.45)); hands = lerp3(back.h, hitT.h, t); tip = lerp3(back.t, hitT.t, t); }
-    else if (p < 1) { const t = smooth((p - lag) / (1 - lag)); hands = lerp3(hitT.h, thru.h, t); tip = lerp3(hitT.t, thru.t, t); }
-    else { hands = thru.h; tip = thru.t; }
-    if (p > lag) { j.footL = [0.5, 0, 1.25]; j.pelvis = [0.56, 0.92, 0.82]; j.hipL = [0.56, 0.92, 0.94]; j.hipR = [0.58, 0.92, 0.7]; }
+// ----------------------------------------------------------------------- posed bodies: batting strokes and the bowling action
+// A pose: feet fr (left) and bk (right), pelvis pel, hips / shoulders facing hy / sy (degrees, 0 = toward the bowler's end),
+// lean (forward), side (toward the left shoulder), hands hL / hR; kpL / kpR / epL / epR point the knees / elbows.
+const LEG = 0.48, UPARM = 0.3, FOREARM = 0.29;
+const facing = d => [Math.sin(d * deg), 0, Math.cos(d * deg)];
+// the middle joint (knee, elbow) between a and c, bent toward `pole`
+function ik(a, c, l1, l2, pole) {
+  const d = sub(c, a), L = Math.max(1e-4, len(d)), dn = mul(d, 1 / L), Lc = Math.min(L, (l1 + l2) * 0.999);
+  const x = (l1 * l1 - l2 * l2 + Lc * Lc) / (2 * Lc), h = Math.sqrt(Math.max(0, l1 * l1 - x * x));
+  let pv = sub(pole, mul(dn, dot(pole, dn)));
+  pv = len(pv) > 1e-4 ? norm(pv) : [0, 1, 0];
+  return add(add(a, mul(dn, x)), mul(pv, h));
+}
+function buildBody(k) {
+  const j = {}, nH = facing(k.hy), sH = [nH[2], 0, -nH[0]], nS = facing(k.sy), s0 = [nS[2], 0, -nS[0]];
+  j.pelvis = k.pel.slice();
+  j.hipL = add(k.pel, mul(sH, 0.11)); j.hipR = add(k.pel, mul(sH, -0.11));
+  const ln = (k.lean || 0) * deg, sd = (k.side || 0) * deg;
+  const sp = norm(add(add([0, Math.cos(ln), 0], mul(nS, Math.sin(ln))), mul(s0, Math.sin(sd))));
+  const s = norm(sub(s0, mul(sp, dot(s0, sp)))), n = cross(s, sp);
+  j.neck = add(k.pel, mul(sp, 0.55));
+  const sc = sub(j.neck, mul(sp, 0.05));
+  j.shL = add(sc, mul(s, 0.19)); j.shR = add(sc, mul(s, -0.19));
+  j.head = add(add(j.neck, mul(sp, 0.18)), add(mul(n, 0.035), k.headOff || [0, 0, 0]));
+  j.footL = k.fr.slice(); j.footR = k.bk.slice();
+  j.kneeL = ik(j.hipL, add(k.fr, [0, 0.07, 0]), LEG, LEG, k.kpL || nH);
+  j.kneeR = ik(j.hipR, add(k.bk, [0, 0.07, 0]), LEG, LEG, k.kpR || nH);
+  j.handL = k.hL.slice(); j.handR = k.hR.slice();
+  j.elL = ik(j.shL, j.handL, UPARM, FOREARM, k.epL || add(s, [0, -0.8, 0]));
+  j.elR = ik(j.shR, j.handR, UPARM, FOREARM, k.epR || add(mul(s, -1), [0, -0.8, 0]));
+  return j;
+}
+function mixPose(a, b, t) {
+  const o = {};
+  for (const key in a) {
+    const x = a[key], y = b[key] === undefined ? x : b[key];
+    o[key] = Array.isArray(x) ? lerp3(x, y, t) : typeof x === 'number' ? lerp(x, y, t) : x;
   }
-  j.handL = add(hands, [0, 0.04, 0.05]); j.handR = add(hands, [0, -0.04, -0.03]);
-  j.elL = lerp3(j.shL, j.handL, 0.5); j.elL[0] -= 0.08;
-  j.elR = lerp3(j.shR, j.handR, 0.5); j.elR[0] -= 0.06;
-  j.kneeL = lerp3(j.hipL, j.footL, 0.5); j.kneeL[0] -= 0.08;
-  j.kneeR = lerp3(j.hipR, j.footR, 0.5); j.kneeR[0] -= 0.06;
-  return { j, hands, tip };
+  for (const key in b) if (o[key] === undefined) o[key] = b[key];
+  return o;
+}
+function keyed(keys, t) {   // keys: [[time, pose], ...], eased between
+  if (t <= keys[0][0]) return keys[0][1];
+  for (let i = 1; i < keys.length; i++) if (t < keys[i][0]) {
+    const [t0, a] = keys[i - 1], [t1, b] = keys[i];
+    return mixPose(a, b, smooth((t - t0) / (t1 - t0)));
+  }
+  return keys[keys.length - 1][1];
+}
+function mixJoints(a, b, t) { const o = {}; for (const k in a) o[k] = lerp3(a[k], b[k] || a[k], t); return o; }
+
+// --- the batter (a right-hander at his guard: facing the off side, front shoulder to the bowler). h = hands, bd = the bat's direction
+const STANCE = { fr: [0.58, 0, 1.06], bk: [0.64, 0, 0.44], pel: [0.63, 0.88, 0.75], hy: -90, sy: -88, lean: 16, side: 0,
+  h: [0.38, 0.9, 0.78], bd: norm([-0.26, -0.95, 0.15]), kpL: [-1, 0, 0.35], kpR: [-1, 0, -0.1] };
+const READY = { ...STANCE, bk: [0.6, 0, 0.4], pel: [0.62, 0.89, 0.73], lean: 14, h: [0.5, 1.12, 0.62], bd: norm([0.25, 0.7, -0.65]) };
+const LEAVE = { ...READY, lean: 6, h: [0.6, 1.5, 0.66], bd: norm([0.12, 0.95, -0.28]) };
+const DUCK = { ...LEAVE, pel: [0.66, 0.56, 0.7], lean: 48, h: [0.62, 1.0, 0.62], kpL: [-1, 0.2, 0.3], kpR: [-1, 0.2, 0] };
+// which stroke the batter plays (it shapes the swing, not where the ball goes)
+function strokeFamily(a, loft, defend, push, short, spin) {
+  if (defend) return short ? 'bdef' : push ? 'push' : 'fdef';
+  if (short) return a < -60 ? 'cut' : a > 25 ? 'pull' : 'bdrive';
+  if (a > 35) return spin && !loft && a < 135 ? 'sweep' : loft && a < 120 ? 'slog' : 'flick';
+  if (a < -100) return 'cut';
+  return 'drive';
+}
+// key poses for a stroke: ready, backlift, the bat meeting the ball at sw.target, the follow-through, then back to the stance
+function strokeKeys(sw) {
+  const T = sw.target, a = sw.intent * deg, dir = [Math.sin(a), 0, Math.cos(a)], loft = sw.loft;
+  const R = READY, B = { ...READY, h: [0.52, 1.3, 0.56], bd: norm([0.2, 0.85, -0.5]), lean: 12 };
+  const at = (bd, d = 0.58) => sub(T, mul(bd, d));   // grip, so the middle of the bat meets the ball
+  const tx = clamp(T[0], -0.9, 0.9), front = (x, z) => [clamp(tx + x, 0.05, 0.72), 0, z];
+  let C, F, tF = 0.5;
+  switch (sw.fam) {
+    case 'drive': {
+      const fr = front(0.3, 1.32), bd = norm([-0.05 + dir[0] * 0.12, -1, -0.12]);
+      C = { ...R, fr, pel: [lerp(0.63, fr[0], 0.45), 0.8, 0.98], hy: -70, sy: -78, lean: 28, side: 14, h: at(bd), bd, kpL: [-0.4, 0, 1] };
+      F = { ...C, hy: -55, sy: -45 + sw.intent * 0.25, lean: 16, side: 6,
+            h: [0.4 + dir[0] * 0.25, loft ? 1.78 : 1.55, 1.08 + dir[2] * 0.12], bd: norm(loft ? [0.3, 0.9, -0.3] : [0.45, 0.5, -0.75]) };
+      break; }
+    case 'fdef': case 'push': {
+      const fr = front(0.3, 1.26), bd = norm([0, -1, -0.28]);
+      C = { ...R, fr, pel: [lerp(0.63, fr[0], 0.45), 0.8, 0.95], hy: -75, sy: -82, lean: 30, side: 14, h: at(bd, 0.5), bd, kpL: [-0.4, 0, 1] };
+      F = sw.fam === 'push' ? { ...C, h: add(C.h, mul(dir, 0.2)), bd: norm([dir[0] * 0.5, -1, dir[2] * 0.3 - 0.1]) } : { ...C };
+      B.h = [0.47, 1.1, 0.66]; B.bd = norm([0.15, 0.6, -0.8]); tF = 0.35; break; }
+    case 'bdef': case 'bdrive': {
+      const bd = norm([0, -1, sw.fam === 'bdef' ? -0.2 : -0.08]), h = at(bd, 0.45);
+      h[1] = Math.min(h[1], 1.4);
+      C = { ...R, fr: [0.5, 0, 0.94], bk: [0.38, 0, 0.36], pel: [0.47, 0.9, 0.64], hy: -80, sy: -84, lean: 10, side: 4, h, bd, kpL: [-1, 0, 0.3], kpR: [-1, 0, 0] };
+      F = sw.fam === 'bdef' ? { ...C } : { ...C, sy: -60, h: [0.38 + dir[0] * 0.2, 1.48, 0.95 + dir[2] * 0.1], bd: norm([0.4, 0.55, -0.7]) };
+      if (sw.fam === 'bdef') tF = 0.35; break; }
+    case 'cut': {
+      const bd = norm([-0.85, -0.3, -0.25]);
+      C = { ...R, fr: [0.52, 0, 1.08], bk: [0.3, 0, 0.6], pel: [0.42, 0.88, 0.82], hy: -95, sy: -92, lean: 22, side: -4, h: at(bd), bd, kpL: [-1, 0, 0.3], kpR: [-1, 0, 0] };
+      F = { ...C, sy: -105, h: [0.18, 0.98, 0.6], bd: norm([-0.45, -0.55, -0.75]) };
+      B.h = [0.45, 1.5, 0.66]; B.bd = norm([0, 0.95, -0.3]); break; }
+    case 'pull': {
+      const bd = norm([-0.95, 0.05, 0.2]);
+      C = { ...R, fr: [0.78, 0, 0.98], bk: [0.48, 0, 0.36], pel: [0.6, 0.9, 0.66], hy: -50, sy: -35, lean: 12, side: 0, h: at(bd), bd, kpL: [-0.3, 0, 1], kpR: [-1, 0, 0] };
+      F = { ...C, hy: -20, sy: 20, h: [0.72, 1.45, 0.75], bd: norm([0.35, 0.35, -0.85]) };
+      B.h = [0.5, 1.5, 0.6]; B.bd = norm([0.2, 0.9, -0.35]); break; }
+    case 'flick': {
+      const fr = front(0.4, 1.28), bd = norm([0.12, -1, -0.05]);
+      C = { ...R, fr, pel: [lerp(0.63, fr[0], 0.45), 0.82, 0.97], hy: -70, sy: -72, lean: 24, side: 10, h: at(bd), bd, kpL: [-0.4, 0, 1] };
+      F = { ...C, hy: -40, sy: -20, lean: 14, h: [0.75, 1.2, 1.05], bd: norm([0.75, 0.35, 0.1 + dir[2] * 0.3]) };
+      break; }
+    case 'slog': {
+      const bd = norm([-0.9, -0.3, 0.25]);
+      C = { ...R, fr: [0.75, 0, 1.25], pel: [0.66, 0.84, 0.86], hy: -45, sy: -30, lean: 18, side: 6, h: at(bd), bd, kpL: [-0.2, 0, 1] };
+      F = { ...C, hy: -10, sy: 30, lean: 8, h: [0.8, 1.6, 0.8], bd: norm([0.3, 0.6, -0.75]) };
+      B.h = [0.5, 1.45, 0.55]; B.bd = norm([0.25, 0.9, -0.35]); break; }
+    case 'sweep': {
+      const bd = norm([-0.9, -0.35, 0.25]);
+      C = { ...R, fr: [0.42, 0, 1.22], bk: [0.78, 0, 0.22], pel: [0.62, 0.54, 0.82], hy: -70, sy: -60, lean: 30, side: 8, h: at(bd), bd,
+            kpL: [-0.3, 0.6, 1], kpR: [-0.2, -1, 0.3] };
+      F = { ...C, sy: -20, h: [0.75, 0.78, 0.95], bd: norm([0.5, 0.2, -0.8]) };
+      B.h = [0.45, 1.2, 0.75]; B.bd = norm([-0.2, 0.8, -0.55]); break; }
+  }
+  return [[0, R], [0.07, B], [SWING_LAG, C], [tF, F], [tF + 1.1, F], [tF + 1.8, STANCE]];
+}
+// the batter this frame: { j, hands, tip } (before moving across the crease or down the pitch)
+function batterPose(sw) {
+  let k;
+  if (sw) { if (!sw.keys) sw.keys = strokeKeys(sw); k = keyed(sw.keys, sw.t); }
+  else {
+    const ready = phase === 'runup' ? smooth(clamp((phaseT - RUNUP + 0.4) / 0.35, 0, 1)) : (phase === 'flight' || phase === 'result') && ball ? 1 : 0;
+    k = ready ? mixPose(STANCE, READY, ready) : STANCE;
+    if (ball && ball.left) {   // bat up out of the way; duck under a bouncer
+      const lk = smooth(clamp((ball.t - ball.left) / 0.2, 0, 1));
+      k = mixPose(k, ball.atBat[1] > 1.45 ? DUCK : LEAVE, lk);
+    }
+  }
+  const bd = norm(k.bd);
+  const j = buildBody({ ...k, hL: sub(k.h, mul(bd, 0.045)), hR: add(k.h, mul(bd, 0.045)), headOff: [0, 0, 0.04] });
+  return { j, hands: k.h.slice(), tip: add(k.h, mul(bd, 0.85)) };
+}
+
+// --- the bowler: run in, bound, deliver from just behind the crease (the ball leaves the hand at REL), follow through
+const RUNUP = 1.35;           // seconds from the start of the run to the release
+let lastStep = -1;
+const runupSteps = t => t < RUNUP - 0.38 ? Math.floor(t * 12 / Math.PI) : t < RUNUP - 0.13 ? 50 : t < RUNUP ? 100 : 101;
+function deliveryKeys(spin) {
+  const j = spin ? 0.3 : 1, Z = PITCH - 0.6;   // release over the front foot, just behind the popping crease
+  const st = spin ? 0.7 : 1;                    // spinners: a shorter stride, more upright, a gentler follow-through
+  const fwd = [0, 0, -1];
+  return [
+    [-0.26, { fr: [0.05, 0.35 * j, Z + 2.2 * st], bk: [0.2, 0.25 * j, Z + 2.65 * st], pel: [0.12, lerp(0.95, 1.14, j), Z + 2.4 * st], hy: 160, sy: 140, lean: 5, side: 0,
+              hL: [0.02, 1.55, Z + 2.12 * st], hR: [0.22, 1.48, Z + 2.25 * st], kpL: fwd, kpR: fwd, epL: [0, -0.5, -1], epR: [0.5, -1, 0] }],
+    [-0.13, { fr: [0.02, 0.3 * st, Z + 0.55 * st], bk: [0.22, 0, Z + 1.1 * st], pel: [0.12, 1.0, Z + 1.05 * st], hy: 110, sy: 95, lean: spin ? -4 : -12,
+              hL: [0.05, 2.0, Z + 0.45 * st], hR: [0.32, spin ? 1.15 : 0.98, Z + 1.45 * st] }],
+    [0, { fr: [0.0, 0, Z - 0.42 * st], bk: [0.25, 0.12, Z + 0.7 * st], pel: [0.08, 0.96 + (1 - st) * 0.1, Z + 0.1], hy: 150, sy: spin ? 150 : 160, lean: spin ? 8 : 12,
+          hL: [-0.22, 1.0, Z + 0.1], hR: [REL_X, 2.15, Z], epR: [1, 0, 0] }],
+    [0.22, { fr: [0.02, 0, Z - 0.42 * st], bk: [0.15, 0.3, Z - 0.5 * st], pel: [0.05, spin ? 0.9 : 0.82, Z - 0.65 * st], hy: 190, sy: spin ? 215 : 205, lean: spin ? 28 : 50,
+             hL: [0.42, 0.95, Z - 0.1], hR: [-0.28, spin ? 0.95 : 0.82, Z - 0.8 * st], epR: [1, -0.5, 0] }],
+    [0.5, { fr: [0.1, 0.15, Z - 1.5 * st], bk: [0.2, 0, Z - 1.2 * st], pel: [0.2, 0.92, Z - 1.3 * st], hy: 180, sy: 185, lean: spin ? 15 : 25,
+            hL: [0.42, 1.0, Z - 1.15 * st], hR: [-0.05, 0.95, Z - 1.55 * st], epR: [1, -1, 0] }],
+  ];
+}
+const DELIVERY = { pace: deliveryKeys(false), spin: deliveryKeys(true) };
+function bowlerState() {
+  const T = inn && inn.bowler !== null ? BOWL_TYPES[btype(bowlerP())] : BOWL_TYPES.F, spin = !!T.turn;
+  const keys = spin ? DELIVERY.spin : DELIVERY.pace;
+  const tr = phase === 'runup' ? phaseT - RUNUP : phase === 'flight' ? phaseT : phase === 'result' || phase === 'play' ? 3 : null;
+  const bound = PITCH - 0.6 + 2.6, speed = spin ? 4.6 : T.speed[0] > 130 ? 8.5 : 7.4;
+  const start = Math.min(T.start, bound + speed * (RUNUP - 0.38));
+  const home = [1.7, 0, 17.2];
+  const runner = (pos, face, run, ph) => ({ pos, j: figure(pos, face, { run, phase: ph }) });
+  if (tr === null) return runner([1.1, 0, start], Math.PI, 0, 0);
+  if (tr < -0.38) {   // running in, at an angle from the right
+    const u = clamp((tr + RUNUP) / (RUNUP - 0.38), 0, 1);
+    return runner([lerp(1.1, 0.12, smooth(Math.min(1, u / 0.9))), 0, lerp(start, bound, u)], Math.PI, 1, phaseT * (spin ? 9 : 12));
+  }
+  if (tr < 0.5) {
+    const j = buildBody(keyed(keys, tr));
+    if (tr < -0.26) {   // from the last running stride into the bound
+      const r = runner([0.12, 0, bound - speed * (tr + 0.38)], Math.PI, 1, phaseT * (spin ? 9 : 12));
+      return { pos: [j.pelvis[0], 0, j.pelvis[2]], j: mixJoints(r.j, j, smooth((tr + 0.38) / 0.12)) };
+    }
+    return { pos: [j.pelvis[0], 0, j.pelvis[2]], j };
+  }
+  // after the follow-through: jog off the pitch to his fielding spot
+  const end = keys[keys.length - 1][1], from = [end.pel[0], 0, end.pel[2]], u = clamp((tr - 0.5) / 0.9, 0, 1);
+  const pos = lerp3(from, home, smooth(u)), r = runner(pos, Math.atan2(home[0] - from[0], home[2] - from[2]), Math.max(0, 1 - u * 1.1), clock * 11);
+  if (tr < 0.65) return { pos, j: mixJoints(buildBody(end), r.j, smooth((tr - 0.5) / 0.15)) };
+  return r;
 }
 
 // stumps (with a tilt when bowled)
@@ -852,52 +1007,146 @@ function drawStumps(z, tilt, bails) {
   else for (const b of bails) line3(sub(b.p, [0.055, 0, 0]), add(b.p, [0.055, 0, 0]), 0.025, '#f1e6c8');
 }
 
-// ======================================================================= audio (made on the first tap)
-let actx = null, master = null, soundOn = true, crowdGain = null, quiet = false;
+// ======================================================================= sound (all made here, no sound files; starts on the first tap)
+let actx = null, master = null, soundOn = true, crowdGain = null, roarGain = null, sfx = null, crowdBus = null, quiet = false;
+let NOISE = null, CLAPS = null;
+function noiseLoop(sec, band, wobble) {   // stereo crowd noise: filtered, with a slow swell like many voices
+  const n = Math.floor(actx.sampleRate * sec), buf = actx.createBuffer(2, n, actx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch), ph = [Math.random() * 6, Math.random() * 6, Math.random() * 6];
+    let lo = 0, lo2 = 0;
+    for (let i = 0; i < n; i++) {
+      const w = Math.random() * 2 - 1;
+      lo += (w - lo) * band[1]; lo2 += (lo - lo2) * band[0];         // band-pass: two one-pole filters
+      const t = i / actx.sampleRate * Math.PI * 2 / sec;             // whole cycles over the loop, so it joins up
+      const sw = 1 + wobble * (0.5 * Math.sin(t * 2 + ph[0]) + 0.3 * Math.sin(t * 5 + ph[1]) + 0.2 * Math.sin(t * 11 + ph[2]));
+      d[i] = (lo - lo2) * sw;
+    }
+    let ss = 0; for (let i = 0; i < n; i++) ss += d[i] * d[i];
+    const k = 0.3 / Math.sqrt(ss / n || 1); for (let i = 0; i < n; i++) d[i] *= k;   // the same loudness whatever the filter
+  }
+  return buf;
+}
+function clapBuffer(sec) {   // applause: lots of short claps, dense at the start and thinning out
+  const sr = actx.sampleRate, n = Math.floor(sr * sec), buf = actx.createBuffer(2, n, sr);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    let t = 0;
+    while (t < sec) {
+      const rate = 90 * Math.exp(-t * 0.9) + 6;
+      t += -Math.log(1 - Math.random()) / rate;
+      const i0 = Math.floor(t * sr), L = Math.floor(sr * 0.012), amp = rand(0.25, 1), tone = rand(0.3, 0.75);
+      let prev = 0;
+      for (let i = 0; i < L && i0 + i < n; i++) {
+        const w = Math.random() * 2 - 1, hp = w - prev * tone; prev = w;   // a bright, short burst
+        d[i0 + i] += hp * amp * Math.exp(-i / (sr * 0.0025));
+      }
+    }
+    for (let i = 0; i < n; i++) d[i] *= 0.22 * Math.min(1, (n - i) / (sr * 0.6));
+  }
+  return buf;
+}
 function audio() {
-  if (actx) return actx;
+  if (actx) { if (actx.state === 'suspended') actx.resume(); return actx; }
   try {
     actx = new (window.AudioContext || window.webkitAudioContext)();
-    master = actx.createGain(); master.gain.value = soundOn ? 0.8 : 0; master.connect(actx.destination);
-    // crowd murmur: looped filtered noise
-    const buf = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate), d = buf.getChannelData(0);
-    let last = 0;
-    for (let i = 0; i < d.length; i++) { last = last * 0.97 + (Math.random() * 2 - 1) * 0.03; d[i] = last * 6; }
-    const src = actx.createBufferSource(); src.buffer = buf; src.loop = true;
-    const f = actx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 700; f.Q.value = 0.6;
-    crowdGain = actx.createGain(); crowdGain.gain.value = 0.18;
-    src.connect(f); f.connect(crowdGain); crowdGain.connect(master); src.start();
+    const comp = actx.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.connect(actx.destination);
+    master = actx.createGain(); master.gain.value = soundOn ? 0.9 : 0; master.connect(comp);
+    // the stadium: a short echo for the bat, the stumps and the gloves
+    const rev = actx.createConvolver(), sr = actx.sampleRate, ir = actx.createBuffer(2, sr * 1.6, sr);
+    for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3) * (i < sr * 0.03 ? 0 : 1); }
+    rev.buffer = ir;
+    const wet = actx.createGain(); wet.gain.value = 0.22; rev.connect(wet); wet.connect(master);
+    sfx = actx.createGain(); sfx.connect(master); sfx.connect(rev);
+    crowdBus = actx.createGain(); crowdBus.gain.value = 0.9; crowdBus.connect(master);
+    NOISE = actx.createBuffer(1, sr, sr); { const d = NOISE.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+    CLAPS = clapBuffer(4);
+    // the crowd: a murmur all the time, and a roar that rises for the big moments
+    const loop = (buf, gain) => { const s = actx.createBufferSource(); s.buffer = buf; s.loop = true; const g = actx.createGain(); g.gain.value = gain; s.connect(g); g.connect(crowdBus); s.start(); return g; };
+    crowdGain = loop(noiseLoop(6, [0.03, 0.12], 0.35), 0.16);
+    roarGain = loop(noiseLoop(5, [0.06, 0.3], 0.25), 0.0);
+    document.addEventListener('visibilitychange', () => { if (!actx) return; if (document.hidden) actx.suspend(); else actx.resume(); });
   } catch (e) { actx = null; }
   return actx;
 }
-function noiseBurst(dur, freq, q, gain) {
-  if (!actx || quiet) return;
-  const t = actx.currentTime, n = Math.floor(actx.sampleRate * dur);
-  const buf = actx.createBuffer(1, n, actx.sampleRate), d = buf.getChannelData(0);
-  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
-  const s = actx.createBufferSource(); s.buffer = buf;
-  const f = actx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
-  const g = actx.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  s.connect(f); f.connect(g); g.connect(master); s.start(t);
+const live = () => actx && !quiet && actx.state !== 'closed';
+// one burst of noise through a filter: dur (s), filter type, frequency, Q, gain, when (s from now), to (bus)
+function burst(dur, type, freq, q, gain, when = 0, to = sfx, freqEnd) {
+  if (!live()) return;
+  const t = actx.currentTime + when;
+  const s = actx.createBufferSource(); s.buffer = NOISE;
+  const f = actx.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
+  if (freqEnd) f.frequency.exponentialRampToValueAtTime(freqEnd, t + dur);
+  const g = actx.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+  s.connect(f); f.connect(g); g.connect(to); s.start(t, Math.random() * 0.5, dur + 0.05);
 }
-function sndBat(power) {
-  if (!actx || quiet) return;
-  const t = actx.currentTime;
-  const o = actx.createOscillator(), g = actx.createGain();
-  o.type = 'triangle'; o.frequency.setValueAtTime(620 + power * 260, t); o.frequency.exponentialRampToValueAtTime(240, t + 0.09);
-  g.gain.setValueAtTime(0.5 + power * 0.4, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
-  o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.13);
-  noiseBurst(0.05, 2400, 1.5, 0.35);
+function ping(freq, dur, gain, when = 0, type = 'sine', freqEnd, to = sfx) {   // a short tone that dies away
+  if (!live()) return;
+  const t = actx.currentTime + when, o = actx.createOscillator(), g = actx.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t); if (freqEnd) o.frequency.exponentialRampToValueAtTime(freqEnd, t + dur);
+  g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+  o.connect(g); g.connect(to); o.start(t); o.stop(t + dur + 0.02);
 }
-function sndCrowd(level, dur) {
-  if (!actx || !crowdGain || quiet) return;
-  const t = actx.currentTime;
-  crowdGain.gain.cancelScheduledValues(t);
-  crowdGain.gain.setValueAtTime(crowdGain.gain.value, t);
-  crowdGain.gain.linearRampToValueAtTime(0.18 + level, t + 0.25);
-  crowdGain.gain.linearRampToValueAtTime(0.18, t + dur);
+// bat on ball: 'middle' (a clean hit, power 0..1), 'edge', 'block'
+function sndBat(kind, power = 0.6) {
+  if (!live()) return;
+  if (kind === 'edge') { burst(0.012, 'highpass', 3000, 0.7, 0.4); ping(2900, 0.03, 0.18); ping(3700, 0.02, 0.1); return; }
+  const block = kind === 'block', p = block ? 0.25 : clamp(power, 0, 1);
+  burst(0.006, 'highpass', 2200, 0.7, 0.55 + p * 0.35);                 // the crack
+  ping(block ? 850 : 1050 + p * 120, 0.05 + p * 0.03, 0.32 + p * 0.25);  // the willow ringing
+  ping(block ? 1350 : 1720, 0.035, 0.14 + p * 0.1);
+  ping(2600, 0.02, 0.06 + p * 0.06);
+  ping(block ? 150 : 175, 0.05, 0.25 + p * 0.25, 0, 'sine', 90);          // the thump
 }
-function sndStumps() { noiseBurst(0.25, 1800, 2, 0.6); noiseBurst(0.12, 600, 3, 0.5); }
+const sndBounce = (v = 1) => { burst(0.05, 'lowpass', 600, 0.8, 0.22 * v); ping(120, 0.06, 0.16 * v, 0, 'sine', 70); };
+const sndGlove = (v = 1) => { burst(0.05, 'bandpass', 1300, 1.2, 0.5 * v); ping(230, 0.045, 0.25 * v, 0, 'sine', 140); };
+const sndStep = v => burst(0.05, 'lowpass', 320, 0.9, 0.45 * v);
+const sndBoards = () => { ping(85, 0.16, 0.35, 0, 'sine', 55); burst(0.09, 'lowpass', 500, 1, 0.3); };
+function sndStumps() {   // the stumps knocked back, then the bails
+  for (let i = 0; i < 3; i++) { burst(0.07, 'bandpass', rand(1400, 2400), 6, 0.55, i * 0.018); ping(rand(600, 760), 0.09, 0.2, i * 0.018, 'triangle'); }
+  burst(0.03, 'bandpass', 4200, 5, 0.25, 0.12); burst(0.03, 'bandpass', 3800, 5, 0.2, 0.2);
+}
+// the crowd
+function sndCrowd(level, dur) {   // the roar: up quickly, then down over `dur` seconds
+  if (!live() || !roarGain) return;
+  const t = actx.currentTime, g = roarGain.gain;
+  g.cancelScheduledValues(t); g.setValueAtTime(g.value, t);
+  g.linearRampToValueAtTime(level * 0.8, t + 0.18); g.setTargetAtTime(0, t + 0.6, dur / 3);
+}
+function sndClap(level, dur = 4) {
+  if (!live() || !CLAPS) return;
+  const t = actx.currentTime, s = actx.createBufferSource(), g = actx.createGain();
+  s.buffer = CLAPS; s.playbackRate.value = rand(0.95, 1.05);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(level, t + 0.15); g.gain.setTargetAtTime(0, t + dur * 0.5, dur * 0.18);
+  s.connect(g); g.connect(crowdBus); s.start(t);
+}
+function sndOoh(level = 1, groan = false) {   // "oooh!" (beaten, an edge, a drop) or a groan ("aww", your wicket)
+  if (!live()) return;
+  const t = actx.currentTime, dur = groan ? 1.5 : 1.3;
+  const s = actx.createBufferSource(); s.buffer = NOISE; s.loop = true;
+  const g = actx.createGain(); g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(3 * level, t + 0.22); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+  for (const [f0, f1, q, k] of groan ? [[700, 420, 5, 1], [1150, 800, 6, 0.6]] : [[320, 620, 5, 1], [800, 1050, 6, 0.6]]) {
+    const f = actx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = q;
+    f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur * 0.7);
+    const fg = actx.createGain(); fg.gain.value = k; s.connect(f); f.connect(fg); fg.connect(g);
+  }
+  g.connect(crowdBus); s.start(t, Math.random() * 0.4); s.stop(t + dur + 0.05);
+}
+function sndHorn() {   // a fan's air horn for a six, after the roar starts
+  if (!live()) return;
+  const t = actx.currentTime + 0.35, g = actx.createGain(), f = actx.createBiquadFilter();
+  f.type = 'lowpass'; f.frequency.value = 1700;
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.09, t + 0.04); g.gain.setValueAtTime(0.09, t + 0.55); g.gain.exponentialRampToValueAtTime(0.0008, t + 0.8);
+  for (const fr of [233, 311, 466]) { const o = actx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = fr * rand(0.995, 1.005); o.connect(f); o.start(t); o.stop(t + 0.85); }
+  f.connect(g); g.connect(crowdBus);
+}
+const sndTick = () => { if (live()) { ping(1900, 0.025, 0.05, 0, 'triangle'); } };
+function sndBuzz(level) {   // the crowd stirs as the bowler runs in
+  if (!live() || !crowdGain) return;
+  const t = actx.currentTime, g = crowdGain.gain;
+  g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(0.16 + level, t + 0.8); g.setTargetAtTime(0.16, t + 1.6, 0.8);
+}
 
 // ======================================================================= game state
 let level = LEVELS[1];
@@ -1089,10 +1338,16 @@ function swing(loft, pressT, aim, w) {
   angle = aimed ? wrapA(angle) : clamp(angle, -140, 140);
   ball.swing.angle = kind === 'hit' ? angle : (atBat[0] < 0.1 ? -150 : 150);
   ball.swing.aimDir = aimed ? aim.angle : null;
+  // how it looks: the stroke, and where the bat meets the ball (relative to the batter's guard)
+  ball.swing.intent = wrapA(aimed ? aim.angle : angle);
+  ball.swing.push = !!(aim && aim.defend && aimed);
+  ball.swing.fam = strokeFamily(ball.swing.intent, ball.swing.loft, ball.swing.defend, ball.swing.push, ball.short, !!(BOWL_TYPES[ball.type] || {}).turn);
+  ball.swing.target = [atBat[0], clamp(atBat[1], 0.12, 1.9), 1.02];
   ball.decision = { kind, q, angle, loft: ball.swing.loft, defend: ball.swing.defend, push: !!(aim && aim.defend && aimed), dtTiming, power: ((aim && aim.power) || 1) * (ball.charge && !(aim && aim.defend) ? 1.1 : 1) };
   // the bat meets the ball in front of the batter (early) or beside the stumps (late), never behind them
   ball.contactT = kind === 'miss' ? Infinity : ball.Tstar + clamp(dtTiming, -0.05, 0.015);
-  const sn = kind === 'hit' ? shotName(angle, ball.swing.loft, ball.swing.defend, ball.decision.push) : kind === 'edge' ? 'Edged' : 'Missed';
+  let sn = kind === 'hit' ? shotName(angle, ball.swing.loft, ball.swing.defend, ball.decision.push) : kind === 'edge' ? 'Edged' : 'Missed';
+  if (kind === 'hit' && ball.swing.fam === 'sweep') sn = Math.abs(angle) > 125 ? 'Fine sweep' : 'Sweep';
   if (swipeVis) swipeVis.label = sn;
   if (!quiet) showTiming(dtTiming, kind, kind === 'hit' ? sn : '', w);
 }
@@ -1338,7 +1593,8 @@ function strike() {
 function contact() {
   const d = ball.decision;
   if (d.kind === 'miss') return;
-  sndBat(d.kind === 'edge' ? 0.15 : d.defend ? 0.1 : d.q);
+  sndBat(d.kind === 'edge' ? 'edge' : d.defend ? 'block' : 'middle', d.q * (d.loft ? 1 : 0.8) * (d.power || 1));
+  if (d.kind === 'edge') sndOoh(0.55);
   const h = strike();
   if (h.playedOn) return;
   const { fp, res, angle } = h;
@@ -1644,14 +1900,19 @@ function finishBall(o, line) {
   recordBall(o);
   updateScore();
   const c = i.cards[k], who = chaseMode ? '' : surname(batterP(k).name) + ' ';
+  const ours = i.userBats;   // the crowd is on your side
   if (o.out) {
     showBanner('OUT!', chaseMode ? line : line + ' · ' + who + c.runs + ' (' + c.balls + ')', 'bw');
-    sndCrowd(i.userBats ? 0.12 : 0.5, 1.6); if (!i.userBats) cheer = 0.6;
+    if (ours) { sndOoh(1, true); sndClap(0.25, 3); } else { sndCrowd(0.9, 3); sndClap(0.7); cheer = 0.8; }
   } else if (o.wide) showBanner('WIDE', line, 'small');
-  else if (o.runs === 6) { showBanner('SIX!', line, 'b6'); sndCrowd(0.75, 3); cheer = 1; }
-  else if (o.runs === 4) { showBanner('FOUR!', line, 'b4'); sndCrowd(0.55, 2.4); cheer = 0.7; }
-  else showBanner(o.runs === 0 ? 'DOT BALL' : o.runs + (o.runs === 1 ? ' RUN' : ' RUNS'), line, 'small');
-  if (!chaseMode && !o.out && c.runs >= 50 && c.runs - o.runs < 50) showBanner(c.runs >= 100 ? 'HUNDRED!' : 'FIFTY!', who + c.runs + ' off ' + c.balls, 'b6');
+  else if (o.runs === 6) { showBanner('SIX!', line, 'b6'); if (ours) { sndCrowd(1, 3.5); sndClap(0.8, 5); sndHorn(); cheer = 1; } else { sndCrowd(0.3, 2); sndClap(0.35); } }
+  else if (o.runs === 4) { showBanner('FOUR!', line, 'b4'); if (ours) { sndCrowd(0.7, 2.6); sndClap(0.6); cheer = 0.7; } else { sndCrowd(0.2, 1.5); sndClap(0.3); } }
+  else {
+    showBanner(o.runs === 0 ? 'DOT BALL' : o.runs + (o.runs === 1 ? ' RUN' : ' RUNS'), line, 'small');
+    if (o.runs && ours) sndClap(0.12 + o.runs * 0.04, 2.5);
+    if (/^Dropped/.test(line)) sndOoh(1.1);
+  }
+  if (!chaseMode && !o.out && c.runs >= 50 && c.runs - o.runs < 50) { showBanner(c.runs >= 100 ? 'HUNDRED!' : 'FIFTY!', who + c.runs + ' off ' + c.balls, 'b6'); sndClap(1, 7); sndCrowd(0.6, 4); }
   phase = 'result'; phaseT = 0;
 }
 
@@ -1956,7 +2217,7 @@ function update(dt) {
   cheer = Math.max(0, cheer - dt * 0.4);
   if (bannerUntil && clock > bannerUntil) hideBanner();
 
-  if (phase === 'wait' && phaseT >= 0) { phase = 'runup'; phaseT = 0; $('delivery').classList.remove('show'); }
+  if (phase === 'wait' && phaseT >= 0) { phase = 'runup'; phaseT = 0; $('delivery').classList.remove('show'); sndBuzz(0.07); }
   else if (phase === 'aim') {
     const [x, y] = keyAxes();
     if (x || y) { marker.x = clamp(marker.x + x * 0.8 * dt, -1.3, 1.1); marker.z = clamp(marker.z - y * 3.5 * dt, -0.4, 11); }
@@ -1965,7 +2226,9 @@ function update(dt) {
       const v = meter.lock !== null ? meter.lock : needle();
       $('meter').querySelector('.needle').style.left = (v + 1) / 2 * 100 + '%';
     }
-    if (phaseT >= 1.35) release();
+    const st = runupSteps(phaseT);
+    if (st !== lastStep) { lastStep = st; if (st >= 0 && st < 101) sndStep(st >= 100 ? 1 : 0.25 + 0.5 * phaseT / RUNUP); }
+    if (phaseT >= RUNUP) { lastStep = -1; release(); }
   }
 
   if (phase === 'flight') {
@@ -1980,6 +2243,7 @@ function update(dt) {
     }
     if (phase === 'flight') {   // not hit (yet)
       const p = samplePath(ball.path, ball.t);
+      if (!ball.bounced && ball.t >= ball.tBounce) { ball.bounced = true; sndBounce(); }
       const d = ball.decision, missed = !d || d.kind === 'miss';
       if (!ball.stumpsHit && (ball.stumps || ball.playedOn) && p[2] <= 0.05 && (missed || ball.contacted)) {
         ball.stumpsHit = true; ball.tilt = [rand(0.3, 0.7), rand(0.6, 1.1), rand(0.3, 0.7)];
@@ -1990,6 +2254,8 @@ function update(dt) {
       } else if (!ball.stumpsHit && p[2] < keeperZ + 0.6) {
         // through to the keeper
         const kp = fielders.find(f => f.keeper);
+        sndGlove(0.8);
+        if (d && d.kind === 'miss' && !ball.wide && !ball.left) sndOoh(0.7);
         if (ball.charge && missed && Math.random() < (keeperZ > -5 ? 0.9 : 0.4)) finishBall({ runs: 0, out: { how: 'stumped', by: kp } }, 'Stumped!');
         else if (ball.charge && missed) finishBall({ runs: 0 }, 'Missed the stumping');
         else if (ball.wide && missed) finishBall({ runs: 0, wide: true }, 'Too wide · one extra run');
@@ -2009,12 +2275,15 @@ function update(dt) {
       if (res.kind === 'caught' && pl.t >= res.t) {
         const f = res.fielder;
         const name = f.keeper ? 'Caught behind' : f.bowler ? 'Caught and bowled' : 'Caught at ' + f.name;
+        sndGlove(1);
         finishBall({ runs: 0, out: { how: 'caught', by: f } }, name);
       } else if ((res.kind === 'four' || res.kind === 'six') && pl.t >= res.t && !pl.announced) {
         pl.announced = true;
+        if (res.kind === 'four') sndBoards();
         const dir = regionName(pl.angle, 60);
         finishBall({ runs: res.runs }, res.kind === 'six' ? res.carry + ' m over ' + dir : 'Through ' + dir);
       } else if (res.kind === 'runs' && pl.t >= res.throwStart + res.throwTime) {
+        sndGlove(0.45);
         const dir = regionName(pl.angle, Math.hypot(res.point[0], res.point[2]));
         const line = res.dropped ? 'Dropped at ' + res.fielder.name + '!' : (res.runs ? 'Worked to ' + dir : 'Straight to ' + res.fielder.name);
         finishBall({ runs: res.runs }, line);
@@ -2178,14 +2447,6 @@ function people() {
                bat: { carry: true, hands: hand, tip: add(hand, [0, -0.7, sr.face ? -0.3 : 0.3]) } });
   } else {
     let { j, hands, tip } = batterPose(ball && ball.swing ? ball.swing : null);
-    if (ball && ball.left) {   // bat up out of the way; duck under a bouncer
-      const k = clamp((ball.t - ball.left) / 0.2, 0, 1);
-      hands = lerp3(hands, [0.52, 1.5, 0.78], k); tip = lerp3(tip, [0.62, 2.1, 0.55], k);
-      j.handL = add(hands, [0, 0.04, 0.05]); j.handR = add(hands, [0, -0.04, -0.03]);
-      j.elL = lerp3(j.shL, j.handL, 0.5); j.elR = lerp3(j.shR, j.handR, 0.5);
-      if (ball.atBat[1] > 1.45) for (const n of ['neck', 'head', 'shL', 'shR', 'elL', 'elR', 'handL', 'handR']) j[n][1] -= 0.45 * k;
-      if (ball.atBat[1] > 1.45) { hands = add(hands, [0, -0.45 * k, 0]); tip = add(tip, [0, -0.45 * k, 0]); }
-    }
     let at = [0.6 + guard, 0, 0.75];
     if (guard) { const o = [guard, 0, 0]; for (const n in j) j[n] = add(j[n], o); hands = add(hands, o); tip = add(tip, o); }
     if (ball && ball.charge) {   // down the pitch
@@ -2301,33 +2562,6 @@ function drawAimGuide() {
   }
   line3([marker.x - 0.08, 0.01, marker.z], [marker.x + 0.08, 0.01, marker.z], 0.025, '#ffb02e');
   line3([marker.x, 0.01, marker.z - 0.13], [marker.x, 0.01, marker.z + 0.13], 0.025, '#ffb02e');
-}
-
-function bowlerState() {
-  // run in from beyond the camera, deliver at the crease, follow through
-  const T = inn && inn.bowler !== null ? BOWL_TYPES[btype(bowlerP())] : BOWL_TYPES.F;
-  let z, x = 0.05, run = 1, ph = clock * 12, handR = null, face = Math.PI;
-  const RUN = 1.35;
-  if (phase === 'runup') {
-    const u = phaseT / RUN;
-    z = lerp(T.start, PITCH + 0.2, u);
-    x = lerp(1.1, 0.05, smooth(Math.min(1, u / 0.8)));   // comes in at an angle from the right
-    ph = phaseT * (T.turn ? 10 : 13);
-    if (u > 0.78) {
-      const k = (u - 0.78) / 0.22;   // bowling arm comes over
-      const a = lerp(Math.PI * 1.1, 0.25, smooth(k));
-      handR = [x + 0.19, 1.45 + Math.cos(a) * 0.68, z - Math.sin(a) * 0.68];
-    }
-  } else if (phase === 'flight' || phase === 'result' || phase === 'play') {
-    const t = phase === 'flight' ? phaseT : 1.4;
-    z = PITCH + 0.2 - Math.min(3.2, t * 4 - t * t * 0.9);
-    x = lerp(0.05, 1.7, smooth(Math.min(1, t / 0.7)));   // follows through off the pitch, out of the camera's way
-    run = Math.max(0, 1 - t / 1.4);
-    ph = clock * 12;
-    if (phase === 'flight' && t < 0.3) { const a = lerp(0.25, -1.3, t / 0.3); handR = [x + 0.19, 1.45 + Math.cos(a) * 0.68, z - Math.sin(a) * 0.68]; }
-  } else { z = T.start; x = 1.1; run = 0; }
-  const pos = [x, 0, z];
-  return { pos, j: figure(pos, face, { run, phase: ph, handR }) };
 }
 
 function renderMap(bp) {
@@ -2502,7 +2736,7 @@ window.addEventListener('keyup', e => held.delete(e.code));
 window.addEventListener('blur', () => held.clear());
 $('mute').addEventListener('click', () => {
   soundOn = !soundOn; audio();
-  if (master) master.gain.value = soundOn ? 0.8 : 0;
+  if (master) master.gain.value = soundOn ? 0.9 : 0;
   $('mute').textContent = soundOn ? 'SOUND ON' : 'SOUND OFF';
 });
 // full screen (Android, iPad, laptops; iPhone Safari can't, but the installed app opens full screen anyway)
@@ -2553,6 +2787,8 @@ try {
     get ball() { return ball; }, get W() { return W; }, get H() { return H; },
   }) : null;
 } catch (e) { R3D = null; }
+// a soft click for buttons
+document.addEventListener('pointerdown', e => { if (e.target.closest && e.target.closest('button')) sndTick(); }, true);
 newFielders();
 renderRecord();
 requestAnimationFrame(frame);
