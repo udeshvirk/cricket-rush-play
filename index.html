@@ -795,11 +795,12 @@ function figure(pos, face, o = {}) {
   const P = (a, b, h) => add(pos, add(add(mul(F, a), mul(L, b)), [0, h, 0]));
   const run = o.run || 0, ph = o.phase || 0, crouch = o.crouch || 0;
   const sw = Math.sin(ph) * 0.42 * run, lean = 0.12 * run + crouch * 0.25;
-  const hip = 0.95 - crouch * 0.25 - Math.abs(Math.sin(ph)) * 0.04 * run;
+  const still = Math.max(0, 1 - run * 2), sd = o.seed || 0, br = Math.sin(clock * 1.6 + sd * 3) * still, shift = Math.sin(clock * 0.45 + sd * 7) * 0.035 * still;
+  const hip = 0.95 - crouch * 0.25 - Math.abs(Math.sin(ph)) * 0.04 * run + br * 0.007;
   const j = {};
-  j.pelvis = P(0, 0, hip);
-  j.neck = P(lean, 0, hip + 0.55);
-  j.head = P(lean + 0.03, 0, hip + 0.74);
+  j.pelvis = P(0, shift, hip);
+  j.neck = P(lean + br * 0.006, shift * 0.6, hip + 0.55);
+  j.head = P(lean + 0.03 + br * 0.008, shift * 0.5, hip + 0.74);
   j.shL = P(lean, 0.19, hip + 0.5); j.shR = P(lean, -0.19, hip + 0.5);
   j.hipL = P(0, 0.11, hip); j.hipR = P(0, -0.11, hip);
   j.footL = P(sw + crouch * 0.1, 0.16 + crouch * 0.12, Math.max(0, Math.sin(ph) * 0.18 * run));
@@ -876,11 +877,12 @@ function mixPose(a, b, t) {
   for (const key in b) if (o[key] === undefined) o[key] = b[key];
   return o;
 }
-function keyed(keys, t) {   // keys: [[time, pose], ...], eased between
+const easeIn = t => t * t, easeOut = t => 1 - (1 - t) * (1 - t);
+function keyed(keys, t) {   // keys: [[time, pose, easing?], ...]; the easing shapes the move into that key (smooth by default)
   if (t <= keys[0][0]) return keys[0][1];
   for (let i = 1; i < keys.length; i++) if (t < keys[i][0]) {
-    const [t0, a] = keys[i - 1], [t1, b] = keys[i];
-    return mixPose(a, b, smooth((t - t0) / (t1 - t0)));
+    const [t0, a] = keys[i - 1], [t1, b, ease] = keys[i];
+    return mixPose(a, b, (ease || smooth)((t - t0) / (t1 - t0)));
   }
   return keys[keys.length - 1][1];
 }
@@ -952,7 +954,15 @@ function strokeKeys(sw) {
       F = { ...C, sy: -20, h: [0.75, 0.78, 0.95], bd: norm([0.5, 0.2, -0.8]) };
       B.h = [0.45, 1.2, 0.75]; B.bd = norm([-0.2, 0.8, -0.55]); break; }
   }
-  return [[0, R], [0.07, B], [SWING_LAG, C], [tF, F], [tF + 1.1, F], [tF + 1.8, STANCE]];
+  // no two strokes quite alike: a little variety in the finish, and a held finish that settles instead of freezing
+  const v = sw.vary || (sw.vary = { l: rand(-4, 4), y: rand(-7, 7), h: [rand(-0.08, 0.08), rand(-0.1, 0.1), rand(-0.06, 0.06)], f: rand(-0.03, 0.05), hold: rand(0.8, 1.3) });
+  const firm = /def/.test(sw.fam) ? 0.3 : 1;
+  C = { ...C, lean: C.lean + v.l * 0.4 };
+  F = { ...F, lean: F.lean + v.l * firm, hy: F.hy + v.y * firm, sy: F.sy + v.y * firm, h: add(F.h, mul(v.h, firm)) };
+  tF += v.f;
+  const S = { ...F, lean: F.lean - 4, h: add(F.h, [0, -0.06 * firm, 0]) };
+  // the bat accelerates into the ball and decelerates through the follow-through
+  return [[0, R], [0.07, B], [SWING_LAG, C, easeIn], [tF, F, easeOut], [tF + v.hold, S], [tF + v.hold + 0.7, STANCE]];
 }
 // the batter this frame: { j, hands, tip } (before moving across the crease or down the pitch)
 function batterPose(sw) {
@@ -961,6 +971,12 @@ function batterPose(sw) {
   else {
     const ready = phase === 'runup' ? smooth(clamp((phaseT - RUNUP + 0.4) / 0.35, 0, 1)) : (phase === 'flight' || phase === 'result') && ball ? 1 : 0;
     k = ready ? mixPose(STANCE, READY, ready) : STANCE;
+    // alive at the crease: breathing, and a tap of the bat until the bowler is well into his run
+    const br = Math.sin(clock * 1.7);
+    const tapOn = phase === 'runup' ? clamp(1 - phaseT / 0.6, 0, 1) : ['flight', 'play', 'result'].includes(phase) ? 0 : 1;
+    const tp = (clock * 0.75) % 1, tap = tapOn * (tp < 0.2 ? Math.sin(tp / 0.2 * Math.PI) : 0);
+    k = { ...k, pel: add(k.pel, [0, br * 0.008, 0]), lean: k.lean + br * 1.2,
+          h: add(k.h, [0, 0.06 * tap, 0]), bd: norm(add(k.bd, [0, 0.35 * tap, -0.15 * tap])) };
     if (ball && ball.left) {   // bat up out of the way; duck under a bouncer
       const lk = smooth(clamp((ball.t - ball.left) / 0.2, 0, 1));
       k = mixPose(k, ball.atBat[1] > 1.45 ? DUCK : LEAVE, lk);
@@ -1184,6 +1200,8 @@ let ball = null;      // the current delivery and what happened to it
 let fielders = [];
 let camMode = 'bowl';
 let ff = false, paused = false, bannerUntil = 0;
+let slowmo = 0, shake = 0, celebrate = null;   // celebrate: the last ball's outcome, for the players' reactions   // seconds of slow motion left after a great hit; camera jolt (0..1) on wickets and sixes
+const SLOWMO = 0.75;
 let keeperZ = -13;
 // your bowling: where the ball should land, the variation, the accuracy meter
 const marker = { x: -0.04, z: 5.2 };
@@ -1622,6 +1640,7 @@ function contact() {
   sndBat(d.kind === 'edge' ? 'edge' : d.defend ? 'block' : 'middle', d.q * (d.loft ? 1 : 0.8) * (d.power || 1));
   if (d.kind === 'edge') sndOoh(0.55);
   rec.hit = rec.t;
+  if (d.kind === 'hit' && !d.defend && d.q > 0.88 && !quiet && !ff && !M.autoplay) slowmo = SLOWMO;
   const h = strike();
   if (h.playedOn) return;
   const { fp, res, angle } = h;
@@ -1710,7 +1729,7 @@ function startOver() {
 
 function beginBall(delay, announce) {
   newFielders();
-  pending = null; ball = null; preBall = null; wantCharge = false; guard = 0; camMode = 'bowl'; meter = null; swipeVis = null;
+  pending = null; ball = null; preBall = null; celebrate = null; wantCharge = false; guard = 0; camMode = 'bowl'; meter = null; swipeVis = null;
   endReplay(); recReset();
   setFF(!!(M.watchFast && autoBowling()));
   hideBanner(); $('timing').classList.remove('show'); $('meter').hidden = true; $('meter').classList.remove('locked');
@@ -1939,6 +1958,8 @@ function finishBall(o, line) {
   updateScore();
   const c = i.cards[k], who = chaseMode ? '' : surname(batterP(k).name) + ' ';
   const ours = i.userBats;   // the crowd is on your side
+  if (!quiet && !ff) shake = o.out ? 0.9 : o.runs === 6 ? 0.6 : 0;
+  { const cc = i.cards[k]; celebrate = { out: o.out || null, runs: o.runs || 0, milestone: !chaseMode && !o.out && cc.runs >= 50 && cc.runs - o.runs < 50 }; }
   if (o.out) {
     showBanner('OUT!', chaseMode ? line : line + ' · ' + who + c.runs + ' (' + c.balls + ')', 'bw');
     if (ours) { sndOoh(1, true); sndClap(0.25, 3); } else { sndCrowd(0.9, 3); sndClap(0.7); cheer = 0.8; }
@@ -2361,19 +2382,19 @@ function update(dt) {
   hint.hidden = !showHint;
 
   // between balls
-  if (phase === 'result' && phaseT > 2.1) afterBall();
+  if (phase === 'result' && phaseT > (celebrate && (celebrate.out || celebrate.milestone) ? 3.0 : 2.1)) afterBall();
 
   // camera
   let tp = BOWL_CAM.pos, tt = BOWL_CAM.tgt, tf = BOWL_CAM.fov, rate = 2.5;
-  if (camMode === 'chase' && ball && ball.play) {
-    const bp = ballPos();
-    const g = [bp[0], 0, bp[2]];
-    const r = Math.hypot(g[0], g[2]);
-    const dir = r > 3 ? [g[0] / r, 0, g[2] / r] : [0, 0, 1];
-    tp = add(mul(g, 0.35), add(mul(dir, -14), [0, 24, 0]));
-    tt = add(g, [0, 0, 0]);
-    tf = 46; rate = 2.2;
-  }
+  if (camMode === 'chase' && ball && ball.play && ball.play.t > 0.3) {
+    // like TV: a camera high in the stands pans and zooms with the ball; it cuts to the other end when the ball goes behind
+    const bp = ballPos(), end = bp[2] < -8 ? -1 : 1;
+    tp = end > 0 ? [bp[0] * 0.1, 15, 66] : [bp[0] * 0.1, 15, -50];
+    tt = [bp[0], bp[1] * 0.55, bp[2]];
+    const d = len(sub(tt, tp));
+    tf = clamp(2 * Math.atan(20 / d) / deg, 16, 50); rate = 5;
+    if (cam.end !== end) { cam.end = end; cam.pos = tp.slice(); cam.tgt = tt.slice(); cam.fov = tf; }
+  } else cam.end = 0;
   const k = 1 - Math.exp(-rate * dt);
   cam.pos = lerp3(cam.pos, tp, k); cam.tgt = lerp3(cam.tgt, tt, Math.min(1, k * 2)); cam.fov = lerp(cam.fov, tf, k);
 }
@@ -2465,6 +2486,27 @@ function render() {
 
 // everyone on the field this frame: joints (world metres), team ('bat' | 'bowl'), bat, keeper; `at` = where they stand
 function people() { return RP ? RP.people : livePeople(); }
+// reactions after the ball: a leap with both arms up, hands on the head, a bat raised to the crowd, the walk back
+function cheerFig(pos, face, t, seed) {
+  const L = [Math.cos(face), 0, -Math.sin(face)], F = [Math.sin(face), 0, Math.cos(face)];
+  const up = smooth(clamp(t / 0.25, 0, 1)), hop = t < 1.8 ? Math.max(0, Math.sin(t * 8 + seed)) * 0.22 * up : 0;
+  const p = [pos[0], hop, pos[2]], one = seed % 2 > 1;     // some punch one fist, some throw both arms up
+  const hand = (s, hi) => add(p, add(add(mul(L, s * lerp(0.25, 0.32, up)), mul(F, 0.08)), [0, lerp(0.95, hi, up), 0]));
+  return figure(p, face, { handL: hand(1, one ? 1.5 : 2.2), handR: hand(-1, 2.25), seed });
+}
+function headFig(pos, face, t, seed) {   // hands on the head
+  const L = [Math.cos(face), 0, -Math.sin(face)], F = [Math.sin(face), 0, Math.cos(face)], u = smooth(clamp(t / 0.4, 0, 1));
+  const hand = s => add(pos, add(add(mul(L, s * lerp(0.25, 0.1, u)), mul(F, lerp(0.05, -0.02, u))), [0, lerp(0.95, 1.78, u), 0]));
+  return figure(pos, face, { handL: hand(1), handR: hand(-1), seed });
+}
+// how far the ring fielders have walked in with the bowler (0..1), and whether they're walking
+function walkIn() {
+  if (phase === 'runup') { const u = clamp(phaseT / (RUNUP - 0.25), 0, 1); return { w: smooth(u), moving: u < 1 }; }
+  if (phase === 'flight') return { w: 1, moving: false };
+  if (ball && ball.play) return { w: 1 - smooth(clamp((ball.play.t - 0.3) / 0.45, 0, 1)), moving: false };
+  if (phase === 'result') { const u = clamp((phaseT - 0.6) / 1.2, 0, 1); return { w: 1 - smooth(u), moving: u > 0 && u < 1 }; }
+  return { w: 0, moving: false };
+}
 function livePeople() {
   const out = [], helmet = helmetCol();
   const runT = ball && ball.play && ball.play.res.kind === 'runs' ? ball.play.t - 0.35 : -1;
@@ -2482,7 +2524,21 @@ function livePeople() {
   const pid = k => inn && inn.bat.players[k] ? inn.bat.players[k].name : 'x';
   // the striker: in his stance and swing, or running
   const sr = runner(0.6, 0.55);
-  if (sr) {
+  const cel = phase === 'result' && celebrate ? celebrate : null;
+  if (cel && cel.out && phaseT > 0.7) {   // out: tuck the bat under the arm and walk off
+    const u = phaseT - 0.7, face = -2.2, at = [0.6 + guard + Math.sin(face) * u * 1.2, 0, 0.75 + Math.cos(face) * u * 1.2];
+    const j = figure(at, face, { run: 0.3, phase: clock * 6, seed: 9 });
+    j.head = add(j.head, [0, -0.05, 0]); j.head = add(j.head, mul([Math.sin(face), 0, Math.cos(face)], 0.05));
+    out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look: [Math.sin(face), -0.5, Math.cos(face)],
+               bat: { carry: true, hands: j.handR, tip: add(j.handR, mul([Math.sin(face), 0.1, Math.cos(face)], -0.75)) } });
+  } else if (cel && cel.milestone && phaseT > 0.5) {   // a fifty or a hundred: the bat raised to the crowd
+    const at = [0.6 + guard, 0, 0.75], face = -0.6, u = smooth(clamp((phaseT - 0.5) / 0.4, 0, 1));
+    const L = [Math.cos(face), 0, -Math.sin(face)];
+    const hR = add(at, add(mul(L, -0.3), [0, lerp(1.0, 2.15, u), 0.05]));
+    const j = figure(at, face, { handR: hR, seed: 9 });
+    out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look: [Math.sin(face), 0, Math.cos(face)],
+               bat: { carry: true, hands: hR, tip: add(hR, [-0.1 * u, 0.85 * u - 0.6 * (1 - u), 0]) } });
+  } else if (sr) {
     const j = figure(sr.pos, sr.face, { run: sr.moving ? 1 : 0, phase: clock * 11 });
     const hand = j.handR;
     out.push({ j, at: sr.pos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look: null,
@@ -2502,16 +2558,31 @@ function livePeople() {
   // the non-striker
   const ns = runner(PITCH - 0.6, -1.5);
   const nsPos = ns ? ns.pos : [-1.7, 0, PITCH - 0.4];
-  const nj = figure(nsPos, ns ? ns.face : Math.PI, { run: ns && ns.moving ? 1 : 0, phase: clock * 11 + 1 });
+  const nj = figure(nsPos, ns ? ns.face : Math.PI, { run: ns && ns.moving ? 1 : 0, phase: clock * 11 + 1, seed: 20 });
   out.push({ j: nj, at: nsPos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.non : 1), look: null,
              bat: { carry: true, hands: nj.handL, tip: add(nj.handL, [0.1, -0.75, ns && ns.face === 0 ? 0.25 : -0.25]) } });
   // the bowler, then the fielders (once the ball is hit, the bowler is one of the fielders)
   const afterHit = !!(ball && ball.play);
   const fid = w => inn && w !== null && w !== undefined && inn.bowl.players[w] ? inn.bowl.players[w].name : 'f' + w;
-  if (!afterHit) { const bw = bowlerState(); out.push({ j: bw.j, at: bw.pos, team: 'bowl', pid: fid(inn ? inn.bowler : 0), look: null }); }
-  for (const f of fielders) {
+  const won = cel && cel.out, hurt = cel && !cel.out && cel.runs >= 4;
+  const react = (f, pos, face) => !cel || phaseT < 0.15 ? null
+    : won && (f.bowler || f === cel.out.by || (f.keeper && cel.out.how !== 'caught')) ? cheerFig(pos, face, phaseT - 0.15, f.bowler ? 0.4 : 1.3)
+    : hurt && f.bowler ? headFig(pos, face, phaseT - 0.15, 3) : null;
+  if (!afterHit) {
+    const bw = bowlerState(), rj = react({ bowler: true }, bw.pos, Math.PI);
+    out.push({ j: rj || bw.j, at: bw.pos, team: 'bowl', pid: fid(inn ? inn.bowler : 0), look: null });
+  }
+  const wi = walkIn();
+  for (const [fi, f] of fielders.entries()) {
     if (f.bowler && !afterHit) continue;
-    out.push({ j: figure(f.pos, f.face, { run: f.run, phase: f.phase, crouch: f.crouch }), at: f.pos, team: 'bowl', keeper: !!f.keeper,
+    let pos = f.pos, run = f.run, ph = f.phase;
+    const r = Math.hypot(f.home[0], f.home[2]);
+    if (wi.w > 0 && !f.keeper && !f.bowler && r > 14) {
+      pos = sub(f.pos, mul([f.home[0] / r, 0, f.home[2] / r], 1.6 * wi.w));
+      if (wi.moving) { run = Math.max(run, 0.3); ph = clock * 7 + f.phase; }
+    }
+    const rj = f.run < 0.3 ? react(f, pos, f.face) : null;
+    out.push({ j: rj || figure(pos, f.face, { run, phase: ph, crouch: wi.moving ? 0 : f.crouch, seed: fi + 1 }), at: pos, team: 'bowl', keeper: !!f.keeper,
                pid: fid(f.who), look: null });
   }
   return out;
@@ -2725,8 +2796,17 @@ for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, e => { 
 
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  tick(dt);
-  render();
+  // slow motion: drops to 30% at the hit, then eases back to full speed
+  let s = 1;
+  if (slowmo > 0) { if (RP || paused) slowmo = 0; else { slowmo -= dt; s = slowmo > 0.45 ? 0.3 : lerp(1, 0.3, smooth(clamp(slowmo / 0.45, 0, 1))); } }
+  shake = Math.max(0, shake - dt * 1.4);
+  tick(dt * s);
+  if (shake > 0 && !RP) {   // shake the camera's aim, then put it back
+    const t0 = cam.tgt, a = shake * shake * len(sub(cam.tgt, cam.pos)) * 0.006, c = now / 1000;
+    cam.tgt = add(t0, mul([Math.sin(c * 61) + Math.sin(c * 37), Math.sin(c * 53) + Math.sin(c * 29), 0], a));
+    render();
+    cam.tgt = t0;
+  } else render();
   requestAnimationFrame(frame);
 }
 function tick(dt) {

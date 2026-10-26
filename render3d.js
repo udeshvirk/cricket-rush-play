@@ -230,14 +230,34 @@ window.Cricket3D = function (G) {
     pads: mat('#f6f4ee'), gloves: mat('#f6f4ee'), shoe: mat('#f0f0f0'), sole: mat('#222222'),
     blade: new T.MeshStandardMaterial({ color: 0xe3c58e, roughness: 0.55 }), grip: mat('#26221e'), cap: mat('#ffd23c'),
   };
-  const cyl = new T.CylinderGeometry(1, 1, 1, 10);                 // limbs: scaled to (r, length, r)
-  const torsoGeo = new T.CylinderGeometry(0.5, 0.4, 1, 14);       // scaled by a basis
-  const sph = new T.SphereGeometry(1, 14, 10);
-  const helmetGeo = new T.SphereGeometry(1, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.56);
+  // body shapes: limbs and trunk are turned profiles (radius along the length), so they have muscle, taper and rounded ends.
+  // Each runs from y = -0.5 (the joint it starts at) to 0.5, radius 1 = the limb's width, so seg() can stretch it between joints.
+  const lathe = (pts, n = 14) => {
+    const v = [new T.Vector2(0, -0.5)];
+    for (const [y, r] of pts) v.push(new T.Vector2(r, y));
+    v.push(new T.Vector2(0, 0.5));
+    const g = new T.LatheGeometry(v, n); g.computeVertexNormals(); return g;
+  };
+  const SHAPE = {
+    thigh: lathe([[-0.5, 1.0], [-0.42, 1.2], [-0.15, 1.18], [0.2, 0.98], [0.45, 0.78], [0.5, 0.6]]),
+    calf: lathe([[-0.5, 0.75], [-0.42, 0.9], [-0.2, 1.08], [0.05, 0.92], [0.35, 0.62], [0.5, 0.5]]),
+    pad: lathe([[-0.52, 0.8], [-0.45, 1.05], [-0.3, 1.0], [0.4, 0.92], [0.5, 0.75]]),
+    upper: lathe([[-0.5, 0.9], [-0.4, 1.12], [-0.1, 1.08], [0.25, 0.95], [0.45, 0.82], [0.5, 0.65]]),
+    fore: lathe([[-0.5, 0.75], [-0.4, 0.98], [-0.2, 1.05], [0.2, 0.8], [0.45, 0.62], [0.5, 0.5]]),
+    neck: lathe([[-0.5, 1.15], [-0.3, 1.0], [0.3, 0.95], [0.5, 0.9]], 10),
+    // the trunk, in a box of 1 x 1 x 1: hips, a narrower waist, a broad chest, sloping shoulders
+    trunk: lathe([[-0.5, 0.4], [-0.38, 0.43], [-0.18, 0.39], [0.05, 0.43], [0.25, 0.5], [0.38, 0.5], [0.45, 0.42], [0.5, 0.3], [0.53, 0.14]], 20),
+  };
+  const cyl = new T.CylinderGeometry(1, 1, 1, 12);
+  const sph = new T.SphereGeometry(1, 16, 12);
+  const dome = new T.SphereGeometry(1, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.55);
+  const halfDisc = new T.CylinderGeometry(1, 1, 1, 18, 1, false, -Math.PI / 2, Math.PI);
+  const bar = new T.TorusGeometry(1, 0.035, 5, 16, Math.PI * 0.9);
   const box = new T.BoxGeometry(1, 1, 1);
   const UP = new T.Vector3(0, 1, 0);
-  const va = new T.Vector3(), vb = new T.Vector3(), vd = new T.Vector3(), vs = new T.Vector3(), vf = new T.Vector3(), vu = new T.Vector3();
+  const va = new T.Vector3(), vb = new T.Vector3(), vd = new T.Vector3(), vs = new T.Vector3(), vf = new T.Vector3(), vu = new T.Vector3(), vx = new T.Vector3(), vy = new T.Vector3();
   const mB = new T.Matrix4();
+  const HAIR = mat('#1b1410'), SHADE = new T.MeshStandardMaterial({ color: 0x111111, roughness: 0.2, metalness: 0.6 });
 
   function part(geo, m, parent) { const x = new T.Mesh(geo, m); x.castShadow = true; x.matrixAutoUpdate = true; parent.add(x); return x; }
   function seg(mesh, a, b, r) {
@@ -247,84 +267,145 @@ window.Cricket3D = function (G) {
     mesh.quaternion.setFromUnitVectors(UP, vd.divideScalar(L));
     mesh.scale.set(r, L, r);
   }
+  // like seg, but flattened: wide across the body (side), thinner front to back
+  function segFlat(mesh, a, b, side, rw, rd, push) {
+    va.set(a[0], a[1], a[2]); vb.set(b[0], b[1], b[2]); vd.subVectors(vb, va);
+    const L = vd.length() || 1e-3; vd.divideScalar(L);
+    vx.copy(side).addScaledVector(vd, -side.dot(vd)).normalize();
+    vy.crossVectors(vx, vd).normalize();
+    mB.makeBasis(vx.multiplyScalar(rw), vd.multiplyScalar(L), vy.clone().multiplyScalar(rd));
+    mB.setPosition((va.x + vb.x) / 2 + vy.x * push, (va.y + vb.y) / 2 + vy.y * push, (va.z + vb.z) / 2 + vy.z * push);
+    mesh.matrix.copy(mB);
+  }
   function ball3(mesh, p, sx, sy, sz) { mesh.position.set(p[0], p[1], p[2]); mesh.scale.set(sx, sy === undefined ? sx : sy, sz === undefined ? sx : sz); }
+  // a name and number on the back of the shirt
+  function backTex() {
+    const c = document.createElement('canvas'); c.width = 128; c.height = 128;
+    const t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; t.anisotropy = 4;
+    return { c, t, who: '' };
+  }
+  function drawBack(b, name) {
+    if (b.who === name) return; b.who = name;
+    const g = b.c.getContext('2d'); g.clearRect(0, 0, 128, 128);
+    const sur = (name.split(' ').pop() || '').toUpperCase().slice(0, 10), num = 1 + (hash(name) % 98);
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#ffffff'; g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 3;
+    g.font = 'bold 20px sans-serif'; g.strokeText(sur, 64, 22); g.fillText(sur, 64, 22);
+    g.font = 'bold 76px sans-serif'; g.strokeText(String(num), 64, 82); g.fillText(String(num), 64, 82);
+    b.t.needsUpdate = true;
+  }
 
   class Person {
     constructor() {
       const g = this.g = new T.Group(); scene.add(g);
       const P = (geo, m) => part(geo, m, g);
-      this.thighL = P(cyl, M3.batPants); this.thighR = P(cyl, M3.batPants);
-      this.shinL = P(cyl, M3.batPants); this.shinR = P(cyl, M3.batPants);
+      this.thighL = P(SHAPE.thigh, M3.batPants); this.thighR = P(SHAPE.thigh, M3.batPants);
+      this.shinL = P(SHAPE.calf, M3.batPants); this.shinR = P(SHAPE.calf, M3.batPants);
+      this.padL = P(SHAPE.pad, M3.pads); this.padR = P(SHAPE.pad, M3.pads); this.padL.matrixAutoUpdate = this.padR.matrixAutoUpdate = false;
       this.kneeL = P(sph, M3.batPants); this.kneeR = P(sph, M3.batPants);
-      this.footL = P(box, M3.shoe); this.footR = P(box, M3.shoe);
+      this.footL = P(sph, M3.shoe); this.footR = P(sph, M3.shoe);
+      this.soleL = P(box, M3.sole); this.soleR = P(box, M3.sole);
       this.hips = P(sph, M3.batPants);
-      this.torso = P(torsoGeo, M3.batShirt); this.torso.matrixAutoUpdate = false;
-      this.upL = P(cyl, M3.batShirt); this.upR = P(cyl, M3.batShirt); this.foreL = P(cyl, SKIN[2]); this.foreR = P(cyl, SKIN[2]);
+      this.torso = P(SHAPE.trunk, M3.batShirt); this.torso.matrixAutoUpdate = false;
+      this.back = backTex();
+      const bm = new T.MeshStandardMaterial({ map: this.back.t, transparent: true, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2 });
+      this.number = new T.Mesh(new T.PlaneGeometry(0.5, 0.5), bm); this.number.position.set(0, 0.17, -0.505); this.number.rotation.y = Math.PI;
+      this.torso.add(this.number);
+      this.delL = P(sph, M3.batShirt); this.delR = P(sph, M3.batShirt);
+      this.upL = P(SHAPE.upper, M3.batShirt); this.upR = P(SHAPE.upper, M3.batShirt); this.foreL = P(SHAPE.fore, SKIN[2]); this.foreR = P(SHAPE.fore, SKIN[2]);
       this.elbL = P(sph, M3.batShirt); this.elbR = P(sph, M3.batShirt);
       this.handL = P(sph, SKIN[2]); this.handR = P(sph, SKIN[2]);
-      this.neck = P(cyl, SKIN[2]); this.head = P(sph, SKIN[2]);
-      this.helmet = P(helmetGeo, M3.helmet); this.grille = P(box, M3.grille);
-      this.cap = P(helmetGeo, M3.cap); this.brim = P(box, M3.cap);
-      this.handle = P(cyl, M3.grip); this.blade = P(box, M3.blade);
+      this.neck = P(SHAPE.neck, SKIN[2]);
+      // the head turns as one piece: face, ears, hair, and a helmet or cap
+      const h = this.headG = new T.Group(); g.add(h);
+      const H = (geo, m) => part(geo, m, h);
+      this.skull = H(sph, SKIN[2]); this.skull.scale.set(0.098, 0.118, 0.108);
+      this.jaw = H(sph, SKIN[2]); this.jaw.scale.set(0.072, 0.06, 0.07); this.jaw.position.set(0, -0.058, 0.03);
+      this.nose = H(sph, SKIN[2]); this.nose.scale.set(0.018, 0.026, 0.024); this.nose.position.set(0, -0.012, 0.105);
+      this.earL = H(sph, SKIN[2]); this.earL.scale.set(0.014, 0.03, 0.022); this.earL.position.set(0.097, -0.005, -0.005);
+      this.earR = H(sph, SKIN[2]); this.earR.scale.set(0.014, 0.03, 0.022); this.earR.position.set(-0.097, -0.005, -0.005);
+      this.hair = H(dome, HAIR); this.hair.scale.set(0.104, 0.11, 0.113); this.hair.position.set(0, 0.012, -0.008); this.hair.rotation.x = -0.25;
+      this.shades = H(box, SHADE); this.shades.scale.set(0.15, 0.028, 0.02); this.shades.position.set(0, 0.022, 0.1);
+      // helmet: shell, peak, side flaps and a grille of curved bars
+      this.helmet = new T.Group(); h.add(this.helmet);
+      const HM = (geo, m) => part(geo, m, this.helmet);
+      const shell = HM(dome, M3.helmet); shell.scale.set(0.128, 0.138, 0.14); shell.position.set(0, -0.005, -0.006);
+      const peak = HM(halfDisc, M3.helmet); peak.scale.set(0.13, 0.01, 0.075); peak.position.set(0, 0.035, 0.11); peak.rotation.x = 0.18;
+      for (const s of [1, -1]) { const f = HM(box, M3.helmet); f.scale.set(0.02, 0.1, 0.1); f.position.set(s * 0.115, -0.06, 0.02); }
+      for (let i = 0; i < 3; i++) {
+        const b = HM(bar, M3.grille); const r = 0.12 - i * 0.004;
+        b.scale.set(r, r, r); b.rotation.set(Math.PI / 2, 0, Math.PI * 0.05); b.position.set(0, 0.0 - i * 0.042, 0.0);
+      }
+      const stem = HM(box, M3.grille); stem.scale.set(0.008, 0.09, 0.008); stem.position.set(0, -0.045, 0.12);
+      // cap: crown, button and a curved peak
+      this.cap = new T.Group(); h.add(this.cap);
+      const CM = (geo, m) => part(geo, m, this.cap);
+      const crown = CM(dome, M3.cap); crown.scale.set(0.108, 0.1, 0.116); crown.position.set(0, 0.025, -0.004);
+      const brim = CM(halfDisc, M3.cap); brim.scale.set(0.105, 0.008, 0.09); brim.position.set(0, 0.03, 0.1); brim.rotation.x = 0.1;
+      const btn = CM(sph, M3.cap); btn.scale.set(0.012, 0.008, 0.012); btn.position.set(0, 0.126, -0.004);
+      this.handle = P(cyl, M3.grip); this.blade = P(box, M3.blade); this.spine = P(box, M3.blade);
     }
     set(pr) {
       const j = pr.j, bat = pr.team === 'bat', keeper = !!pr.keeper;
       const shirt = bat ? M3.batShirt : M3.bowlShirt, pants = bat ? M3.batPants : M3.bowlPants;
-      const skin = SKIN[hash(pr.pid || 'x') % SKIN.length];
+      const hs = hash(pr.pid || 'x'), skin = SKIN[hs % SKIN.length];
       this.g.visible = true;
-      // legs: batters and the keeper wear pads on the shins
-      const padded = bat || keeper;
-      for (const [th, sh, kn, ft, hip, knee, foot] of [[this.thighL, this.shinL, this.kneeL, this.footL, j.hipL, j.kneeL, j.footL],
-                                                      [this.thighR, this.shinR, this.kneeR, this.footR, j.hipR, j.kneeR, j.footR]]) {
-        th.material = pants; seg(th, hip, knee, 0.075);
-        sh.material = padded ? M3.pads : pants; seg(sh, knee, [foot[0], foot[1] + 0.07, foot[2]], padded ? 0.075 : 0.058);
-        kn.material = padded ? M3.pads : pants; ball3(kn, knee, padded ? 0.085 : 0.065);
-        ft.position.set(foot[0], foot[1] + 0.04, foot[2]); ft.scale.set(0.1, 0.08, 0.26);
-      }
-      // body: a tapered trunk set from the shoulder line and the spine
+      // the body's own axes: across the shoulders (vs), up the spine (vu), forward (vf)
       vu.set(j.neck[0] - j.pelvis[0], j.neck[1] - j.pelvis[1], j.neck[2] - j.pelvis[2]);
       const Lt = vu.length(); vu.normalize();
       vs.set(j.shL[0] - j.shR[0], j.shL[1] - j.shR[1], j.shL[2] - j.shR[2]);
       vs.addScaledVector(vu, -vs.dot(vu)).normalize();
       vf.crossVectors(vs, vu).normalize();
-      mB.makeBasis(vs.clone().multiplyScalar(0.44), vu.clone().multiplyScalar(Lt * 1.02), vf.clone().multiplyScalar(0.25));
-      mB.setPosition((j.pelvis[0] + j.neck[0]) / 2, (j.pelvis[1] + j.neck[1]) / 2 + 0.02, (j.pelvis[2] + j.neck[2]) / 2);
-      this.torso.matrix.copy(mB); this.torso.material = shirt;
-      this.hips.material = pants; this.hips.position.set(j.pelvis[0], j.pelvis[1] - 0.02, j.pelvis[2]);
-      this.hips.quaternion.setFromRotationMatrix(mB.makeBasis(vs, vu, vf)); this.hips.scale.set(0.2, 0.13, 0.13);
-      // arms
-      for (const [up, fo, el, hd, sh, elb, hand] of [[this.upL, this.foreL, this.elbL, this.handL, j.shL, j.elL, j.handL],
-                                                    [this.upR, this.foreR, this.elbR, this.handR, j.shR, j.elR, j.handR]]) {
-        up.material = shirt; seg(up, sh, elb, 0.055);
-        fo.material = bat || keeper ? shirt : skin; seg(fo, elb, hand, 0.045);
-        el.material = shirt; ball3(el, elb, 0.055);
-        hd.material = (bat && pr.gloves) || keeper ? M3.gloves : skin; ball3(hd, hand, (bat && pr.gloves) || keeper ? 0.058 : 0.045);
+      const side = vs.clone(), fwd = vf.clone(), yawB = Math.atan2(fwd.x, fwd.z);
+      // legs: batters and the keeper wear pads over the shins
+      const padded = bat || keeper;
+      for (const [th, sh, pd, kn, ft, so, hip, knee, foot] of [[this.thighL, this.shinL, this.padL, this.kneeL, this.footL, this.soleL, j.hipL, j.kneeL, j.footL],
+                                                              [this.thighR, this.shinR, this.padR, this.kneeR, this.footR, this.soleR, j.hipR, j.kneeR, j.footR]]) {
+        th.material = pants; seg(th, hip, knee, 0.078);
+        const ank = [foot[0], foot[1] + 0.08, foot[2]];
+        sh.material = pants; seg(sh, knee, ank, 0.058); sh.visible = !padded;
+        pd.visible = padded;
+        if (padded) segFlat(pd, [knee[0], knee[1] + 0.1, knee[2]], [ank[0], ank[1] - 0.03, ank[2]], side, 0.088, 0.072, 0.012);
+        kn.material = padded ? M3.pads : pants; ball3(kn, knee, padded ? 0.08 : 0.062);
+        // shoes point the way the body faces (toes slightly out)
+        const toe = [Math.sin(yawB), 0, Math.cos(yawB)];
+        ft.position.set(foot[0] + toe[0] * 0.05, foot[1] + 0.045, foot[2] + toe[2] * 0.05); ft.rotation.set(0, yawB, 0); ft.scale.set(0.052, 0.042, 0.13);
+        so.position.set(foot[0] + toe[0] * 0.05, foot[1] + 0.012, foot[2] + toe[2] * 0.05); so.rotation.set(0, yawB, 0); so.scale.set(0.075, 0.016, 0.2);
       }
-      // head, then a helmet (batters, keeper) or a cap
+      // trunk: set from the shoulder line and the spine
+      mB.makeBasis(vs.clone().multiplyScalar(0.46), vu.clone().multiplyScalar(Lt * 1.04), vf.clone().multiplyScalar(0.27));
+      mB.setPosition((j.pelvis[0] + j.neck[0]) / 2, (j.pelvis[1] + j.neck[1]) / 2 + 0.01, (j.pelvis[2] + j.neck[2]) / 2);
+      this.torso.matrix.copy(mB); this.torso.material = shirt;
+      this.number.visible = !keeper; if (!keeper) drawBack(this.back, pr.pid || '');
+      this.hips.material = pants; this.hips.position.set(j.pelvis[0], j.pelvis[1] - 0.03, j.pelvis[2]);
+      this.hips.quaternion.setFromRotationMatrix(mB.makeBasis(vs, vu, vf)); this.hips.scale.set(0.185, 0.12, 0.125);
+      // arms, with a rounded shoulder
+      for (const [de, up, fo, el, hd, sh, elb, hand] of [[this.delL, this.upL, this.foreL, this.elbL, this.handL, j.shL, j.elL, j.handL],
+                                                        [this.delR, this.upR, this.foreR, this.elbR, this.handR, j.shR, j.elR, j.handR]]) {
+        de.material = shirt; ball3(de, [sh[0] - vu.x * 0.015, sh[1] - vu.y * 0.015, sh[2] - vu.z * 0.015], 0.068);
+        up.material = shirt; seg(up, sh, elb, 0.054);
+        fo.material = bat || keeper ? shirt : skin; seg(fo, elb, hand, 0.044);
+        el.material = shirt; ball3(el, elb, 0.047);
+        const gl = (bat && pr.gloves) || keeper;
+        hd.material = gl ? M3.gloves : skin; ball3(hd, hand, gl ? 0.06 : 0.042, gl ? 0.055 : 0.048, gl ? 0.065 : 0.042);
+      }
+      // head
       const hp = j.head;
-      this.neck.material = skin; seg(this.neck, j.neck, [hp[0], hp[1] - 0.08, hp[2]], 0.045);
-      this.head.material = skin; ball3(this.head, hp, 0.105, 0.12, 0.11);
+      this.neck.material = skin; seg(this.neck, j.neck, [hp[0], hp[1] - 0.07, hp[2]], 0.05);
       const lookDir = pr.look ? vd.set(pr.look[0], pr.look[1], pr.look[2]) : vd.copy(vf).setY(0).normalize();
       const yaw = Math.atan2(lookDir.x, lookDir.z);
+      this.headG.position.set(hp[0], hp[1], hp[2]); this.headG.rotation.set(-0.08, yaw, 0, 'YXZ');
+      for (const m of [this.skull, this.jaw, this.nose, this.earL, this.earR]) m.material = skin;
       const helm = bat || keeper;
-      this.helmet.visible = this.grille.visible = helm; this.cap.visible = this.brim.visible = !helm;
-      if (helm) {
-        this.helmet.position.set(hp[0], hp[1] - 0.01, hp[2]); this.helmet.rotation.set(-0.15, yaw, 0, 'YXZ'); this.helmet.scale.set(0.13, 0.14, 0.135);
-        this.grille.position.set(hp[0] + Math.sin(yaw) * 0.12, hp[1] - 0.04, hp[2] + Math.cos(yaw) * 0.12); this.grille.rotation.set(0, yaw, 0);
-        this.grille.scale.set(0.17, 0.1, 0.02);
-      } else {
-        this.cap.material = this.brim.material = M3.cap;
-        this.cap.position.set(hp[0], hp[1] + 0.02, hp[2]); this.cap.rotation.set(0, yaw, 0); this.cap.scale.set(0.115, 0.1, 0.12);
-        this.brim.position.set(hp[0] + Math.sin(yaw) * 0.12, hp[1] + 0.03, hp[2] + Math.cos(yaw) * 0.12); this.brim.rotation.set(0.12, yaw, 0, 'YXZ');
-        this.brim.scale.set(0.16, 0.012, 0.12);
-      }
-      // the bat
+      this.helmet.visible = helm; this.cap.visible = !helm; this.hair.visible = !helm;
+      this.shades.visible = !helm && hs % 3 === 0;
+      // the bat: handle, a flat blade and the ridge down its back
       const hasBat = !!pr.bat;
-      this.handle.visible = this.blade.visible = hasBat;
+      this.handle.visible = this.blade.visible = this.spine.visible = hasBat;
       if (hasBat) {
         const h = pr.bat.hands, t = pr.bat.tip, k = 0.32, mid = [h[0] + (t[0] - h[0]) * k, h[1] + (t[1] - h[1]) * k, h[2] + (t[2] - h[2]) * k];
         seg(this.handle, [h[0] - (t[0] - h[0]) * 0.06, h[1] - (t[1] - h[1]) * 0.06, h[2] - (t[2] - h[2]) * 0.06], mid, 0.017);
-        seg(this.blade, mid, t, 1); this.blade.scale.x = 0.108; this.blade.scale.z = 0.045;
+        seg(this.blade, mid, t, 1); this.blade.scale.x = 0.108; this.blade.scale.z = 0.03;
+        seg(this.spine, mid, t, 1); this.spine.scale.x = 0.04; this.spine.scale.z = 0.055; this.spine.scale.y *= 0.85;
       }
     }
   }
