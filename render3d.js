@@ -299,6 +299,121 @@ window.Cricket3D = function (G) {
     b.t.needsUpdate = true;
   }
 
+  // ---------------------------------------------------------------- the realistic body (vendor/player-model.js, built by tools/build-player.py
+  // from MakeHuman's CC0 body). Its skeleton is driven from the game's joints every frame: each bone is placed at the matching
+  // joint and turned so it points at the next one, with the knee / elbow bend or the body's facing fixing the twist.
+  const RIG = { tried: false, tmpl: null, rest: {} };
+  const INVIS = new T.MeshBasicMaterial({ visible: false });
+  const EYES = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.25 });
+  const SKINV = SKIN.map(m => new T.MeshStandardMaterial({ color: m.color.clone().multiplyScalar(1.12), vertexColors: true, roughness: 0.62 }));
+  // one material per player: the kit is cut per pixel along clean lines in the rest pose (waist, collar, sleeves, ankles),
+  // so the edges are sharp whatever the triangles; the collar and sleeve ends get a trim in the team's second colour
+  function kitMaterial() {
+    const k = RIG.kit, V3 = a => new T.Vector3(a[0], a[1], a[2]);
+    const u = { uShirt: { value: new T.Color() }, uPants: { value: new T.Color() }, uSkin: { value: new T.Color() }, uShoe: { value: new T.Color('#f2f2f2') },
+                uTrim: { value: new T.Color() }, uKit: { value: new T.Vector3(k.waist, k.neck, k.ankle) },
+                uShL: { value: V3(k.shL) }, uElL: { value: V3(k.elL) }, uShR: { value: V3(k.shR) }, uElR: { value: V3(k.elR) } };
+    const m = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0 });
+    m.userData.u = u;
+    m.onBeforeCompile = sh => {
+      Object.assign(sh.uniforms, u);
+      sh.vertexShader = 'attribute vec3 _rest;\nattribute vec4 _part;\nvarying vec3 vRest;\nvarying vec4 vPart;\n' +
+        sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vRest = _rest; vPart = _part;');
+      sh.fragmentShader = 'uniform vec3 uShirt, uPants, uSkin, uShoe, uTrim, uKit, uShL, uElL, uShR, uElR;\nvarying vec3 vRest;\nvarying vec4 vPart;\nfloat kRough;\n' +
+        sh.fragmentShader.replace('#include <color_fragment>', `
+  vec3 kc = uShirt; kRough = 0.86;
+  float neckLine = uKit.y - 0.045 - 0.03 * smoothstep(0.0, 0.09, vRest.z);
+  if (vPart.w > 0.5) { kc = vColor.rgb; kRough = 0.25; }
+  else if (vPart.z > 0.5 || vPart.y > 0.5) { kc = uSkin * vColor.rgb; kRough = 0.55; }
+  else if (abs(vPart.x) > 0.5) {
+    vec3 s = vPart.x > 0.0 ? uShL : uShR, e = vPart.x > 0.0 ? uElL : uElR;
+    float t = dot(vRest - s, e - s) / dot(e - s, e - s);
+    if (t > 0.62) { kc = uSkin * vColor.rgb; kRough = 0.55; } else if (t > 0.57) kc = uTrim;
+  }
+  else if (vRest.y < uKit.z + 0.035) { kc = uShoe; kRough = 0.45; }
+  else if (vRest.y > neckLine && abs(vRest.x) < 0.11) { kc = uSkin * vColor.rgb; kRough = 0.55; }
+  else if (vRest.y > neckLine - 0.014 && abs(vRest.x) < 0.12) kc = uTrim;
+  else if (vRest.y < uKit.x) { kc = uPants; kRough = 0.8; }
+  diffuseColor.rgb = kc;`).replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = kRough;');
+    };
+    m.customProgramCacheKey = () => 'cricket-kit-1';
+    return m;
+  }
+  const SKIN_TONES = ['#8d5a3b', '#b07650', '#c99872', '#e0b48f', '#6b4029', '#a36b47'].map(c => new T.Color(c));
+  const qa = new T.Quaternion(), qb = new T.Quaternion(), m4a = new T.Matrix4(), m4b = new T.Matrix4();
+  const v1 = new T.Vector3(), v2 = new T.Vector3(), v3 = new T.Vector3(), v4 = new T.Vector3();
+  // bone -> the point it aims at, and how its twist is fixed ('side' = across the body, 'pole' = the joint bend, 'up', 'fwd')
+  const AIM = {
+    pelvis: ['spine_01', 'hips'], spine_01: ['spine_02', 'side'], spine_02: ['spine_03', 'side'], spine_03: ['neck_01', 'side'],
+    neck_01: ['head', 'side'], head: ['headTop', 'look'],
+    clavicle_l: ['upperarm_l', 'fwd'], clavicle_r: ['upperarm_r', 'fwd'],
+    upperarm_l: ['lowerarm_l', 'poleL'], lowerarm_l: ['hand_l', 'poleL'], hand_l: ['handTip_l', 'poleL'],
+    upperarm_r: ['lowerarm_r', 'poleR'], lowerarm_r: ['hand_r', 'poleR'], hand_r: ['handTip_r', 'poleR'],
+    thigh_l: ['calf_l', 'kneeL'], calf_l: ['foot_l', 'kneeL'], foot_l: ['ball_l', 'up'], ball_l: ['toe_l', 'up'],
+    thigh_r: ['calf_r', 'kneeR'], calf_r: ['foot_r', 'kneeR'], foot_r: ['ball_r', 'up'], ball_r: ['toe_r', 'up'],
+  };
+  const ORDER = ['pelvis', 'spine_01', 'spine_02', 'spine_03', 'neck_01', 'head', 'clavicle_l', 'upperarm_l', 'lowerarm_l', 'hand_l',
+                 'clavicle_r', 'upperarm_r', 'lowerarm_r', 'hand_r', 'thigh_l', 'calf_l', 'foot_l', 'ball_l', 'thigh_r', 'calf_r', 'foot_r', 'ball_r'];
+  const PARENT = { pelvis: null, spine_01: 'pelvis', spine_02: 'spine_01', spine_03: 'spine_02', neck_01: 'spine_03', head: 'neck_01',
+                   clavicle_l: 'spine_03', upperarm_l: 'clavicle_l', lowerarm_l: 'upperarm_l', hand_l: 'lowerarm_l',
+                   clavicle_r: 'spine_03', upperarm_r: 'clavicle_r', lowerarm_r: 'upperarm_r', hand_r: 'lowerarm_r',
+                   thigh_l: 'pelvis', calf_l: 'thigh_l', foot_l: 'calf_l', ball_l: 'foot_l', thigh_r: 'pelvis', calf_r: 'thigh_r', foot_r: 'calf_r', ball_r: 'foot_r' };
+  const A = a => new T.Vector3(a[0], a[1], a[2]);
+  // the bend direction of a two-bone limb: from the middle joint toward the line through its ends (fallback when straight)
+  function pole(a, b, c, fb) {
+    v1.subVectors(c, a); const L2 = v1.lengthSq();
+    const t = L2 > 1e-8 ? v2.subVectors(b, a).dot(v1) / L2 : 0;
+    v3.copy(a).addScaledVector(v1, t).sub(b);
+    return v3.lengthSq() > 1e-6 ? v3.normalize().clone() : fb.clone();
+  }
+  function frame(d, s, out) {   // a rotation matrix from an aim direction and a twist hint
+    v1.copy(d).normalize(); v2.copy(s).addScaledVector(v1, -s.dot(v1));
+    if (v2.lengthSq() < 1e-8) v2.set(v1.y, -v1.x, 0.3); v2.normalize(); v3.crossVectors(v1, v2);
+    return out.makeBasis(v1, v2, v3);
+  }
+  function restFrames() {   // the rest pose's frames, from the bone positions in the model
+    const r = RIG.rest, R = RIG.restQ = {}, fwd = new T.Vector3(0, 0, 1), side = new T.Vector3(1, 0, 0), up = new T.Vector3(0, 1, 0);
+    r.headTop = r.head.clone().add(new T.Vector3(0, 0.16, -0.01));
+    for (const s of ['l', 'r']) {
+      r['handTip_' + s] = r['middle_01_' + s].clone();
+      r['toe_' + s] = r['ball_' + s].clone().add(new T.Vector3(0, 0.006, 0.073));
+    }
+    const hint = { side, hips: side, fwd, up, look: side,
+                   poleL: pole(r.upperarm_l, r.lowerarm_l, r.hand_l, fwd), poleR: pole(r.upperarm_r, r.lowerarm_r, r.hand_r, fwd),
+                   kneeL: pole(r.thigh_l, r.calf_l, r.foot_l, fwd), kneeR: pole(r.thigh_r, r.calf_r, r.foot_r, fwd) };
+    // finger curl: about the line across the knuckles, toward the palm (which faces the body in the rest pose)
+    RIG.curl = { grip: {}, relax: {} };
+    for (const s of ['l', 'r']) {
+      const a = new T.Vector3().subVectors(r['index_01_' + s], r['pinky_01_' + s]).normalize();
+      const d = new T.Vector3().subVectors(r['middle_01_' + s], r['hand_' + s]).normalize();
+      const palm = new T.Vector3(-Math.sign(r['hand_' + s].x), 0, 0);
+      const sg = Math.sign(new T.Vector3().crossVectors(a, d).dot(palm)) || 1;
+      for (const [mode, ang] of [['grip', [1.25, 1.45, 0.95]], ['relax', [0.3, 0.45, 0.3]]])
+        for (const f of ['index', 'middle', 'ring', 'pinky', 'thumb'])
+          for (let k = 1; k <= 3; k++) {
+            const t = f === 'thumb' ? (k === 1 ? 0 : ang[k - 1] * 0.5) : ang[k - 1];
+            RIG.curl[mode][f + '_0' + k + '_' + s] = new T.Quaternion().setFromAxisAngle(a, sg * t);
+          }
+    }
+    for (const b of ORDER) {
+      const [to, tw] = AIM[b];
+      R[b] = frame(v4.subVectors(r[to], r[b]).clone(), hint[tw], new T.Matrix4()).clone();
+    }
+  }
+  function loadModel() {
+    if (RIG.tried || !window.PLAYER_GLB || !T.GLTFLoader || !T.SkeletonUtils) return;
+    RIG.tried = true;
+    try {
+      const bin = Uint8Array.from(atob(window.PLAYER_GLB), c => c.charCodeAt(0)).buffer;
+      new T.GLTFLoader().parse(bin, '', g => {
+        RIG.tmpl = g.scene; RIG.kit = g.userData.kit; g.scene.updateMatrixWorld(true);
+        g.scene.traverse(o => { if (o.isBone) RIG.rest[o.name] = o.getWorldPosition(new T.Vector3()); });
+        restFrames();
+        pool.forEach(p => p.attach());
+      }, e => console.warn('player model', e));
+    } catch (e) { console.warn('player model', e); }
+  }
+
   class Person {
     constructor() {
       const g = this.g = new T.Group(); scene.add(g);
@@ -349,8 +464,76 @@ window.Cricket3D = function (G) {
       const btn = CM(sph, M3.cap); btn.scale.set(0.012, 0.008, 0.012); btn.position.set(0, 0.126, -0.004);
       this.handle = P(cyl, M3.grip); this.blade = P(box, M3.blade); this.spine = P(box, M3.blade);
     }
+    attach() {
+      const root = T.SkeletonUtils.clone(RIG.tmpl);
+      this.model = root; this.bones = {}; this.parts = {};
+      root.traverse(o => {
+        if (o.isBone) this.bones[o.name] = o;
+        if (o.isMesh) { o.frustumCulled = false; o.castShadow = true; o.material = this.kit = kitMaterial(); }
+      });
+      scene.add(root);
+      // the shape-built body stays for the equipment (pads, gloves, helmet, cap, bat, shirt number); the rest is hidden
+      for (const k of ['thighL', 'thighR', 'shinL', 'shinR', 'kneeL', 'kneeR', 'footL', 'footR', 'soleL', 'soleR', 'hips', 'delL', 'delR',
+                       'upL', 'upR', 'foreL', 'foreR', 'elbL', 'elbR', 'neck', 'skull', 'jaw', 'nose', 'earL', 'earR', 'hair', 'shades']) this[k].visible = false;
+      this.hidden = true;
+    }
+    fit(pr, fwd, side, skinIdx, shirt, pants) {
+      const j = pr.j, B = this.bones, r = RIG.rest, W = this.wq || (this.wq = {}), Wp = this.wp || (this.wp = {});
+      const pos = {};
+      const pel = A(j.pelvis), neck = A(j.neck), headC = A(j.head);
+      // the trunk: the rest spine, turned and stretched to run from the pelvis to the neck
+      const up = v4.subVectors(neck, pel).clone(), Lt = up.length(), Lr = r.neck_01.y - r.pelvis.y;
+      const hipSide = A(j.hipL).sub(A(j.hipR)).normalize();
+      const trunkQ = qa.setFromRotationMatrix(frame(up, side, m4a)).clone().multiply(qb.setFromRotationMatrix(frame(v4.subVectors(r.neck_01, r.pelvis).clone(), new T.Vector3(1, 0, 0), m4b)).invert());
+      pos.pelvis = pel;
+      for (const b of ['spine_01', 'spine_02', 'spine_03', 'clavicle_l', 'clavicle_r']) pos[b] = v1.subVectors(r[b], r.pelvis).multiplyScalar(b.startsWith('spine') ? Lt / Lr : 1).applyQuaternion(trunkQ).add(pel).clone();
+      pos.clavicle_l.copy(v1.subVectors(r.clavicle_l, r.spine_03).applyQuaternion(trunkQ).add(pos.spine_03));
+      pos.clavicle_r.copy(v1.subVectors(r.clavicle_r, r.spine_03).applyQuaternion(trunkQ).add(pos.spine_03));
+      pos.neck_01 = neck;
+      pos.head = v1.subVectors(headC, neck).normalize().multiplyScalar(r.head.distanceTo(r.neck_01)).add(neck).clone();
+      pos.headTop = v1.subVectors(headC, pos.head).normalize().multiplyScalar(0.16).add(pos.head).clone();
+      for (const s of ['l', 'r']) {
+        const S = s.toUpperCase(), sh = A(j['sh' + S]), el = A(j['el' + S]), hd = A(j['hand' + S]);
+        pos['upperarm_' + s] = sh; pos['lowerarm_' + s] = el;
+        const fd = v1.subVectors(hd, el).normalize().clone();
+        pos['hand_' + s] = hd.clone().addScaledVector(fd, -0.06);
+        pos['handTip_' + s] = hd.clone().addScaledVector(fd, 0.05);
+        const hip = A(j['hip' + S]), kn = A(j['knee' + S]), ft = A(j['foot' + S]);
+        pos['thigh_' + s] = hip; pos['calf_' + s] = kn;
+        const ank = ft.clone(); ank.y += r['foot_' + s].y;
+        pos['foot_' + s] = ank;
+        const yaw = Math.atan2(fwd.x, fwd.z), toe = v1.subVectors(r['ball_' + s], r['foot_' + s]).applyAxisAngle(new T.Vector3(0, 1, 0), yaw).clone();
+        pos['ball_' + s] = ank.clone().add(toe);
+        pos['toe_' + s] = pos['ball_' + s].clone().add(new T.Vector3(Math.sin(yaw) * 0.073, 0.006, Math.cos(yaw) * 0.073));
+      }
+      const lookV = pr.look ? new T.Vector3(pr.look[0], 0, pr.look[2]).normalize() : fwd.clone().setY(0).normalize();
+      const hint = { side, hips: hipSide, fwd, up: new T.Vector3(0, 1, 0), look: new T.Vector3(lookV.z, 0, -lookV.x),
+                     poleL: pole(pos.upperarm_l, pos.lowerarm_l, pos.hand_l, fwd), poleR: pole(pos.upperarm_r, pos.lowerarm_r, pos.hand_r, fwd),
+                     kneeL: pole(pos.thigh_l, pos.calf_l, pos.foot_l, fwd), kneeR: pole(pos.thigh_r, pos.calf_r, pos.foot_r, fwd) };
+      // world rotations, then local ones down the hierarchy (the bind pose has no rotation, so rest frames are world frames)
+      for (const b of ORDER) {
+        const [to, tw] = AIM[b];
+        frame(v4.subVectors(pos[to], pos[b]).clone(), hint[tw], m4a);
+        m4b.copy(RIG.restQ[b]).transpose();
+        const q = (W[b] || (W[b] = new T.Quaternion())).setFromRotationMatrix(m4a.multiply(m4b));
+        Wp[b] = pos[b];
+        const p = PARENT[b], bone = B[b];
+        if (!p) { bone.quaternion.copy(q); bone.position.copy(pos[b]); continue; }
+        qb.copy(W[p]).invert();
+        bone.quaternion.copy(qb).multiply(q);
+        bone.position.subVectors(pos[b], Wp[p]).applyQuaternion(qb);
+      }
+      // fingers: a fist round the bat handle (gloves), relaxed otherwise
+      const curl = RIG.curl[(pr.team === 'bat' && pr.gloves) || pr.keeper ? 'grip' : 'relax'];
+      for (const k in curl) if (B[k]) B[k].quaternion.copy(curl[k]);
+      // kit colours
+      const u = this.kit.userData.u;
+      u.uShirt.value.copy(shirt.color); u.uPants.value.copy(pants.color); u.uTrim.value.copy(pants.color);
+      u.uSkin.value.copy(SKIN_TONES[skinIdx % SKIN_TONES.length]);
+    }
     set(pr) {
       const j = pr.j, bat = pr.team === 'bat', keeper = !!pr.keeper;
+      if (this.model) this.model.visible = true;
       const shirt = bat ? M3.batShirt : M3.bowlShirt, pants = bat ? M3.batPants : M3.bowlPants;
       const hs = hash(pr.pid || 'x'), skin = SKIN[hs % SKIN.length];
       this.g.visible = true;
@@ -369,7 +552,7 @@ window.Cricket3D = function (G) {
         const ank = [foot[0], foot[1] + 0.08, foot[2]];
         sh.material = pants; seg(sh, knee, ank, 0.058); sh.visible = !padded;
         pd.visible = padded;
-        if (padded) segFlat(pd, [knee[0], knee[1] + 0.1, knee[2]], [ank[0], ank[1] - 0.03, ank[2]], side, 0.088, 0.072, 0.012);
+        if (padded) segFlat(pd, [knee[0], knee[1] + 0.1, knee[2]], [ank[0], ank[1] - 0.03, ank[2]], side, this.model ? 0.1 : 0.088, this.model ? 0.095 : 0.072, this.model ? 0.028 : 0.012);
         kn.material = padded ? M3.pads : pants; ball3(kn, knee, padded ? 0.08 : 0.062);
         // shoes point the way the body faces (toes slightly out)
         const toe = [Math.sin(yawB), 0, Math.cos(yawB)];
@@ -379,7 +562,7 @@ window.Cricket3D = function (G) {
       // trunk: set from the shoulder line and the spine
       mB.makeBasis(vs.clone().multiplyScalar(0.46), vu.clone().multiplyScalar(Lt * 1.04), vf.clone().multiplyScalar(0.27));
       mB.setPosition((j.pelvis[0] + j.neck[0]) / 2, (j.pelvis[1] + j.neck[1]) / 2 + 0.01, (j.pelvis[2] + j.neck[2]) / 2);
-      this.torso.matrix.copy(mB); this.torso.material = shirt;
+      this.torso.matrix.copy(mB); this.torso.material = this.model ? INVIS : shirt;
       this.number.visible = !keeper; if (!keeper) drawBack(this.back, pr.pid || '');
       this.hips.material = pants; this.hips.position.set(j.pelvis[0], j.pelvis[1] - 0.03, j.pelvis[2]);
       this.hips.quaternion.setFromRotationMatrix(mB.makeBasis(vs, vu, vf)); this.hips.scale.set(0.185, 0.12, 0.125);
@@ -391,7 +574,7 @@ window.Cricket3D = function (G) {
         fo.material = bat || keeper ? shirt : skin; seg(fo, elb, hand, 0.044);
         el.material = shirt; ball3(el, elb, 0.047);
         const gl = (bat && pr.gloves) || keeper;
-        hd.material = gl ? M3.gloves : skin; ball3(hd, hand, gl ? 0.06 : 0.042, gl ? 0.055 : 0.048, gl ? 0.065 : 0.042);
+        hd.visible = !this.model || gl; hd.material = gl ? M3.gloves : skin; ball3(hd, hand, gl ? 0.06 : 0.042, gl ? 0.055 : 0.048, gl ? 0.065 : 0.042);
       }
       // head
       const hp = j.head;
@@ -412,6 +595,7 @@ window.Cricket3D = function (G) {
         seg(this.blade, mid, t, 1); this.blade.scale.x = 0.108; this.blade.scale.z = 0.03;
         seg(this.spine, mid, t, 1); this.spine.scale.x = 0.04; this.spine.scale.z = 0.055; this.spine.scale.y *= 0.85;
       }
+      if (this.model) this.fit(pr, fwd, side, hs, shirt, pants);
     }
   }
   const pool = [];
@@ -504,7 +688,8 @@ window.Cricket3D = function (G) {
     setStumps(stumpsFar, null, null);
 
     const list = G.M ? people() : [];
-    pool.forEach((p, i) => { if (i < list.length) p.set(list[i]); else p.g.visible = false; });
+    loadModel();
+    pool.forEach((p, i) => { if (i < list.length) p.set(list[i]); else { p.g.visible = false; if (p.model) p.model.visible = false; } });
     blobs.forEach((b, i) => { b.visible = i < list.length; if (b.visible) b.position.set(list[i].at[0], 0.012, list[i].at[2]); });
 
     const bp = G.M ? ballPos() : null;
