@@ -532,7 +532,8 @@
 <script src="vendor/postprocessing.min.js"></script>
 <script src="vendor/GLTFLoader.js"></script>
 <script src="vendor/SkeletonUtils.js"></script>
-<script async src="vendor/player-model.js"></script>
+<script async src="vendor/player-v2.js"></script>
+<script async src="vendor/equipment-model.js"></script>
 <script src="render3d.js"></script>
 <script>
 (() => {
@@ -690,7 +691,7 @@ const ovStr = b => Math.floor(b / 6) + (b % 6 ? '.' + (b % 6) : '');
 const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
 
 // ======================================================================= camera and projection
-const BOWL_CAM = { pos: [0, 8.5, 36], tgt: [0, 0.6, 2.2], fov: 13 };   // the TV angle: high behind the bowler, looking down the pitch
+const BOWL_CAM = { pos: [0, 7.2, 45], tgt: [0, 0.3, 6.5], fov: 18 };   // the TV angle: high behind the bowler, looking down the pitch
 const cam = { pos: BOWL_CAM.pos.slice(), tgt: BOWL_CAM.tgt.slice(), fov: BOWL_CAM.fov };
 let cr, cu, cf, focal;
 const NEAR = 0.3;

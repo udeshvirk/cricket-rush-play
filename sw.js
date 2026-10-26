@@ -1,6 +1,6 @@
 // Offline support. VERSION is stamped with the commit when the game is published (tools/build-play.sh), so players get the new game.
-const VERSION = 'cricket-rush-45b19b3';
-const SHELL = ['./', 'index.html', 'render3d.js', 'vendor/three.min.js', 'vendor/postprocessing.min.js', 'vendor/GLTFLoader.js', 'vendor/SkeletonUtils.js', 'vendor/player-model.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
+const VERSION = 'cricket-rush-0cc530e';
+const SHELL = ['./', 'index.html', 'render3d.js', 'vendor/three.min.js', 'vendor/postprocessing.min.js', 'vendor/GLTFLoader.js', 'vendor/SkeletonUtils.js', 'vendor/player-v2.js', 'vendor/equipment-model.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

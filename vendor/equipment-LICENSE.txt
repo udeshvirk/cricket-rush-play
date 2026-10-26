@@ -1,0 +1,10 @@
+CC0 1.0 Universal (Public Domain Dedication)
+
+The original 3D geometry of the seven cricket equipment models, the procedural
+source-code generator, and the original preview renders contained in this
+archive are dedicated to the public domain under CC0 1.0 by the author.
+
+You may copy, modify, distribute, use commercially, and incorporate these assets
+into games without attribution. These meshes use no third-party asset files.
+
+CC0 legal text: https://creativecommons.org/publicdomain/zero/1.0/legalcode

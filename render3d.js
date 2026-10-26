@@ -176,28 +176,67 @@ window.Cricket3D = function (G) {
       pts.push(new T.Vector2(r, y), new T.Vector2(r2, y));
     }
     pts.push(new T.Vector2(STAND_OUT + 0.5, STAND_H + 5), new T.Vector2(STAND_OUT + 8, STAND_H + 6));
-    const seats = canvasTex(1024, 512, (g, w, h) => {
-      g.fillStyle = '#141c36'; g.fillRect(0, 0, w, h);
-      const cols = ['#cfc8b8', '#d9963a', '#2aa59b', '#c9475a', '#6c78bd', '#d8bc5e', '#3a6fd8', '#8a93ad', '#e6e1d6', '#5a3f30'];
-      for (let i = 0; i < 26000; i++) {
-        g.globalAlpha = 0.35 + Math.random() * 0.45; g.fillStyle = cols[(Math.random() * cols.length) | 0];
-        const x = Math.random() * w, y = Math.random() * h; g.fillRect(x, y, 2 + Math.random() * 2, 3 + Math.random() * 2);
-      }
-      g.globalAlpha = 1;
-    }, true);
-    seats.repeat.set(30, 1);
-    const stand = new T.Mesh(new T.LatheGeometry(pts, 96), new T.MeshBasicMaterial({ map: seats, side: T.DoubleSide, color: 0x9aa3c0 }));
+    const stand = new T.Mesh(new T.LatheGeometry(pts, 96), new T.MeshLambertMaterial({ color: 0x232b45, side: T.DoubleSide }));
     scene.add(stand); standMesh = stand;
     // a lit strip along the front of the upper deck
     const strip = new T.Mesh(new T.CylinderGeometry(STAND_OUT + 0.6, STAND_OUT + 0.6, 0.5, 96, 1, true), new T.MeshBasicMaterial({ color: 0x2ed3c6, side: T.BackSide }));
     strip.position.y = STAND_H + 0.8; scene.add(strip);
   }
-  const standMat = standMesh.material;
-  const standBase = standMat.color.clone();
+  // the crowd: one seated spectator per seat (some empty), all drawn in one go. Each has a shirt colour, a skin tone and a
+  // phase; when the crowd cheers they bob up and throw their arms in the air (done in the vertex shader)
+  const crowdU = { uCheer: { value: 0 }, uTime: { value: 0 } };
+  {
+    const parts = [];
+    const add = (geo, part, x, y, z) => { geo = geo.toNonIndexed(); geo.translate(x, y, z); const n = geo.attributes.position.count;
+      geo.setAttribute('part', new T.BufferAttribute(new Float32Array(n).fill(part), 1)); parts.push(geo); };
+    add(new T.BoxGeometry(0.42, 0.5, 0.26), 0, 0, 0.45, 0);                  // body
+    add(new T.IcosahedronGeometry(0.11, 0), 1, 0, 0.84, 0.01);               // head
+    add(new T.BoxGeometry(0.08, 0.42, 0.08), 2, 0.2, 0.9, 0.02);             // arms (raised; shown when cheering)
+    add(new T.BoxGeometry(0.08, 0.42, 0.08), 2, -0.2, 0.9, 0.02);
+    const geo = new T.BufferGeometry();
+    for (const k of ['position', 'normal', 'part']) {
+      const arrs = parts.map(g => g.attributes[k].array), len = arrs.reduce((a, b) => a + b.length, 0), out = new Float32Array(len);
+      let o = 0; for (const a of arrs) { out.set(a, o); o += a.length; }
+      geo.setAttribute(k, new T.BufferAttribute(out, k === 'part' ? 1 : 3));
+    }
+    const steps = 14, density = lowEnd ? 0.55 : 1, seats = [];
+    for (let i = 0; i < steps; i++) {
+      const r = lerp(STAND_IN, STAND_OUT, (i + 0.55) / steps), y = lerp(1.4, STAND_H, (i + 1) / steps);
+      const n = Math.floor(2 * Math.PI * r / 0.62 * density);
+      for (let k = 0; k < n; k++) if (Math.random() > 0.1) seats.push([(k + Math.random() * 0.3) / n * Math.PI * 2, r, y]);
+    }
+    const N = seats.length;
+    const shirtA = new Float32Array(N * 3), skinA = new Float32Array(N * 3), phaseA = new Float32Array(N);
+    const SHIRTS = ['#e8e4da', '#2a62d8', '#f2c230', '#1f8f4e', '#d23b4a', '#ff8a1f', '#3a3f55', '#7a4fc9', '#18a9c9', '#f0f0f0', '#1b2a6b', '#c9c1a8'];
+    const SKINS = ['#8d5a3b', '#b07650', '#c99872', '#e0b48f', '#6b4029'], c = new T.Color();
+    const mesh = new T.InstancedMesh(geo, null, N), m = new T.Matrix4(), q = new T.Quaternion(), sc = new T.Vector3(), ps = new T.Vector3(), Y = new T.Vector3(0, 1, 0);
+    seats.forEach(([a, r, y], i) => {
+      const x = Math.sin(a) * r, z = Math.cos(a) * r, k = 0.9 + Math.random() * 0.2;
+      m.compose(ps.set(x, y, z), q.setFromAxisAngle(Y, Math.atan2(-x, -z)), sc.set(k, k, k)); mesh.setMatrixAt(i, m);
+      c.set(SHIRTS[(Math.random() * SHIRTS.length) | 0]).multiplyScalar(0.45 + Math.random() * 0.3); c.toArray(shirtA, i * 3);
+      c.set(SKINS[(Math.random() * SKINS.length) | 0]).multiplyScalar(0.7); c.toArray(skinA, i * 3);
+      phaseA[i] = Math.random();
+    });
+    geo.setAttribute('aShirt', new T.InstancedBufferAttribute(shirtA, 3));
+    geo.setAttribute('aSkin', new T.InstancedBufferAttribute(skinA, 3));
+    geo.setAttribute('aPhase', new T.InstancedBufferAttribute(phaseA, 1));
+    const mat = new T.MeshLambertMaterial({ color: 0xffffff });
+    mat.onBeforeCompile = sh => {
+      Object.assign(sh.uniforms, crowdU);
+      sh.vertexShader = 'uniform float uCheer, uTime;\nattribute float part, aPhase;\nattribute vec3 aShirt, aSkin;\nvarying vec3 vCrowd;\n' +
+        sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+  vCrowd = part > 0.5 && part < 1.5 ? aSkin : aShirt;
+  float up = uCheer * step(0.35, aPhase);
+  if (part > 1.5) transformed.y = mix(0.72, transformed.y, up);    // arms fold away when calm
+  transformed.y += max(0.0, sin(uTime * 9.0 + aPhase * 6.283)) * uCheer * 0.22;`);
+      sh.fragmentShader = 'varying vec3 vCrowd;\n' + sh.fragmentShader.replace('vec4 diffuseColor = vec4( diffuse, opacity );', 'vec4 diffuseColor = vec4( vCrowd, opacity );');
+    };
+    mat.customProgramCacheKey = () => 'crowd-1';
+    mesh.material = mat; mesh.frustumCulled = false;
+    scene.add(mesh);
+  }
   function updateCrowd() {
-    const c = G.cheer > 0.02 ? G.cheer * (0.55 + 0.45 * Math.sin(G.clock * 18)) : 0;
-    standMat.color.copy(standBase).multiplyScalar(1 + c * 0.45);
-    if (standMat.map) standMat.map.offset.y = c ? Math.sin(G.clock * 24) * 0.004 * c : 0;
+    crowdU.uCheer.value = Math.min(1, (G.cheer || 0) * 1.4); crowdU.uTime.value = G.clock || 0;
   }
 
   // ---------------------------------------------------------------- stumps
@@ -306,12 +345,14 @@ window.Cricket3D = function (G) {
   const INVIS = new T.MeshBasicMaterial({ visible: false });
   const EYES = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.25 });
   const SKINV = SKIN.map(m => new T.MeshStandardMaterial({ color: m.color.clone().multiplyScalar(1.12), vertexColors: true, roughness: 0.62 }));
+  // (V2 player: this paints only the BODY under the separate kit meshes, so where the kit leaves a gap the body shows the
+  // same team colour instead of a seam)
   // one material per player: the kit is cut per pixel along clean lines in the rest pose (waist, collar, sleeves, ankles),
   // so the edges are sharp whatever the triangles; the collar and sleeve ends get a trim in the team's second colour
   function kitMaterial() {
     const k = RIG.kit, V3 = a => new T.Vector3(a[0], a[1], a[2]);
     const u = { uShirt: { value: new T.Color() }, uPants: { value: new T.Color() }, uSkin: { value: new T.Color() }, uShoe: { value: new T.Color('#f2f2f2') },
-                uTrim: { value: new T.Color() }, uKit: { value: new T.Vector3(k.waist, k.neck, k.ankle) },
+                uTrim: { value: new T.Color() }, uGlove: { value: 0 }, uKit: { value: new T.Vector3(k.waist, k.neck, k.ankle) },
                 uShL: { value: V3(k.shL) }, uElL: { value: V3(k.elL) }, uShR: { value: V3(k.shR) }, uElR: { value: V3(k.elR) } };
     const m = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0 });
     m.userData.u = u;
@@ -319,24 +360,26 @@ window.Cricket3D = function (G) {
       Object.assign(sh.uniforms, u);
       sh.vertexShader = 'attribute vec3 _rest;\nattribute vec4 _part;\nvarying vec3 vRest;\nvarying vec4 vPart;\n' +
         sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vRest = _rest; vPart = _part;');
-      sh.fragmentShader = 'uniform vec3 uShirt, uPants, uSkin, uShoe, uTrim, uKit, uShL, uElL, uShR, uElR;\nvarying vec3 vRest;\nvarying vec4 vPart;\nfloat kRough;\n' +
+      sh.fragmentShader = 'uniform vec3 uShirt, uPants, uSkin, uShoe, uTrim, uKit, uShL, uElL, uShR, uElR;\nuniform float uGlove;\nvarying vec3 vRest;\nvarying vec4 vPart;\nfloat kRough;\n' +
         sh.fragmentShader.replace('#include <color_fragment>', `
-  vec3 kc = uShirt; kRough = 0.86;
+  vec3 kc = uShirt; kRough = 0.86; bool own = false;
   float neckLine = uKit.y - 0.045 - 0.03 * smoothstep(0.0, 0.09, vRest.z);
-  if (vPart.w > 0.5) { kc = vColor.rgb; kRough = 0.25; }
-  else if (vPart.z > 0.5 || vPart.y > 0.5) { kc = uSkin * vColor.rgb; kRough = 0.55; }
+  if (vPart.w > 0.5) { kc = vColor.rgb; kRough = 0.25; own = true; }
+  else if (vPart.z > 0.5 && uGlove > 0.5) { kc = vec3(0.94, 0.93, 0.9) * vColor.r; kRough = 0.7; own = true; }
+  else if (vPart.z > 0.5 || vPart.y > 0.5) { kc = uSkin * vColor.rgb; kRough = 0.55; own = true; }
   else if (abs(vPart.x) > 0.5) {
     vec3 s = vPart.x > 0.0 ? uShL : uShR, e = vPart.x > 0.0 ? uElL : uElR;
     float t = dot(vRest - s, e - s) / dot(e - s, e - s);
-    if (t > 0.62) { kc = uSkin * vColor.rgb; kRough = 0.55; } else if (t > 0.57) kc = uTrim;
+    if (t > 1.72 && uGlove > 0.5) { kc = vec3(0.94, 0.93, 0.9); kRough = 0.7; }
+    else if (t > 0.62) { kc = uSkin * vColor.rgb; kRough = 0.55; own = true; } else if (t > 0.57) kc = uTrim;
   }
   else if (vRest.y < uKit.z + 0.035) { kc = uShoe; kRough = 0.45; }
-  else if (vRest.y > neckLine && abs(vRest.x) < 0.11) { kc = uSkin * vColor.rgb; kRough = 0.55; }
+  else if (vRest.y > neckLine && abs(vRest.x) < 0.11) { kc = uSkin * vColor.rgb; kRough = 0.55; own = true; }
   else if (vRest.y > neckLine - 0.014 && abs(vRest.x) < 0.12) kc = uTrim;
   else if (vRest.y < uKit.x) { kc = uPants; kRough = 0.8; }
   diffuseColor.rgb = kc;`).replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = kRough;');
     };
-    m.customProgramCacheKey = () => 'cricket-kit-1';
+    m.customProgramCacheKey = () => 'cricket-kit-v2';
     return m;
   }
   const SKIN_TONES = ['#8d5a3b', '#b07650', '#c99872', '#e0b48f', '#6b4029', '#a36b47'].map(c => new T.Color(c));
@@ -388,12 +431,29 @@ window.Cricket3D = function (G) {
       const d = new T.Vector3().subVectors(r['middle_01_' + s], r['hand_' + s]).normalize();
       const palm = new T.Vector3(-Math.sign(r['hand_' + s].x), 0, 0);
       const sg = Math.sign(new T.Vector3().crossVectors(a, d).dot(palm)) || 1;
-      for (const [mode, ang] of [['grip', [1.25, 1.45, 0.95]], ['relax', [0.3, 0.45, 0.3]]])
+      for (const [mode, ang] of [['grip', [1.0, 1.2, 0.8]], ['relax', [0.3, 0.45, 0.3]]])
         for (const f of ['index', 'middle', 'ring', 'pinky', 'thumb'])
           for (let k = 1; k <= 3; k++) {
             const t = f === 'thumb' ? (k === 1 ? 0 : ang[k - 1] * 0.5) : ang[k - 1];
             RIG.curl[mode][f + '_0' + k + '_' + s] = new T.Quaternion().setFromAxisAngle(a, sg * t);
           }
+    }
+    // batting gloves on the hand bones: glove origin = palm centre, fingers -Y, palm -X (left); the right glove is mirrored
+    RIG.glove = {};
+    for (const s of ['l', 'r']) {
+      const d0 = new T.Vector3().subVectors(r['middle_01_' + s], r['hand_' + s]);
+      const palm = new T.Vector3(-Math.sign(r['hand_' + s].x), 0, 0).addScaledVector(d0.clone().normalize(), -0).normalize();
+      const Ry = d0.clone().normalize().negate(), Rx = (s === 'l' ? palm.clone().negate() : palm.clone());
+      Rx.addScaledVector(Ry, -Rx.dot(Ry)).normalize(); const Rz = new T.Vector3().crossVectors(Rx, Ry);
+      RIG.glove[s] = { pos: d0.clone().multiplyScalar(0.5).add(new T.Vector3(-Math.sign(r['hand_' + s].x) * 0.012, 0, 0)),
+                       quat: new T.Quaternion().setFromRotationMatrix(new T.Matrix4().makeBasis(Rx, Ry, Rz)), sx: s === 'l' ? 1 : -1 };
+    }
+    RIG.grip = {};
+    for (const s of ['l', 'r']) {
+      const d0 = new T.Vector3().subVectors(r['middle_01_' + s], r['hand_' + s]);
+      const a0 = new T.Vector3().subVectors(r['index_01_' + s], r['pinky_01_' + s]);
+      RIG.grip[s] = { rest: frame(d0, a0, new T.Matrix4()).clone(), knuckles: a0.clone(),
+                      fist: d0.clone().add(new T.Vector3(-Math.sign(r['hand_' + s].x) * 0.028, 0, 0)) };   // the middle of the fist
     }
     for (const b of ORDER) {
       const [to, tw] = AIM[b];
@@ -407,11 +467,65 @@ window.Cricket3D = function (G) {
       const bin = Uint8Array.from(atob(window.PLAYER_GLB), c => c.charCodeAt(0)).buffer;
       new T.GLTFLoader().parse(bin, '', g => {
         RIG.tmpl = g.scene; RIG.kit = g.userData.kit; g.scene.updateMatrixWorld(true);
+        g.scene.traverse(o => {   // the body's own skin colour (face vertices), so each player can get his own tone
+          if (!o.isMesh || !o.geometry.attributes._part || !o.geometry.attributes.color) return;
+          const pa = o.geometry.attributes._part, ca = o.geometry.attributes.color; let r = 0, gg = 0, bb = 0, n = 0;
+          for (let i = 0; i < pa.count; i++) if (pa.getY(i) > 0.5 && pa.getW(i) < 0.5) { r += ca.getX(i); gg += ca.getY(i); bb += ca.getZ(i); n++; }
+          RIG.skinBase = new T.Color(r / n, gg / n, bb / n);
+        });
         g.scene.traverse(o => { if (o.isBone) RIG.rest[o.name] = o.getWorldPosition(new T.Vector3()); });
         restFrames();
+        // where the handle runs through a gripping fist: the middle of the loop the curled fingers make (measured in the rest pose)
+        const TB = {}; g.scene.traverse(o => { if (o.isBone) TB[o.name] = o; });
+        for (const s of ['l', 'r']) {
+          const keep = {};
+          for (const k in RIG.curl.grip) if (k.endsWith('_' + s)) { keep[k] = TB[k].quaternion.clone(); TB[k].quaternion.copy(RIG.curl.grip[k]); }
+          g.scene.updateMatrixWorld(true);
+          const c = new T.Vector3(); let n = 0;
+          for (const f of ['index', 'middle', 'ring']) for (let k = 1; k <= 3; k++) { c.add(TB[f + '_0' + k + '_' + s].getWorldPosition(v1)); n++; }
+          RIG.grip[s].fist = c.multiplyScalar(1 / n).sub(RIG.rest['hand_' + s]);
+          for (const k in keep) TB[k].quaternion.copy(keep[k]);
+        }
+        g.scene.updateMatrixWorld(true);
         pool.forEach(p => p.attach());
       }, e => console.warn('player model', e));
     } catch (e) { console.warn('player model', e); }
+  }
+
+  // ---------------------------------------------------------------- equipment models (vendor/equipment-model.js: bat, helmet, cap, pad; CC0)
+  const EQ = { tried: false, ready: false };
+  // which helmet and gloves to show: 'model' = the equipment models, 'built' = the shape-built helmet and gloved fingers
+  const EQUIP_OPT = Object.assign({ helmet: 'built', gloves: 'built' }, window.CR_EQUIP || {});
+  const EQMAT = { padding: mat('#1a1d24'), strap: mat('#b9bcc2'), sticker: mat('#c9302c') };
+  for (const m of Object.values(EQMAT)) m.side = T.DoubleSide;
+  const EQMAT_USES = { shell: M3.helmet, grille: M3.grille, cap: M3.cap, pad: M3.pads, willow: M3.blade, grip: M3.grip };
+  function loadEquipment() {
+    if (EQ.tried || !window.EQUIP_GLB || !T.GLTFLoader) return;
+    EQ.tried = true;
+    const names = Object.keys(window.EQUIP_GLB); let left = names.length;
+    for (const k of names) {
+      try {
+        const bin = Uint8Array.from(atob(window.EQUIP_GLB[k]), c => c.charCodeAt(0)).buffer;
+        new T.GLTFLoader().parse(bin, '', g => {
+          g.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false;
+            const n = o.material.name, side = o.material.side;
+            if (side === T.DoubleSide) for (const m of [M3.helmet, M3.grille, M3.cap, M3.pads, M3.blade, M3.grip]) if (EQMAT_USES[n] === m) m.side = T.DoubleSide;
+            o.material = n === 'shell' ? M3.helmet : n === 'grille' ? M3.grille : n === 'cap' ? M3.cap : n === 'pad' ? M3.pads
+              : n === 'willow' ? M3.blade : n === 'grip' ? M3.grip : EQMAT[n] || o.material; } });
+          EQ[k] = g.scene;
+          if (--left === 0) { EQ.ready = true; pool.forEach(p => p.attachEquipment()); }
+        }, e => console.warn('equipment', k, e));
+      } catch (e) { console.warn('equipment', k, e); }
+    }
+  }
+  const eqM = new T.Matrix4(), eX = new T.Vector3(), eY = new T.Vector3(), eZ = new T.Vector3();
+  // place an equipment piece: its local -Y along 'down', local +Z toward 'face', at 'at', scaled by sy (sx = -1 mirrors it)
+  function placeEq(obj, at, down, face, sy, sx = 1) {
+    eY.copy(down).normalize().negate();
+    eZ.copy(face).addScaledVector(eY, -face.dot(eY)); if (eZ.lengthSq() < 1e-8) eZ.set(0, 0, 1); eZ.normalize();
+    eX.crossVectors(eY, eZ);
+    obj.matrix.makeBasis(eX.multiplyScalar(sx * sy), eY.multiplyScalar(sy), eZ.multiplyScalar(sy));
+    obj.matrix.setPosition(at); obj.matrixWorldNeedsUpdate = true;
   }
 
   class Person {
@@ -448,14 +562,14 @@ window.Cricket3D = function (G) {
       // helmet: shell, peak, side flaps and a grille of curved bars
       this.helmet = new T.Group(); h.add(this.helmet);
       const HM = (geo, m) => part(geo, m, this.helmet);
-      const shell = HM(dome, M3.helmet); shell.scale.set(0.128, 0.138, 0.14); shell.position.set(0, -0.005, -0.006);
-      const peak = HM(halfDisc, M3.helmet); peak.scale.set(0.13, 0.01, 0.075); peak.position.set(0, 0.035, 0.11); peak.rotation.x = 0.18;
-      for (const s of [1, -1]) { const f = HM(box, M3.helmet); f.scale.set(0.02, 0.1, 0.1); f.position.set(s * 0.115, -0.06, 0.02); }
+      const shell = HM(dome, M3.helmet); shell.scale.set(0.116, 0.13, 0.128); shell.position.set(0, -0.012, -0.01);
+      const peak = HM(halfDisc, M3.helmet); peak.scale.set(0.115, 0.008, 0.06); peak.position.set(0, -0.012, 0.11); peak.rotation.x = 0.22;
+      for (const s of [1, -1]) { const f = HM(sph, M3.helmet); f.scale.set(0.014, 0.05, 0.05); f.position.set(s * 0.104, -0.065, 0.025); }
       for (let i = 0; i < 3; i++) {
-        const b = HM(bar, M3.grille); const r = 0.12 - i * 0.004;
-        b.scale.set(r, r, r); b.rotation.set(Math.PI / 2, 0, Math.PI * 0.05); b.position.set(0, 0.0 - i * 0.042, 0.0);
+        const b = HM(bar, M3.grille); const r = 0.118 - i * 0.006;
+        b.scale.set(r, r, r * 1.05); b.rotation.set(Math.PI / 2, 0, Math.PI * 0.05); b.position.set(0, -0.058 - i * 0.03, 0.006 - i * 0.004);
       }
-      const stem = HM(box, M3.grille); stem.scale.set(0.008, 0.09, 0.008); stem.position.set(0, -0.045, 0.12);
+      const stem = HM(box, M3.grille); stem.scale.set(0.007, 0.07, 0.007); stem.position.set(0, -0.088, 0.12);
       // cap: crown, button and a curved peak
       this.cap = new T.Group(); h.add(this.cap);
       const CM = (geo, m) => part(geo, m, this.cap);
@@ -464,12 +578,23 @@ window.Cricket3D = function (G) {
       const btn = CM(sph, M3.cap); btn.scale.set(0.012, 0.008, 0.012); btn.position.set(0, 0.126, -0.004);
       this.handle = P(cyl, M3.grip); this.blade = P(box, M3.blade); this.spine = P(box, M3.blade);
     }
+    attachEquipment() {
+      const C = k => { const o = EQ[k].clone(); o.matrixAutoUpdate = false; return o; };
+      this.eqBat = C('bat'); this.eqPadL = C('pad_left'); this.eqPadR = C('pad_left'); this.g.add(this.eqBat, this.eqPadL, this.eqPadR);
+      this.eqHelmet = EQ.helmet.clone(); this.eqCap = EQ.cap.clone(); this.headG.add(this.eqHelmet, this.eqCap);
+      if (EQ.glove_left) { this.eqGl = EQ.glove_left.clone(); this.eqGr = EQ.glove_left.clone(); }
+      if (EQ.keeper_glove_left) { this.eqKl = EQ.keeper_glove_left.clone(); this.eqKr = EQ.keeper_glove_left.clone(); }
+      for (const o of [this.eqGl, this.eqGr, this.eqKl, this.eqKr]) if (o) { o.visible = false; this.g.add(o); }
+      this.eqHelmet.scale.setScalar(1.0); this.eqCap.scale.setScalar(1.0);
+    }
     attach() {
       const root = T.SkeletonUtils.clone(RIG.tmpl);
       this.model = root; this.bones = {}; this.parts = {};
       root.traverse(o => {
         if (o.isBone) this.bones[o.name] = o;
-        if (o.isMesh) { o.frustumCulled = false; o.castShadow = true; o.material = this.kit = kitMaterial(); }
+        if (o.isMesh) { o.frustumCulled = false; o.castShadow = true; o.receiveShadow = true;
+          const n = o.material.name; o.material = o.geometry.attributes._part ? (this.kit = kitMaterial()) : o.material.clone(); this.parts[n] = o;
+          if (n === 'KIT_Emblem') o.visible = false; }   // the V2 chest badge's shape is broken; hidden until it's remade
       });
       scene.add(root);
       // the shape-built body stays for the equipment (pads, gloves, helmet, cap, bat, shirt number); the rest is hidden
@@ -523,13 +648,64 @@ window.Cricket3D = function (G) {
         bone.quaternion.copy(qb).multiply(q);
         bone.position.subVectors(pos[b], Wp[p]).applyQuaternion(qb);
       }
+      // hands on the bat: each gripping hand turns so its knuckle line runs along the handle, and the bat goes through the top fist
+      this.batFix = null;
+      if (pr.bat) {
+        const bh = A(pr.bat.hands), bt = A(pr.bat.tip), bd = bt.clone().sub(bh).normalize();
+        const grips = pr.bat.carry ? [bh.distanceTo(pos.hand_l) < bh.distanceTo(pos.hand_r) ? 'l' : 'r'] : ['l', 'r'];
+        let top = null;
+        for (const s of grips) {
+          // turn the hand so its fist lands on the handle: the wrist-to-fist line points at the handle, the knuckles along it
+          const G = RIG.grip[s], hp = pos['hand_' + s], reach = G.fist.length();
+          const foot = bh.clone().addScaledVector(bd, v1.subVectors(hp, bh).dot(bd)), dist = hp.distanceTo(foot);
+          const slide = Math.sqrt(Math.max(0, reach * reach - dist * dist));
+          const P1 = foot.clone().addScaledVector(bd, slide), P2 = foot.clone().addScaledVector(bd, -slide);
+          const P = P1.distanceTo(bh) < P2.distanceTo(bh) ? P1 : P2;
+          frame(v2.subVectors(P, hp).clone(), bd, m4a);
+          if (!G.restF) G.restF = frame(G.fist.clone(), G.knuckles, new T.Matrix4()).clone().transpose();
+          m4b.copy(G.restF);
+          const q = new T.Quaternion().setFromRotationMatrix(m4a.multiply(m4b));
+          B['hand_' + s].quaternion.copy(qb.copy(W['lowerarm_' + s]).invert()).multiply(q);
+          W['hand_' + s].copy(q);
+          const fist = RIG.grip[s].fist.clone().applyQuaternion(q).add(pos['hand_' + s]);
+          if (!top || fist.distanceTo(bh) < top.distanceTo(bh)) top = fist;
+        }
+        const L = bt.distanceTo(bh);
+        this.batFix = { h: top.toArray(), t: top.clone().addScaledVector(bd, L).toArray() };
+      }
+      // the helmet or cap sits on the head and turns with it
+      this.headG.position.copy(pos.head).add(v1.set(0, 0.075, -0.008).applyQuaternion(W.head));
+      this.headG.quaternion.copy(W.head);
+      // the equipment helmet and cap ride on the head bone itself (its rest frame is the world frame, so the offset is simple)
+      if (this.eqHelmet && this.eqHelmet.parent !== B.head) {
+        for (const o of [this.eqHelmet, this.eqCap]) { B.head.add(o); o.position.set(0, 0.075, -0.008); }
+      }
       // fingers: a fist round the bat handle (gloves), relaxed otherwise
       const curl = RIG.curl[(pr.team === 'bat' && pr.gloves) || pr.keeper ? 'grip' : 'relax'];
       for (const k in curl) if (B[k]) B[k].quaternion.copy(curl[k]);
       // kit colours
-      const u = this.kit.userData.u;
-      u.uShirt.value.copy(shirt.color); u.uPants.value.copy(pants.color); u.uTrim.value.copy(pants.color);
-      u.uSkin.value.copy(SKIN_TONES[skinIdx % SKIN_TONES.length]);
+      const P = this.parts;
+      if (P.KIT_Jersey) P.KIT_Jersey.material.color.copy(shirt.color);
+      if (P.KIT_Trousers) P.KIT_Trousers.material.color.copy(pants.color);
+      if (P.KIT_Trim) P.KIT_Trim.material.color.copy(pants.color).multiplyScalar(0.8);
+      if (this.kit && RIG.skinBase) {   // the body: team colours under the kit, and this player's skin tone (the model's colours carry the face and hair)
+        const u = this.kit.userData.u, t = SKIN_TONES[skinIdx % SKIN_TONES.length];
+        u.uShirt.value.copy(shirt.color); u.uPants.value.copy(pants.color); u.uTrim.value.copy(pants.color);
+        u.uSkin.value.setRGB(Math.min(1.6, t.r / RIG.skinBase.r), Math.min(1.6, t.g / RIG.skinBase.g), Math.min(1.6, t.b / RIG.skinBase.b));
+        u.uShoe.value.set('#1a1d24');
+      }
+      // gloves on the hands (batters and the keeper); fingers tuck a little inside them
+      const gloved = (pr.team === 'bat' && pr.gloves) || pr.keeper;
+      for (const s of ['l', 'r']) {
+        const gl = pr.keeper ? this['eqK' + s] : this['eqG' + s], other = pr.keeper ? this['eqG' + s] : this['eqK' + s];
+        if (other) other.visible = false;
+        if (gl) {
+          if (gl.parent !== B['hand_' + s]) { B['hand_' + s].add(gl); const f = RIG.glove[s]; gl.position.copy(f.pos); gl.quaternion.copy(f.quat); gl.scale.set(f.sx, 1, 1); }
+          gl.visible = gloved && EQUIP_OPT.gloves === 'model';
+        }
+        for (const f of ['index', 'middle', 'ring', 'pinky', 'thumb']) { const bn = B[f + '_01_' + s]; if (bn) bn.scale.setScalar(gloved && gl && EQUIP_OPT.gloves === 'model' ? 0.7 : 1); }
+      }
+      if (this.kit) this.kit.userData.u.uGlove.value = gloved && EQUIP_OPT.gloves === 'built' ? 1 : 0;
     }
     set(pr) {
       const j = pr.j, bat = pr.team === 'bat', keeper = !!pr.keeper;
@@ -574,7 +750,7 @@ window.Cricket3D = function (G) {
         fo.material = bat || keeper ? shirt : skin; seg(fo, elb, hand, 0.044);
         el.material = shirt; ball3(el, elb, 0.047);
         const gl = (bat && pr.gloves) || keeper;
-        hd.visible = !this.model || gl; hd.material = gl ? M3.gloves : skin; ball3(hd, hand, gl ? 0.06 : 0.042, gl ? 0.055 : 0.048, gl ? 0.065 : 0.042);
+        hd.visible = !this.model; hd.material = gl ? M3.gloves : skin; ball3(hd, hand, gl ? 0.06 : 0.042, gl ? 0.055 : 0.048, gl ? 0.065 : 0.042);
       }
       // head
       const hp = j.head;
@@ -587,15 +763,35 @@ window.Cricket3D = function (G) {
       this.helmet.visible = helm; this.cap.visible = !helm; this.hair.visible = !helm;
       this.shades.visible = !helm && hs % 3 === 0;
       // the bat: handle, a flat blade and the ridge down its back
-      const hasBat = !!pr.bat;
-      this.handle.visible = this.blade.visible = this.spine.visible = hasBat;
+      if (this.model) this.fit(pr, fwd, side, hs, shirt, pants);
+      const hasBat = !!pr.bat, eq = !!this.eqBat;
+      if (eq) {   // the equipment models replace the shape-built bat, pads, helmet and cap
+        const mh = EQUIP_OPT.helmet === 'model';
+        this.helmet.visible = helm && !mh; this.cap.visible = !helm && !mh;
+        this.eqHelmet.visible = helm && mh; this.eqCap.visible = !helm && mh;
+        this.padL.visible = this.padR.visible = false;
+        for (const [o, knee, foot, sx] of [[this.eqPadL, j.kneeL, j.footL, 1], [this.eqPadR, j.kneeR, j.footR, -1]]) {
+          o.visible = padded;
+          if (!padded) continue;
+          const kn = new T.Vector3(knee[0], knee[1], knee[2]), an = new T.Vector3(foot[0], foot[1] + 0.07, foot[2]);
+          const down = an.clone().sub(kn), L = down.length();
+          placeEq(o, kn, down, fwd, L / 0.44, sx);
+        }
+        this.eqBat.visible = hasBat;
+        if (hasBat) {
+          const h = this.batFix ? this.batFix.h : pr.bat.hands, t = this.batFix ? this.batFix.t : pr.bat.tip;
+          const H = new T.Vector3(h[0], h[1], h[2]), d = new T.Vector3(t[0], t[1], t[2]).sub(H), L = d.length(); d.normalize();
+          const face = pr.look ? new T.Vector3(pr.look[0], pr.look[1], pr.look[2]) : fwd;
+          placeEq(this.eqBat, H.clone().addScaledVector(d, -0.07), d, face, (L + 0.07) / 0.86);
+        }
+      }
+      this.handle.visible = this.blade.visible = this.spine.visible = hasBat && !eq;
       if (hasBat) {
-        const h = pr.bat.hands, t = pr.bat.tip, k = 0.32, mid = [h[0] + (t[0] - h[0]) * k, h[1] + (t[1] - h[1]) * k, h[2] + (t[2] - h[2]) * k];
+        const h = this.batFix ? this.batFix.h : pr.bat.hands, t = this.batFix ? this.batFix.t : pr.bat.tip, k = 0.32, mid = [h[0] + (t[0] - h[0]) * k, h[1] + (t[1] - h[1]) * k, h[2] + (t[2] - h[2]) * k];
         seg(this.handle, [h[0] - (t[0] - h[0]) * 0.06, h[1] - (t[1] - h[1]) * 0.06, h[2] - (t[2] - h[2]) * 0.06], mid, 0.017);
         seg(this.blade, mid, t, 1); this.blade.scale.x = 0.108; this.blade.scale.z = 0.03;
         seg(this.spine, mid, t, 1); this.spine.scale.x = 0.04; this.spine.scale.z = 0.055; this.spine.scale.y *= 0.85;
       }
-      if (this.model) this.fit(pr, fwd, side, hs, shirt, pants);
     }
   }
   const pool = [];
@@ -688,7 +884,7 @@ window.Cricket3D = function (G) {
     setStumps(stumpsFar, null, null);
 
     const list = G.M ? people() : [];
-    loadModel();
+    loadModel(); loadEquipment();
     pool.forEach((p, i) => { if (i < list.length) p.set(list[i]); else { p.g.visible = false; if (p.model) p.model.visible = false; } });
     blobs.forEach((b, i) => { b.visible = i < list.length; if (b.visible) b.position.set(list[i].at[0], 0.012, list[i].at[2]); });
 
