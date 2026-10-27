@@ -352,6 +352,43 @@
     .autopad button { height: 28px; font-size: 11px; }
   }
 </style>
+<style>
+  /* Development presentation review: keep the pitch clear above a lower score ribbon. */
+  body.reference-view { margin: 0; }
+  body.reference-view #tvbar { top: auto; bottom: env(safe-area-inset-bottom,0px); left: 0; right: 0; max-width: none;
+    display: grid; grid-template-columns: minmax(170px,auto) 1fr; grid-template-rows: 36px 26px;
+    background: rgba(5,15,22,.92); border-top: 1px solid rgba(255,255,255,.25); }
+  body.reference-view #tvbar #scorebar { grid-column: 1 / -1; }
+  body.reference-view #tvbar #scorebar > div { background: transparent; padding: 2px 16px; }
+  body.reference-view #tvbar #scorebar .team { min-width: 62px; font-size: 16px; justify-content: center; }
+  body.reference-view #tvbar #scorebar .runs { font-size: 30px; line-height: 1; }
+  body.reference-view #tvbar #scorebar .overs { font-size: 15px; }
+  body.reference-view #tvbar #scorebar .need { margin-left: auto; font-size: 15px; }
+  body.reference-view #tvbar #batline { grid-column: 2; grid-row: 2; background: transparent; justify-content: space-between;
+    gap: 18px; padding: 0 16px; font-size: 16px; line-height: 24px; }
+  body.reference-view #tvbar #overchips { grid-column: 1; grid-row: 2; padding: 0 12px; align-items: center; }
+  body.reference-view #tvbar .chip { min-width: 15px; height: 15px; font-size: 10px; }
+  body.reference-view #delivery { top: auto; bottom: calc(76px + env(safe-area-inset-bottom,0px)); left: auto; right: 16px; transform: none; background: rgba(5,15,22,.7); font-size: 14px; }
+  body.reference-view #swipeHint { bottom: calc(74px + env(safe-area-inset-bottom,0px)); }
+  body.reference-view #tvcard { bottom: calc(78px + env(safe-area-inset-bottom,0px)); }
+  body.reference-view.reference-touch #tvbar { bottom: calc(100px + env(safe-area-inset-bottom,0px)); }
+  body.reference-view.reference-touch #delivery { bottom: calc(176px + env(safe-area-inset-bottom,0px)); }
+  @media (max-width:900px) {
+    body.reference-view #tvbar #scorebar > div { padding: 2px 8px; }
+    body.reference-view #tvbar #batline { font-size: 12px; gap: 8px; padding: 0 8px; }
+    body.reference-view #bowlerLine { display: none; }
+    body.reference-view #tvbar #scorebar .need { font-size: 12px; }
+  }
+  @media (max-height:460px) {
+    body.reference-view #tvbar { grid-template-rows: 24px 18px; }
+    body.reference-view #tvbar #scorebar .runs { font-size: 20px; }
+    body.reference-view #tvbar #scorebar .team, body.reference-view #tvbar #scorebar .overs { font-size: 11px; }
+    body.reference-view #tvbar #batline { font-size: 10px; line-height: 18px; }
+    body.reference-view.reference-touch #tvbar { bottom: 38px; }
+    body.reference-view.reference-touch .shotsel { flex-direction: row; }
+    body.reference-view.reference-touch #delivery { bottom: 90px; }
+  }
+</style>
 </head>
 <body>
 
@@ -506,6 +543,7 @@
         <button class="btn ghost" id="autoBowlToggle" type="button">Computer bowls for me</button>
         <button class="btn ghost" id="gfxToggle" type="button" hidden>Graphics: 3D</button>
         <button class="btn ghost" id="replayToggle" type="button" hidden>Replays: on</button>
+        <button class="btn ghost" id="commentaryToggle" type="button" aria-pressed="false" title="Optional device-voice preview. Recorded commentary voices are not included.">Commentary preview: off</button>
         <button class="btn ghost" id="quit" type="button">Quit match</button>
       </div>
       <div class="tabs" id="pauseTabs"></div>
@@ -535,10 +573,15 @@
 <script async src="vendor/player-v2.js"></script>
 <script async src="vendor/equipment-model.js"></script>
 <script async src="vendor/grip-model.js"></script>
+<script src="player-production/config.js"></script>
+<script src="player-production/motion.js"></script>
+<script src="commentary.js"></script>
 <script src="render3d.js"></script>
 <script>
 (() => {
 'use strict';
+const REFERENCE_VIEW = !!(window.CR_PLAYER_PRODUCTION && window.CR_PLAYER_PRODUCTION.reference);
+document.body.classList.toggle('reference-view',REFERENCE_VIEW);
 
 // ======================================================================= setup
 const canvas = document.getElementById('view');
@@ -692,7 +735,9 @@ const ovStr = b => Math.floor(b / 6) + (b % 6 ? '.' + (b % 6) : '');
 const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
 
 // ======================================================================= camera and projection
-const BOWL_CAM = { pos: [0, 7.2, 45], tgt: [0, 0.3, 6.5], fov: 18 };   // the TV angle: high behind the bowler, looking down the pitch
+// Long broadcast lens: comparable player size at both ends, without enlarging meshes.
+const BOWL_CAM = REFERENCE_VIEW ? { pos:[0,14.5,87],tgt:[0,.5,8],fov:5.7 }
+  : { pos:[0,7.2,45],tgt:[0,.3,6.5],fov:18 };
 const cam = { pos: BOWL_CAM.pos.slice(), tgt: BOWL_CAM.tgt.slice(), fov: BOWL_CAM.fov };
 let cr, cu, cf, focal;
 const NEAR = 0.3;
@@ -701,12 +746,14 @@ function setupCamera() {
   cf = norm(sub(cam.tgt, cam.pos));
   cr = norm(cross(cf, [0, 1, 0]));
   cu = cross(cr, cf);
-  let f = (H / 2) / Math.tan(cam.fov * deg / 2);
+  const ribbon=REFERENCE_VIEW && !$('tvbar').hidden ? $('tvbar').getBoundingClientRect() : null;
+  const pictureH=ribbon && ribbon.top>0 ? Math.min(H,Math.max(H*.55,ribbon.top-6)) : H;
+  let f = (pictureH / 2) / Math.tan(cam.fov * deg / 2);
   const aspect = W / H;
-  if (aspect < 1.35) f *= Math.pow(aspect / 1.35, aspect < 0.8 ? 0.72 : 0.5);   // portrait: zoom out, but less than the width alone would need
+  if (!REFERENCE_VIEW && aspect < 1.35) f *= Math.pow(aspect / 1.35, aspect < 0.8 ? 0.72 : 0.5);   // portrait: zoom out, but less than the width alone would need
   focal = f;
   // an upright screen: the picture's centre sits higher, so the field fills the middle instead of the stands
-  camShift = aspect < 0.8 ? H * 0.06 : 0; cy = H / 2 - camShift;
+  camShift = REFERENCE_VIEW ? (H-pictureH)/2 : aspect < 0.8 ? H * 0.06 : 0; cy = H / 2 - camShift;
 }
 let camShift = 0, cy = 0;
 function toCam(p) { const d = sub(p, cam.pos); return [dot(d, cr), dot(d, cu), dot(d, cf)]; }
@@ -872,6 +919,45 @@ function figure(pos, face, o = {}) {
   j.handL = o.handL || P(lean - arm + crouch * 0.35, 0.24, hip + 0.02 + crouch * 0.2);
   j.handR = o.handR || P(lean + arm + crouch * 0.35, -0.24, hip + 0.02 + crouch * 0.2);
   j.elL = add(lerp3(j.shL, j.handL, 0.5), mul(L, 0.05)); j.elR = add(lerp3(j.shR, j.handR, 0.5), mul(L, -0.05));
+  if(REFERENCE_VIEW) {
+    j.footPitchL=[0,0,0];j.footPitchR=[0,0,0];
+    if(run>.05) {
+      const resting=Object.fromEntries(Object.entries(j).map(([key,value])=>[key,value.slice()]));
+      const stance=.28,strideLength=3.8,halfStride=stance*strideLength/2;
+      const cycle=o.gaitDistance===undefined?ph:o.gaitDistance*Math.PI*2/strideLength;
+      const step=angle=>{
+        const u=((angle/(Math.PI*2))%1+1)%1;
+        if(u<stance) {
+          const v=u/stance,pitch=-.18*(1-smooth(clamp(v/.18,0,1)))+.42*smooth(clamp((v-.72)/.28,0,1));
+          const lift=pitch>0?.14*Math.sin(pitch)+.06*(Math.cos(pitch)-1):-.04*Math.sin(pitch);
+          return [halfStride-2*halfStride*v,lift,pitch];
+        }
+        const v=(u-stance)/(1-stance);
+        const tangent=-2*halfStride*(1-stance)/stance;
+        const pitch=lerp(.42,-.18,smooth(clamp(v/.65,0,1)))-.2*Math.sin(v*Math.PI);
+        const lift=.33*Math.pow(Math.sin(v*Math.PI),1.2)+(.14*Math.sin(.42)+.06*(Math.cos(.42)-1))*(1-smooth(clamp(v/.18,0,1)));
+        return [-halfStride+2*halfStride*smooth(v)+tangent*(2*v*v*v-3*v*v+v),lift,pitch];
+      };
+      const left=step(cycle),right=step(cycle+Math.PI);
+      const sway=Math.sin(cycle)*.012*run,bob=Math.cos(cycle*2)*.025*run;
+      j.pelvis=P(.02,sway,.84+bob);j.neck=P(.14,sway*.5,1.39+bob);j.head=P(.17,sway*.3,1.58+bob);
+      const hips=.045*Math.sin(cycle),shoulders=-.055*Math.sin(cycle);
+      j.hipL=P(hips,.11,.84+bob);j.hipR=P(-hips,-.11,.84+bob);
+      j.shL=P(.14+shoulders,.19,1.34+bob);j.shR=P(.14-shoulders,-.19,1.34+bob);
+      j.footL=P(left[0]*run,.15,left[1]*run);j.footR=P(right[0]*run,-.15,right[1]*run);
+      const arm=Math.sin(cycle+Math.PI*.12)*.31*run;
+      j.handL=o.handL||P(.17-arm,.24,1.12+bob+.05*Math.cos(cycle));
+      j.handR=o.handR||P(.17+arm,-.24,1.12+bob-.05*Math.cos(cycle));
+      const blend=smooth(clamp(run*1.4,0,1));
+      for(const key of Object.keys(resting))j[key]=lerp3(resting[key],j[key],blend);
+      j.footPitchL=[left[2]*blend,0,0];j.footPitchR=[right[2]*blend,0,0];
+    }
+    j.footDirL=F.slice();j.footDirR=F.slice();
+    j.kneeL=ik(j.hipL,add(j.footL,[0,.07,0]),LEG,LEG,F);j.kneeR=ik(j.hipR,add(j.footR,[0,.07,0]),LEG,LEG,F);
+    const elbowBack=add(mul(F,-.6),[0,-.8,0]);
+    j.elL=ik(j.shL,j.handL,UPARM,FOREARM,add(elbowBack,mul(L,.12)));
+    j.elR=ik(j.shR,j.handR,UPARM,FOREARM,add(elbowBack,mul(L,-.12)));
+  }
   return j;
 }
 function drawFigure(j, col, o = {}) {
@@ -921,9 +1007,15 @@ function buildBody(k) {
   const sc = sub(j.neck, mul(sp, 0.05));
   j.shL = add(sc, mul(s, 0.19)); j.shR = add(sc, mul(s, -0.19));
   j.head = add(add(j.neck, mul(sp, 0.18)), add(mul(n, 0.035), k.headOff || [0, 0, 0]));
+  if(REFERENCE_VIEW && k.headOff) j.head=add(j.neck,[0,.18,.025]); // batsman keeps his eyes level while the trunk leans
   j.footL = k.fr.slice(); j.footR = k.bk.slice();
-  j.kneeL = ik(j.hipL, add(k.fr, [0, 0.07, 0]), LEG, LEG, k.kpL || nH);
-  j.kneeR = ik(j.hipR, add(k.bk, [0, 0.07, 0]), LEG, LEG, k.kpR || nH);
+  if(REFERENCE_VIEW) {
+    j.footDirL=norm(k.kpL||nH);j.footDirR=norm(k.kpR||nH);
+    const pitch=k.rearFootPitch||0;j.footPitchR=[pitch,0,0];j.footPitchL=[0,0,0];
+    j.footR[1]+=.14*Math.sin(pitch)+.06*(Math.cos(pitch)-1);
+  }
+  j.kneeL = ik(j.hipL, add(j.footL, [0, 0.07, 0]), LEG, LEG, k.kpL || nH);
+  j.kneeR = ik(j.hipR, add(j.footR, [0, 0.07, 0]), LEG, LEG, k.kpR || nH);
   j.handL = k.hL.slice(); j.handR = k.hR.slice();
   j.elL = ik(j.shL, j.handL, UPARM, FOREARM, k.epL || add(s, [0, -0.8, 0]));
   j.elR = ik(j.shR, j.handR, UPARM, FOREARM, k.epR || add(mul(s, -1), [0, -0.8, 0]));
@@ -933,7 +1025,13 @@ function mixPose(a, b, t) {
   const o = {};
   for (const key in a) {
     const x = a[key], y = b[key] === undefined ? x : b[key];
-    o[key] = Array.isArray(x) ? lerp3(x, y, t) : typeof x === 'number' ? lerp(x, y, t) : x;
+    if(REFERENCE_VIEW && key==='bd') {
+      // A normalised linear blend rushes through almost-opposite backlift
+      // directions. Interpolate the blade on the unit sphere instead.
+      const cosine=clamp(dot(x,y),-1,1),angle=Math.acos(cosine),sine=Math.sin(angle);
+      if(cosine<-.999){const axis=norm(cross(x,Math.abs(x[1])<.9?[0,1,0]:[1,0,0]));o[key]=add(mul(x,Math.cos(Math.PI*t)),mul(cross(axis,x),Math.sin(Math.PI*t)));}
+      else o[key]=Math.abs(sine)>.001?add(mul(x,Math.sin((1-t)*angle)/sine),mul(y,Math.sin(t*angle)/sine)):norm(lerp3(x,y,t));
+    } else o[key] = Array.isArray(x) ? lerp3(x, y, t) : typeof x === 'number' ? lerp(x, y, t) : x;
   }
   for (const key in b) if (o[key] === undefined) o[key] = b[key];
   return o;
@@ -951,8 +1049,11 @@ function mixJoints(a, b, t) { const o = {}; for (const k in a) o[k] = lerp3(a[k]
 
 // --- the batter (a right-hander at his guard: facing the off side, front shoulder to the bowler). h = hands, bd = the bat's direction
 const STANCE = { fr: [0.58, 0, 1.06], bk: [0.64, 0, 0.44], pel: [0.63, 0.88, 0.75], hy: -90, sy: -88, lean: 16, side: 0,
-  h: [0.38, 0.9, 0.78], bd: norm([-0.26, -0.95, 0.15]), kpL: [-1, 0, 0.35], kpR: [-1, 0, -0.1] };
-const READY = { ...STANCE, bk: [0.6, 0, 0.4], pel: [0.62, 0.89, 0.73], lean: 14, h: [0.5, 1.12, 0.62], bd: norm([0.25, 0.7, -0.65]) };
+  h: [0.38, 0.9, 0.78], bd: norm([-0.26, -0.95, 0.15]), kpL: [-1, 0, 0.35], kpR: [-1, 0, -0.1],rearFootPitch:0 };
+// Compact guard: the blade stays in front of the legs until the backlift.
+// The previous raised guard ran the blade through the chest/right sleeve.
+const READY = { ...STANCE, bk: [0.6, 0, 0.4], pel: [0.62, 0.89, 0.73], lean: 14, h: [0.24, 0.97, 0.88], bd: norm([-0.15, -0.98, 0.10]) };
+const PREPARE = {...READY,fr:[.42,0,1.18],pel:[.58,.88,.80],h:[.20,1.18,.93],bd:norm([-.42,.82,-.38])};
 const LEAVE = { ...READY, lean: 6, h: [0.6, 1.5, 0.66], bd: norm([0.12, 0.95, -0.28]) };
 const DUCK = { ...LEAVE, pel: [0.66, 0.56, 0.7], lean: 48, h: [0.62, 1.0, 0.62], kpL: [-1, 0.2, 0.3], kpR: [-1, 0.2, 0] };
 // which stroke the batter plays (it shapes the swing, not where the ball goes)
@@ -966,7 +1067,9 @@ function strokeFamily(a, loft, defend, push, short, spin) {
 // key poses for a stroke: ready, backlift, the bat meeting the ball at sw.target, the follow-through, then back to the stance
 function strokeKeys(sw) {
   const T = sw.target, a = sw.intent * deg, dir = [Math.sin(a), 0, Math.cos(a)], loft = sw.loft;
-  const R = READY, B = { ...READY, h: [0.52, 1.3, 0.56], bd: norm([0.2, 0.85, -0.5]), lean: 12 };
+  const R = REFERENCE_VIEW ? (sw.visualStart || PREPARE) : READY;
+  const B = REFERENCE_VIEW ? {...PREPARE,h:[.22,1.22,.94],bd:norm([-.28,.88,-.38]),lean:12}
+    : {...READY,h:[.52,1.3,.56],bd:norm([.2,.85,-.5]),lean:12};
   const at = (bd, d = 0.58) => sub(T, mul(bd, d));   // grip, so the middle of the bat meets the ball
   const tx = clamp(T[0], -0.9, 0.9), front = (x, z) => [clamp(tx + x, 0.05, 0.72), 0, z];
   let C, F, tF = 0.5;
@@ -976,27 +1079,30 @@ function strokeKeys(sw) {
       C = { ...R, fr, pel: [lerp(0.63, fr[0], 0.45), 0.8, 0.98], hy: -70, sy: -78, lean: 28, side: 14, h: at(bd), bd, kpL: [-0.4, 0, 1] };
       F = { ...C, hy: -55, sy: -45 + sw.intent * 0.25, lean: 16, side: 6,
             h: [0.4 + dir[0] * 0.25, loft ? 1.78 : 1.55, 1.08 + dir[2] * 0.12], bd: norm(loft ? [0.3, 0.9, -0.3] : [0.45, 0.5, -0.75]) };
+      if(REFERENCE_VIEW) F={...F,pel:[.45,.91,1.0],hy:-40,sy:-20,lean:8,side:2,rearFootPitch:.4,h:[.68,loft?1.90:1.78,1.16],bd:norm(loft?[.35,.83,-.43]:[.48,.65,-.58])};
       break; }
     case 'fdef': case 'push': {
       const fr = front(0.3, 1.26), bd = norm([0, -1, -0.28]);
       C = { ...R, fr, pel: [lerp(0.63, fr[0], 0.45), 0.8, 0.95], hy: -75, sy: -82, lean: 30, side: 14, h: at(bd, 0.5), bd, kpL: [-0.4, 0, 1] };
       F = sw.fam === 'push' ? { ...C, h: add(C.h, mul(dir, 0.2)), bd: norm([dir[0] * 0.5, -1, dir[2] * 0.3 - 0.1]) } : { ...C };
-      B.h = [0.47, 1.1, 0.66]; B.bd = norm([0.15, 0.6, -0.8]); tF = 0.35; break; }
+      B.h = [0.25, 1.1, 0.82]; B.bd = norm([0.15, 0.6, -0.8]); tF = 0.35; break; }
     case 'bdef': case 'bdrive': {
-      const bd = norm([0, -1, sw.fam === 'bdef' ? -0.2 : -0.08]), h = at(bd, 0.45);
-      h[1] = Math.min(h[1], 1.4);
+      const bd = norm(sw.fam === 'bdef' ? [-.20,-1,.30] : [-.15,-1,.20]);
+      // Shorten along the blade axis, rather than clamping only hand Y and
+      // pulling the bat face away from the ball's contact point.
+      const h = at(bd, Math.min(.45, Math.max(.20, (1.4-T[1])/-bd[1])));
       C = { ...R, fr: [0.5, 0, 0.94], bk: [0.38, 0, 0.36], pel: [0.47, 0.9, 0.64], hy: -80, sy: -84, lean: 10, side: 4, h, bd, kpL: [-1, 0, 0.3], kpR: [-1, 0, 0] };
       F = sw.fam === 'bdef' ? { ...C } : { ...C, sy: -60, h: [0.38 + dir[0] * 0.2, 1.48, 0.95 + dir[2] * 0.1], bd: norm([0.4, 0.55, -0.7]) };
       if (sw.fam === 'bdef') tF = 0.35; break; }
     case 'cut': {
-      const bd = norm([-0.85, -0.3, -0.25]);
-      C = { ...R, fr: [0.52, 0, 1.08], bk: [0.3, 0, 0.6], pel: [0.42, 0.88, 0.82], hy: -95, sy: -92, lean: 22, side: -4, h: at(bd), bd, kpL: [-1, 0, 0.3], kpR: [-1, 0, 0] };
-      F = { ...C, sy: -105, h: [0.18, 0.98, 0.6], bd: norm([-0.45, -0.55, -0.75]) };
+      const bd = norm([-0.95, -0.3, 0.15]);
+      C = { ...R, fr: [0.52, 0, 1.08], bk: [0.3, 0, 0.6], pel: [0.42, 0.88, 0.70], hy: -95, sy: -92, lean: 22, side: -4, h: at(bd), bd, kpL: [-1, 0, 0.3], kpR: [-1, 0, 0] };
+      F = { ...C, sy: -105, h: [-0.05, 1.20, 1.0], bd: norm([-0.45, -0.55, -0.75]) };
       B.h = [0.45, 1.5, 0.66]; B.bd = norm([0, 0.95, -0.3]); break; }
     case 'pull': {
       const bd = norm([-0.95, 0.05, 0.2]);
       C = { ...R, fr: [0.78, 0, 0.98], bk: [0.48, 0, 0.36], pel: [0.6, 0.9, 0.66], hy: -50, sy: -35, lean: 12, side: 0, h: at(bd), bd, kpL: [-0.3, 0, 1], kpR: [-1, 0, 0] };
-      F = { ...C, hy: -20, sy: 20, h: [0.72, 1.45, 0.75], bd: norm([0.35, 0.35, -0.85]) };
+      F = { ...C, hy: -20, sy: 20, h: [0.95, 1.58, 0.92], bd: norm([0.35, 0.35, -0.85]) };
       B.h = [0.5, 1.5, 0.6]; B.bd = norm([0.2, 0.9, -0.35]); break; }
     case 'flick': {
       const fr = front(0.4, 1.28), bd = norm([0.12, -1, -0.05]);
@@ -1005,15 +1111,15 @@ function strokeKeys(sw) {
       break; }
     case 'slog': {
       const bd = norm([-0.9, -0.3, 0.25]);
-      C = { ...R, fr: [0.75, 0, 1.25], pel: [0.66, 0.84, 0.86], hy: -45, sy: -30, lean: 18, side: 6, h: at(bd), bd, kpL: [-0.2, 0, 1] };
+      C = { ...R, fr: [0.75, 0, 1.25], pel: [0.66, 0.74, 0.86], hy: -45, sy: -30, lean: 28, side: 6, h: at(bd,.50), bd, kpL: [-0.2, 0, 1] };
       F = { ...C, hy: -10, sy: 30, lean: 8, h: [0.8, 1.6, 0.8], bd: norm([0.3, 0.6, -0.75]) };
       B.h = [0.5, 1.45, 0.55]; B.bd = norm([0.25, 0.9, -0.35]); break; }
     case 'sweep': {
       const bd = norm([-0.9, -0.35, 0.25]);
       C = { ...R, fr: [0.42, 0, 1.22], bk: [0.78, 0, 0.22], pel: [0.62, 0.54, 0.82], hy: -70, sy: -60, lean: 30, side: 8, h: at(bd), bd,
             kpL: [-0.3, 0.6, 1], kpR: [-0.2, -1, 0.3] };
-      F = { ...C, sy: -20, h: [0.75, 0.78, 0.95], bd: norm([0.5, 0.2, -0.8]) };
-      B.h = [0.45, 1.2, 0.75]; B.bd = norm([-0.2, 0.8, -0.55]); break; }
+      F = { ...C, sy: -20, h: [1.0, 0.93, 1.12], bd: norm([0.5, 0.2, -0.8]) };
+      B.h = [0.22, 1.2, 0.90]; B.bd = norm([-0.2, 0.8, -0.55]); break; }
   }
   // no two strokes quite alike: a little variety in the finish, and a held finish that settles instead of freezing
   const v = sw.vary || (sw.vary = { l: rand(-4, 4), y: rand(-7, 7), h: [rand(-0.08, 0.08), rand(-0.1, 0.1), rand(-0.06, 0.06)], f: rand(-0.03, 0.05), hold: rand(0.8, 1.3) });
@@ -1021,14 +1127,25 @@ function strokeKeys(sw) {
   C = { ...C, lean: C.lean + v.l * 0.4 };
   F = { ...F, lean: F.lean + v.l * firm, hy: F.hy + v.y * firm, sy: F.sy + v.y * firm, h: add(F.h, mul(v.h, firm)) };
   tF += v.f;
+  if(REFERENCE_VIEW && ['drive','fdef','push','flick','slog'].includes(sw.fam)) B.fr=add(lerp3(R.fr,C.fr,.65),[0,.035,0]);
   const S = { ...F, lean: F.lean - 4, h: add(F.h, [0, -0.06 * firm, 0]) };
   // the bat accelerates into the ball and decelerates through the follow-through
+  if(REFERENCE_VIEW && sw.fam==='drive') {
+    // Extend through the ball before folding over the shoulder. A direct
+    // contact-to-finish arc cuts across the upper chest immediately after impact.
+    const extension={...C,hy:-60,sy:-55,lean:20,side:8,h:[.55,1.24,1.54],bd:norm([.32,-.12,.94])};
+    return [[0,R],[.07,B],[SWING_LAG,C,easeIn],[.24,extension],[tF,F,easeOut],[tF+v.hold,S],[tF+v.hold+.7,STANCE]];
+  }
   return [[0, R], [0.07, B], [SWING_LAG, C, easeIn], [tF, F, easeOut], [tF + v.hold, S], [tF + v.hold + 0.7, STANCE]];
 }
 // the batter this frame: { j, hands, tip } (before moving across the crease or down the pitch)
 function batterPose(sw) {
   let k;
-  if (sw) { if (!sw.keys) sw.keys = strokeKeys(sw); k = keyed(sw.keys, sw.t); }
+  if (sw) {
+    if (!sw.keys) sw.keys = strokeKeys(sw);
+    if(REFERENCE_VIEW) {if(!sw.curve)sw.curve=CricketMotion.prepare(sw.keys);k=CricketMotion.sample(sw.curve,sw.t);}
+    else k=keyed(sw.keys,sw.t);
+  }
   else {
     const ready = phase === 'runup' ? smooth(clamp((phaseT - RUNUP + 0.4) / 0.35, 0, 1)) : (phase === 'flight' || phase === 'result') && ball ? 1 : 0;
     k = ready ? mixPose(STANCE, READY, ready) : STANCE;
@@ -1038,6 +1155,9 @@ function batterPose(sw) {
     const tp = (clock * 0.75) % 1, tap = tapOn * (tp < 0.2 ? Math.sin(tp / 0.2 * Math.PI) : 0);
     k = { ...k, pel: add(k.pel, [0, br * 0.008, 0]), lean: k.lean + br * 1.2,
           h: add(k.h, [0, 0.06 * tap, 0]), bd: norm(add(k.bd, [0, 0.35 * tap, -0.15 * tap])) };
+    if(REFERENCE_VIEW && phase==='flight' && ball && !ball.left) {
+      const u=smooth(clamp((ball.t-(ball.Tstar-SWING_LAG-.28))/.28,0,1));k=mixPose(k,PREPARE,u);
+    }
     if (ball && ball.left) {   // bat up out of the way; duck under a bouncer
       const lk = smooth(clamp((ball.t - ball.left) / 0.2, 0, 1));
       k = mixPose(k, ball.atBat[1] > 1.45 ? DUCK : LEAVE, lk);
@@ -1045,11 +1165,15 @@ function batterPose(sw) {
   }
   const bd = norm(k.bd);
   const j = buildBody({ ...k, hL: sub(k.h, mul(bd, 0.045)), hR: add(k.h, mul(bd, 0.045)), headOff: [0, 0, 0.04] });
-  return { j, hands: k.h.slice(), tip: add(k.h, mul(bd, 0.85)) };
+  const follow=REFERENCE_VIEW && sw?smooth(clamp((sw.t-SWING_LAG-.04)/.32,0,1)):0;
+  const gaze=facing(REFERENCE_VIEW && sw?clamp(sw.intent||0,-70,70)*follow:0);
+  if(REFERENCE_VIEW && sw?.loft)j.head[2]-=.035*follow;
+  return { j, hands: k.h.slice(), tip: add(k.h, mul(bd, 0.85)), pose:k,look:gaze };
 }
 
 // --- the bowler: run in, bound, deliver from just behind the crease (the ball leaves the hand at REL), follow through
 const RUNUP = 1.35;           // seconds from the start of the run to the release
+const BOWLER_LANE_X = .44;    // body/feet pass beside the wicket; REL_X stays the release hand
 let lastStep = -1;
 const runupSteps = t => t < RUNUP - 0.38 ? Math.floor(t * 12 / Math.PI) : t < RUNUP - 0.13 ? 50 : t < RUNUP ? 100 : 101;
 function deliveryKeys(spin) {
@@ -1067,7 +1191,13 @@ function deliveryKeys(spin) {
              hL: [0.42, 0.95, Z - 0.1], hR: [-0.28, spin ? 0.95 : 0.82, Z - 0.8 * st], epR: [1, -0.5, 0] }],
     [0.5, { fr: [0.1, 0.15, Z - 1.5 * st], bk: [0.2, 0, Z - 1.2 * st], pel: [0.2, 0.92, Z - 1.3 * st], hy: 180, sy: 185, lean: spin ? 15 : 25,
             hL: [0.42, 1.0, Z - 1.15 * st], hR: [-0.05, 0.95, Z - 1.55 * st], epR: [1, -1, 0] }],
-  ];
+  ].map(([time,k]) => {
+    // Run and plant beside the far wicket. The previous front-foot bound
+    // crossed its centre stump. Preserve the existing release-hand target.
+    const offset=[BOWLER_LANE_X-.12,0,0];
+    return [time,{...k,fr:add(k.fr,offset),bk:add(k.bk,offset),pel:add(k.pel,offset),
+      hL:add(k.hL,offset),hR:time===0?k.hR:add(k.hR,offset)}];
+  });
 }
 const DELIVERY = { pace: deliveryKeys(false), spin: deliveryKeys(true) };
 function bowlerState() {
@@ -1077,16 +1207,17 @@ function bowlerState() {
   const bound = PITCH - 0.6 + 2.6, speed = spin ? 4.6 : T.speed[0] > 130 ? 8.5 : 7.4;
   const start = Math.min(T.start, bound + speed * (RUNUP - 0.38));
   const home = [1.7, 0, 17.2];
-  const runner = (pos, face, run, ph) => ({ pos, j: figure(pos, face, { run, phase: ph }) });
+  const runner = (pos, face, run, ph) => ({ pos, j: figure(pos, face, { run, phase: ph,gaitDistance:Math.hypot(pos[0]-1.1,pos[2]-start) }) });
   if (tr === null) return runner([1.1, 0, start], Math.PI, 0, 0);
   if (tr < -0.38) {   // running in, at an angle from the right
     const u = clamp((tr + RUNUP) / (RUNUP - 0.38), 0, 1);
-    return runner([lerp(1.1, 0.12, smooth(Math.min(1, u / 0.9))), 0, lerp(start, bound, u)], Math.PI, 1, phaseT * (spin ? 9 : 12));
+    return runner([lerp(1.1, BOWLER_LANE_X, smooth(Math.min(1, u / 0.9))), 0, lerp(start, bound, u)], Math.PI, 1, phaseT * (spin ? 9 : 12));
   }
   if (tr < 0.5) {
-    const j = buildBody(keyed(keys, tr));
+    if(REFERENCE_VIEW && !keys.curve)keys.curve=CricketMotion.prepare(keys);
+    const j = buildBody(REFERENCE_VIEW?CricketMotion.sample(keys.curve,tr):keyed(keys,tr));
     if (tr < -0.26) {   // from the last running stride into the bound
-      const r = runner([0.12, 0, bound - speed * (tr + 0.38)], Math.PI, 1, phaseT * (spin ? 9 : 12));
+      const r = runner([BOWLER_LANE_X, 0, bound - speed * (tr + 0.38)], Math.PI, 1, phaseT * (spin ? 9 : 12));
       return { pos: [j.pelvis[0], 0, j.pelvis[2]], j: mixJoints(r.j, j, smooth((tr + 0.38) / 0.12)) };
     }
     return { pos: [j.pelvis[0], 0, j.pelvis[2]], j };
@@ -1112,6 +1243,19 @@ function drawStumps(z, tilt, bails) {
 
 // ======================================================================= sound (all made here, no sound files; starts on the first tap)
 let actx = null, master = null, soundOn = true, crowdGain = null, roarGain = null, sfx = null, crowdBus = null, quiet = false;
+const commentary=window.CricketCommentary?.create({onSpeaking(speaking){if(crowdBus&&actx)crowdBus.gain.setTargetAtTime(speaking ? .45 : .9,actx.currentTime,.15);}})
+  || {supported:false,enabled:false,emit(){return false;},setEnabled(){},setMuted(){},setSuspended(){},reset(){},unlock(){}};
+let commentaryPreference=false;
+try{commentaryPreference=localStorage.getItem('cricket-rush-commentary-preview')==='on';}catch(e){}
+commentary.setEnabled(commentaryPreference);
+function commentaryCall(event,data){commentary.setSuspended(paused||!!RP||document.hidden||ff);return commentary.emit(event,{...data,skip:quiet||ff||!!RP||paused||!!M?.autoplay});}
+const commentaryButton=$('commentaryToggle');
+function showCommentarySetting(){commentaryButton.textContent=commentary.supported?'Commentary preview: '+(commentary.enabled?'on':'off'):'Commentary preview unavailable';commentaryButton.disabled=!commentary.supported;commentaryButton.setAttribute('aria-pressed',String(commentary.enabled));}
+showCommentarySetting();
+commentaryButton.addEventListener('click',()=>{commentary.unlock();commentary.setEnabled(!commentary.enabled);try{localStorage.setItem('cricket-rush-commentary-preview',commentary.enabled?'on':'off');}catch(e){}showCommentarySetting();});
+document.addEventListener('pointerdown',()=>commentary.unlock(),{capture:true,once:true});
+document.addEventListener('keydown',()=>commentary.unlock(),{capture:true,once:true});
+document.addEventListener('visibilitychange',()=>commentary.setSuspended(document.hidden||paused||!!RP));
 let NOISE = null, CLAPS = null;
 function noiseLoop(sec, band, wobble) {   // stereo crowd noise: filtered, with a slow swell like many voices
   const n = Math.floor(actx.sampleRate * sec), buf = actx.createBuffer(2, n, actx.sampleRate);
@@ -1269,6 +1413,7 @@ const marker = { x: -0.04, z: 5.2 };
 let varIdx = 0, meter = null, varStreak = { vi: 0, n: 0 };
 
 const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+document.body.classList.toggle('reference-touch',REFERENCE_VIEW && touch);
 const ACTIVE = new Set(['pick', 'aim', 'wait', 'runup', 'flight', 'play', 'result']);
 const btype = p => (p && p.type) || 'M';
 const bowlerP = () => inn.bowl.players[inn.bowler];
@@ -1421,7 +1566,8 @@ function swing(loft, pressT, aim, w) {
   if (aim && aim.defend) w *= 1.35;                                                     // a block is easier to time
   if (ball.charge) w *= high ? 0.8 : 1.15;                                              // down the pitch: a half-volley, unless it's a bouncer
   const okW = 0.1 * w, edgeW = 0.15 * w;
-  ball.swing = { t: ball.t - pressT, loft: loft && !(aim && aim.defend), angle: 0, tc, defend: !!(aim && aim.defend) };
+  const visualStart=REFERENCE_VIEW?batterPose(null).pose:null;
+  ball.swing = { t: ball.t - pressT, loft: loft && !(aim && aim.defend), angle: 0, tc, defend: !!(aim && aim.defend),...(visualStart?{visualStart}:{}) };
   let kind;
   const a = Math.abs(dtTiming) * (low ? 1.35 : 1);
   if (high && dtTiming > -0.02 && !(aim && aim.defend)) kind = 'miss';   // a bouncer you're late on goes over the bat
@@ -2018,6 +2164,8 @@ function finishBall(o, line) {
   recordBall(o);
   updateScore();
   const c = i.cards[k], who = chaseMode ? '' : surname(batterP(k).name) + ' ';
+  commentaryCall('result',{...o,id:'ball-'+M.cur+'-'+i.balls+'-'+i.extras+'-'+i.runs+'-'+i.wkts,totalRuns:i.runs,wickets:i.wkts,
+    overDone:i.balls>0&&i.balls%6===0&&!o.wide,milestone:!o.out?(c.runs>=100&&c.runs-o.runs<100?100:c.runs>=50&&c.runs-o.runs<50?50:0):0});
   const ours = i.userBats;   // the crowd is on your side
   if (!quiet && !ff) shake = o.out ? 0.9 : o.runs === 6 ? 0.6 : 0;
   { const cc = i.cards[k]; celebrate = { out: o.out || null, runs: o.runs || 0, milestone: !chaseMode && !o.out && cc.runs >= 50 && cc.runs - o.runs < 50 }; }
@@ -2042,6 +2190,7 @@ function setPace() {
   RUN1 = match ? 2.75 : 3.0; RUN_MORE = match ? 2.6 : 2.7; FRICTION = match ? 3.4 : 1.8;
 }
 function startInnings(k) {
+  commentary.reset();
   M.cur = k; inn = M.innings[k];
   setPace();
   showScreen(null);
@@ -2049,6 +2198,7 @@ function startInnings(k) {
   varStreak = { vi: 0, n: 0 };
   updateScore();
   startOver();
+  commentaryCall('innings',{target:inn.target});
 }
 function endInnings() {
   phase = 'break'; showControls();
@@ -2079,6 +2229,7 @@ function endMatch() {
     text = b.bat.name + ' won by ' + plural(b.maxWkts - b.wkts, 'wicket') + (left ? ', with ' + plural(left, 'ball') + ' to spare.' : ', off the last ball.');
   } else if (b.runs === b.target - 1) text = 'Scores level. The match is tied.';
   else { winner = a.bat; text = a.bat.name + ' won by ' + plural(b.target - 1 - b.runs, 'run') + '.'; }
+  commentaryCall('match',{text});
   const t = $('endTitle');
   if (!winner) { t.textContent = 'TIED'; t.className = 'result'; }
   else if (winner === you) { t.textContent = 'YOU WON'; t.className = 'result win'; }
@@ -2290,6 +2441,7 @@ function pickGo() {
 function openPause() {
   if (!M || !ACTIVE.has(phase) || paused) return;
   paused = true;
+  commentary.setSuspended(true);
   const i = inn;
   $('pauseText').textContent = i.bat.name + ' ' + i.runs + '/' + i.wkts + ' after ' + ovStr(i.balls) + ' overs' +
     (i.target ? ', need ' + Math.max(0, i.target - i.runs) + ' off ' + (i.maxBalls - i.balls) + '.' : '.');
@@ -2433,7 +2585,7 @@ function update(dt) {
     const mv = canMove();
     if ($('moveL').disabled === mv) { $('moveL').disabled = !mv; $('moveR').disabled = !mv; }
   }
-  const hint = $('swipeHint'), showHint = inn && inn.userBats && (M.batBalls || 0) < 4 && ['wait', 'runup', 'flight'].includes(phase) && !(ball && (ball.swing || ball.left));
+  const hint = $('swipeHint'), showHint = inn && inn.userBats && (M.batBalls || 0) < 4 && ['wait', 'runup', 'flight'].includes(phase) && !(ball && (ball.swing || ball.left)) && (!REFERENCE_VIEW || phase==='wait');
   if (showHint) {
     const t = shotType === 'defend' ? 'DEFEND' : shotType === 'loft' ? 'LOFT' : 'SHOT';
     const txt = touch ? t + ' chosen · swipe where you want it as the ball arrives'
@@ -2447,13 +2599,29 @@ function update(dt) {
 
   // camera
   let tp = BOWL_CAM.pos, tt = BOWL_CAM.tgt, tf = BOWL_CAM.fov, rate = 2.5;
-  if (camMode === 'chase' && ball && ball.play && ball.play.t > 0.3) {
+  const followDelay=REFERENCE_VIEW ? (ball?.decision?.loft||ball?.swing?.loft ? .12 : .45) : .3;
+  if (camMode === 'chase' && ball && ball.play && ball.play.t > followDelay) {
     // like TV: a camera high in the stands pans and zooms with the ball; it cuts to the other end when the ball goes behind
     const bp = ballPos(), end = bp[2] < -8 ? -1 : 1;
     tp = end > 0 ? [bp[0] * 0.1, 15, 66] : [bp[0] * 0.1, 15, -50];
     tt = [bp[0], bp[1] * 0.55, bp[2]];
     const d = len(sub(tt, tp));
     tf = clamp(2 * Math.atan(20 / d) / deg, 16, 50); rate = 5;
+    if(REFERENCE_VIEW) {
+      // Broadcast coverage of the play rather than a 40 m high field overview.
+      // Keep a nearby fielder readable and leave room for an airborne ball.
+      const near=fielders.reduce((best,f)=>dist2(bp,f.pos)<dist2(bp,best.pos)?f:best,fielders[0]);
+      const gap=dist2(bp,near.pos),context=clamp((gap-4)/20,0,.35);
+      tt=lerp3(bp,add(near.pos,[0,.9,0]),context);tt[1]=Math.max(.8,tt[1]*.65);
+      // Keep the airborne ball in frame; the old height multiplier aimed
+      // well below its apex. Retain the existing ground-play framing.
+      if(bp[1]>8)tt[1]=bp[1]-Math.min(2,(bp[1]-8)*.12);
+      // At z=87 the seating surface is about 12.53 m high. The old
+      // 12.5 m camera sat inside that mesh and could render a black stand.
+      tp=[bp[0]*.06,14.5,end>0?87:-79];
+      const span=clamp(Math.max(8,Math.abs(bp[1]-.9)+4,gap*.55+4),8,18);
+      tf=clamp(2*Math.atan(span*.5/len(sub(tt,tp)))/deg,4,28);rate=4;
+    }
     if (cam.end !== end) { cam.end = end; cam.pos = tp.slice(); cam.tgt = tt.slice(); cam.fov = tf; }
   } else cam.end = 0;
   const k = 1 - Math.exp(-rate * dt);
@@ -2580,7 +2748,10 @@ function livePeople() {
     const from = (leg % 2 === 0) ? startZ : (startZ < 10 ? PITCH - 0.6 : 0.6);
     const to = (leg % 2 === 0) ? (startZ < 10 ? PITCH - 0.6 : 0.6) : startZ;
     const z = prog >= total ? (total % 2 ? (startZ < 10 ? PITCH - 0.6 : 0.6) : startZ) : lerp(from, to, smooth(f));
-    return { pos: [x, 0, z], face: to > from ? 0 : Math.PI, moving: prog < total };
+    const turn=REFERENCE_VIEW && leg<total-1?smooth(clamp((f-.87)/.13,0,1))*Math.PI:0;
+    const speed=prog>=total?0:Math.abs(to-from)*6*f*(1-f)/(runT<RUN1?RUN1:RUN_MORE);
+    return { pos: [x, 0, z], face: (to > from ? 0 : Math.PI)+turn, moving: prog < total,runWeight:smooth(clamp(speed/4,0,1)),
+      distance:Math.min(total,leg+smooth(f))*(PITCH-1.2) };
   };
   const pid = k => inn && inn.bat.players[k] ? inn.bat.players[k].name : 'x';
   // the striker: in his stance and swing, or running
@@ -2600,26 +2771,30 @@ function livePeople() {
     out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look: [Math.sin(face), 0, Math.cos(face)],
                bat: { carry: true, hands: hR, tip: add(hR, [-0.1 * u, 0.85 * u - 0.6 * (1 - u), 0]) } });
   } else if (sr) {
-    const j = figure(sr.pos, sr.face, { run: sr.moving ? 1 : 0, phase: clock * 11 });
+    const j = figure(sr.pos, sr.face, { run: REFERENCE_VIEW?sr.runWeight:sr.moving?1:0, phase: clock * 11,gaitDistance:sr.distance });
     const hand = j.handR;
     out.push({ j, at: sr.pos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look: null,
                bat: { carry: true, hands: hand, tip: add(hand, [0, -0.7, sr.face ? -0.3 : 0.3]) } });
   } else {
-    let { j, hands, tip } = batterPose(ball && ball.swing ? ball.swing : null);
+    let { j, hands, tip,look } = batterPose(ball && ball.swing ? ball.swing : null);
+    let contact = ball && ball.swing && ball.swing.target ? ball.swing.target.slice() : null;
     let at = [0.6 + guard, 0, 0.75];
-    if (guard) { const o = [guard, 0, 0]; for (const n in j) j[n] = add(j[n], o); hands = add(hands, o); tip = add(tip, o); }
+    if (guard) { const o = [guard, 0, 0]; for (const n in j) if(!/^foot(Dir|Pitch)/.test(n))j[n] = add(j[n], o); hands = add(hands, o); tip = add(tip, o); if(contact)contact=add(contact,o); }
     if (ball && ball.charge) {   // down the pitch
       const dz = STEP * smooth(clamp(ball.charge.t / 0.4, 0, 1)), o = [0, 0, dz];
-      for (const n in j) j[n] = add(j[n], o);
-      hands = add(hands, o); tip = add(tip, o); at = add(at, o);
+      for (const n in j) if(!/^foot(Dir|Pitch)/.test(n))j[n] = add(j[n], o);
+      hands = add(hands, o); tip = add(tip, o); at = add(at, o); if(contact)contact=add(contact,o);
       if (ball.charge.t < 0.4) { const ph = Math.sin(ball.charge.t * 24) * 0.12; j.footL[2] += ph; j.footR[2] -= ph; j.kneeL[2] += ph / 2; j.kneeR[2] -= ph / 2; }
     }
-    out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look: [0, 0, 1], bat: { carry: false, hands, tip } });
+    const stroke=ball && ball.swing;
+    const width=REFERENCE_VIEW && stroke && stroke.fam!=='drive' && stroke.keys
+      ? norm(cross(mul(stroke.keys[2][1].bd,-1),[0,0,1])) : [1,0,0];
+    out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look, bat: { carry: false, hands, tip, contact,...(REFERENCE_VIEW?{width}:{}) } });
   }
   // the non-striker
   const ns = runner(PITCH - 0.6, -1.5);
   const nsPos = ns ? ns.pos : [-1.7, 0, PITCH - 0.4];
-  const nj = figure(nsPos, ns ? ns.face : Math.PI, { run: ns && ns.moving ? 1 : 0, phase: clock * 11 + 1, seed: 20 });
+  const nj = figure(nsPos, ns ? ns.face : Math.PI, { run: REFERENCE_VIEW?(ns?ns.runWeight:0):(ns&&ns.moving?1:0), phase: clock * 11 + 1,gaitDistance:ns?ns.distance+1.9:undefined, seed: 20 });
   out.push({ j: nj, at: nsPos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.non : 1), look: null,
              bat: { carry: true, hands: nj.handL, tip: add(nj.handL, [0.1, -0.75, ns && ns.face === 0 ? 0.25 : -0.25]) } });
   // the bowler, then the fielders (once the ball is hit, the bowler is one of the fielders)
@@ -2643,7 +2818,9 @@ function livePeople() {
       if (wi.moving) { run = Math.max(run, 0.3); ph = clock * 7 + f.phase; }
     }
     const rj = f.run < 0.3 ? react(f, pos, f.face) : null;
-    out.push({ j: rj || figure(pos, f.face, { run, phase: ph, crouch: wi.moving ? 0 : f.crouch, seed: fi + 1 }), at: pos, team: 'bowl', keeper: !!f.keeper,
+    const startBlend=REFERENCE_VIEW && f.target && ball?.play?smooth(clamp((ball.play.t-(f.keeper ? .12 : .32))/.18,0,1)):1;
+    out.push({ j: rj || figure(pos, f.face, { run:REFERENCE_VIEW?run*startBlend:run, phase: ph,
+      gaitDistance:REFERENCE_VIEW && f.run>.9?f.phase*f.speed/11:undefined,crouch: wi.moving ? 0 : f.crouch, seed: fi + 1 }), at: pos, team: 'bowl', keeper: !!f.keeper,
                pid: fid(f.who), look: null });
   }
   return out;
@@ -2856,6 +3033,7 @@ function setReplays(on) {
 for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, e => { if (RP) { e.preventDefault(); e.stopPropagation(); endReplay(); } }, true);
 
 function frame(now) {
+  commentary.setSuspended(paused||!!RP||document.hidden||ff);
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   // slow motion: drops to 30% at the hit, then eases back to full speed
   let s = 1;
@@ -3026,6 +3204,7 @@ window.addEventListener('keyup', e => held.delete(e.code));
 window.addEventListener('blur', () => held.clear());
 $('mute').addEventListener('click', () => {
   soundOn = !soundOn; audio();
+  commentary.setMuted(!soundOn);
   if (master) master.gain.value = soundOn ? 0.9 : 0;
   $('mute').textContent = soundOn ? '🔊' : '🔇';
 });
@@ -3074,7 +3253,7 @@ try {
   R3D = window.Cricket3D ? window.Cricket3D({
     touch, LIGHTS, BOARDS, STAND_IN, STAND_OUT, STAND_H, PITCH, CREASE, ROPE, lerp, people, ballPos, cam, deg, $,
     get cheer() { return cheer; }, get clock() { return clock; }, get inn() { return inn; }, get M() { return M; },
-    get ball() { return RP ? RP.snap : ball; }, get W() { return W; }, get H() { return H; }, get camShift() { return camShift; },
+    get ball() { return RP ? RP.snap : ball; }, get W() { return W; }, get H() { return H; }, get camShift() { return camShift; }, get projectionFocal() { return focal; },
   }) : null;
 } catch (e) { R3D = null; }
 if (R3D) { const rb = $('replayToggle'); rb.hidden = false; setReplays(replaysOn); rb.addEventListener('click', () => setReplays(!replaysOn)); }

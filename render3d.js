@@ -26,6 +26,7 @@ window.Cricket3D = function (G) {
 
   const scene = new T.Scene();
   scene.fog = new T.Fog(0x0a1024, 160, 420);
+  scene.background=new T.Color(0x14243b);
   const camera = new T.PerspectiveCamera(30, 1, 0.3, 900);
   const V = (a) => new T.Vector3(a[0], a[1], a[2]);
 
@@ -56,9 +57,9 @@ window.Cricket3D = function (G) {
   // ---------------------------------------------------------------- sky
   const sky = new T.Mesh(new T.SphereGeometry(600, 32, 16), new T.ShaderMaterial({
     side: T.BackSide, depthWrite: false, fog: false,
-    uniforms: { top: { value: new T.Color(0x02050f) }, mid: { value: new T.Color(0x0c1638) }, bot: { value: new T.Color(0x1d2c5e) } },
+    uniforms: { top: { value: new T.Color(0x182c49) }, mid: { value: new T.Color(0x293f60) }, bot: { value: new T.Color(0x475b79) } },
     vertexShader: 'varying float h; void main(){ h = normalize(position).y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-    fragmentShader: 'uniform vec3 top; uniform vec3 mid; uniform vec3 bot; varying float h; void main(){ vec3 c = h > 0.12 ? mix(mid, top, smoothstep(0.12, 0.6, h)) : mix(bot, mid, smoothstep(-0.05, 0.12, h)); gl_FragColor = vec4(c, 1.0); }',
+    fragmentShader: 'uniform vec3 top; uniform vec3 mid; uniform vec3 bot; varying float h; void main(){ vec3 c = h > 0.12 ? mix(mid, top, smoothstep(0.12, 0.6, h)) : mix(bot, mid, smoothstep(-0.05, 0.12, h)); gl_FragColor = vec4(c, 1.0);\n #include <tonemapping_fragment>\n #include <encodings_fragment>\n }',
   }));
   scene.add(sky);
   {
@@ -72,7 +73,7 @@ window.Cricket3D = function (G) {
   }
 
   // ---------------------------------------------------------------- lights: four floodlight towers
-  scene.add(new T.HemisphereLight(0x8ea4ff, 0x1c2e1c, 0.35));
+  scene.add(new T.HemisphereLight(window.CR_PLAYER_PRODUCTION?.reference?0xc4cbd7:0x8ea4ff,0x1c2e1c,window.CR_PLAYER_PRODUCTION?.reference ? .62 : .35));
   const lightDirs = [];
   LIGHTS.forEach((L, i) => {
     const top = [L[0], 46, L[2]];
@@ -81,10 +82,14 @@ window.Cricket3D = function (G) {
     scene.add(d); scene.add(d.target);
     if (i === 0) {
       d.castShadow = true;
-      const s = lowEnd ? 1024 : 2048;
+      const s = window.CR_PLAYER_PRODUCTION?.reference ? (lowEnd?2048:4096) : (lowEnd?1024:2048);
       d.shadow.mapSize.set(s, s);
       const c = d.shadow.camera; c.left = -60; c.right = 60; c.top = 60; c.bottom = -60; c.near = 20; c.far = 260;
       d.shadow.bias = -0.0004; d.shadow.normalBias = 0.03;
+      if(window.CR_PLAYER_PRODUCTION?.reference) {
+        c.left=-24;c.right=24;c.top=24;c.bottom=-24;
+        d.shadow.bias=-.00004;d.shadow.normalBias=.003;
+      }
     }
     lightDirs.push(d);
     // the tower and its lamp bank
@@ -252,10 +257,11 @@ window.Cricket3D = function (G) {
   const stumpsNear = makeStumps(0), stumpsFar = makeStumps(PITCH);
 
   // ---------------------------------------------------------------- the ball
-  const ballMesh = new T.Mesh(new T.SphereGeometry(0.045, 14, 10), new T.MeshBasicMaterial({ color: 0xffffff }));
+  const ballMesh = new T.Mesh(new T.SphereGeometry(window.CR_PLAYER_PRODUCTION?.reference ? .036 : .045, 14, 10), new T.MeshBasicMaterial({ color: 0xffffff }));
   scene.add(ballMesh);
   const ballGlow = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: 0xffffff, transparent: true, opacity: 0.7, depthWrite: false, blending: T.AdditiveBlending }));
   ballGlow.scale.set(0.55, 0.55, 1); scene.add(ballGlow);
+  if(window.CR_PLAYER_PRODUCTION?.reference){ballGlow.scale.set(.12,.12,1);ballGlow.material.opacity=.18;}
   const blobGeo = new T.PlaneGeometry(1, 1); blobGeo.rotateX(-Math.PI / 2);
   const blobMat = new T.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false });
   const ballShadow = new T.Mesh(blobGeo, blobMat); ballShadow.scale.set(0.2, 1, 0.2); scene.add(ballShadow);
@@ -270,7 +276,8 @@ window.Cricket3D = function (G) {
   const mat = c => new T.MeshStandardMaterial({ color: c, roughness: 0.7 });
   const M3 = {
     batShirt: mat('#3d7dff'), batPants: mat('#173f99'), bowlShirt: mat('#ffd23c'), bowlPants: mat('#0e6b40'),
-    helmet: new T.MeshStandardMaterial({ color: 0x173f99, roughness: 0.35, metalness: 0.2 }), grille: new T.MeshStandardMaterial({ color: 0x9aa0aa, metalness: 0.8, roughness: 0.3 }),
+    helmet: new T.MeshStandardMaterial({ color: 0x173f99, roughness: window.CR_PLAYER_PRODUCTION?.reference ? .66 : .35, metalness: window.CR_PLAYER_PRODUCTION?.reference ? 0 : .2 }),
+    grille: new T.MeshStandardMaterial({ color: window.CR_PLAYER_PRODUCTION?.reference ? 0x434a4c : 0x9aa0aa, metalness: .8, roughness: window.CR_PLAYER_PRODUCTION?.reference ? .48 : .3 }),
     pads: mat('#f6f4ee'), gloves: mat('#f6f4ee'), shoe: mat('#f0f0f0'), sole: mat('#222222'),
     blade: new T.MeshStandardMaterial({ color: 0xe3c58e, roughness: 0.55 }), grip: mat('#26221e'), cap: mat('#ffd23c'),
   };
@@ -342,6 +349,18 @@ window.Cricket3D = function (G) {
   // from MakeHuman's CC0 body). Its skeleton is driven from the game's joints every frame: each bone is placed at the matching
   // joint and turned so it points at the next one, with the knee / elbow bend or the body's facing fixing the twist.
   const RIG = { tried: false, tmpl: null, rest: {} };
+  const PRODUCTION = window.CR_PLAYER_PRODUCTION;
+  function loadProduction() {
+    if (!PRODUCTION || !PRODUCTION.enabled || PRODUCTION.tried || !RIG.tmpl) return;
+    PRODUCTION.tried = true;
+    new T.GLTFLoader().load(PRODUCTION.url, g => {
+      try {
+        PRODUCTION.validate(RIG.tmpl, g.scene);
+        PRODUCTION.template = g.scene; PRODUCTION.ready = true;
+        pool.forEach((p, i) => { if (PRODUCTION.slots.includes(i)) p.attach(); });
+      } catch (e) { PRODUCTION.error = e.message; console.warn('Experimental player rejected:', e); }
+    }, undefined, e => { PRODUCTION.error = String(e); console.warn('Experimental player load failed:', e); });
+  }
   const INVIS = new T.MeshBasicMaterial({ visible: false });
   const EYES = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.25 });
   const SKINV = SKIN.map(m => new T.MeshStandardMaterial({ color: m.color.clone().multiplyScalar(1.12), vertexColors: true, roughness: 0.62 }));
@@ -488,6 +507,7 @@ window.Cricket3D = function (G) {
         }
         g.scene.updateMatrixWorld(true);
         pool.forEach(p => p.attach());
+        if (PRODUCTION) PRODUCTION.baselineReady = true;
         loadGrip();
       }, e => console.warn('player model', e));
     } catch (e) { console.warn('player model', e); }
@@ -496,7 +516,7 @@ window.Cricket3D = function (G) {
   // ---------------------------------------------------------------- equipment models (vendor/equipment-model.js: bat, helmet, cap, pad; CC0)
   const EQ = { tried: false, ready: false };
   // which helmet and gloves to show: 'model' = the equipment models, 'built' = the shape-built helmet and gloved fingers
-  const EQUIP_OPT = Object.assign({ helmet: 'built', gloves: 'built' }, window.CR_EQUIP || {});
+  const EQUIP_OPT = Object.assign({ helmet: PRODUCTION?.reference?'model':'built', gloves: 'built' }, window.CR_EQUIP || {});
   const EQMAT = { padding: mat('#1a1d24'), strap: mat('#b9bcc2'), sticker: mat('#c9302c') };
   for (const m of Object.values(EQMAT)) m.side = T.DoubleSide;
   const EQMAT_USES = { shell: M3.helmet, grille: M3.grille, cap: M3.cap, pad: M3.pads, willow: M3.blade, grip: M3.grip };
@@ -507,15 +527,20 @@ window.Cricket3D = function (G) {
     for (const k of names) {
       try {
         const bin = Uint8Array.from(atob(window.EQUIP_GLB[k]), c => c.charCodeAt(0)).buffer;
-        new T.GLTFLoader().parse(bin, '', g => {
+        const accept = g => {
           g.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false;
             const n = o.material.name, side = o.material.side;
             if (side === T.DoubleSide) for (const m of [M3.helmet, M3.grille, M3.cap, M3.pads, M3.blade, M3.grip]) if (EQMAT_USES[n] === m) m.side = T.DoubleSide;
             o.material = n === 'shell' ? M3.helmet : n === 'grille' ? M3.grille : n === 'cap' ? M3.cap : n === 'pad' ? M3.pads
               : n === 'willow' ? M3.blade : n === 'grip' ? M3.grip : EQMAT[n] || o.material; } });
           EQ[k] = g.scene;
-          if (--left === 0) { EQ.ready = true; pool.forEach(p => p.attachEquipment()); }
-        }, e => console.warn('equipment', k, e));
+          if (--left === 0) { EQ.ready = true; if(PRODUCTION)PRODUCTION.equipmentReady=true; pool.forEach(p => p.attachEquipment()); }
+        };
+        if(k==='helmet' && PRODUCTION?.reference) {
+          new T.GLTFLoader().load('player-production/cricket_helmet_reference.glb',g=>{PRODUCTION.helmetReady=true;accept(g);},undefined,e=>{
+            console.warn('Reference helmet failed',e);new T.GLTFLoader().parse(bin,'',accept,e=>console.warn('equipment',k,e));
+          });
+        } else new T.GLTFLoader().parse(bin,'',accept,e=>console.warn('equipment',k,e));
       } catch (e) { console.warn('equipment', k, e); }
     }
   }
@@ -544,7 +569,7 @@ window.Cricket3D = function (G) {
         // the cuff's centre in bat space: the wrist goes here, so the forearm enters the glove through its cuff
         const cuffB = anchor.clone().add(cuff ? cuff.clone().multiplyScalar(0.8) : new T.Vector3(s === 'l' ? -0.04 : 0.04, 0.04, 0));
         GRIP3.side[s] = { glove: g.scene, anchor, handInBat, palm: d0.clone().multiplyScalar(GRIP3.palmK), cuff, cuffB, F0: F0.clone().transpose() };
-        if (--left === 0) { GRIP3.ready = true; pool.forEach(p => p.attachGrip()); }
+        if (--left === 0) { GRIP3.ready = true; if(PRODUCTION)PRODUCTION.gripReady=true; pool.forEach(p => p.attachGrip()); }
       }, e => console.warn('grip', k, e));
     }
   }
@@ -554,6 +579,84 @@ window.Cricket3D = function (G) {
     const along = (D * D + L1 * L1 - L2 * L2) / (2 * D), h = Math.sqrt(Math.max(0, L1 * L1 - along * along));
     const p = v2.subVectors(elbow0, S).clone(); p.addScaledVector(d, -p.dot(d)); if (p.lengthSq() < 1e-8) p.set(0, -1, 0); p.normalize();
     return S.clone().addScaledVector(d, along).addScaledVector(p, h);
+  }
+  // Keep both cuff targets fixed while choosing a natural elbow bend that
+  // clears the blade. Moving only the bat would detach the hands again.
+  const bladeEnvelope = new T.Box3(new T.Vector3(-.054,-.86,-.052),new T.Vector3(.054,-.30,.0124));
+  function elbowForBat(S, wrist, elbow0, L1, L2, O, Bq) {
+    const base=elbowFor(S,wrist,elbow0,L1,L2),axis=wrist.clone().sub(S).normalize();
+    const along=base.clone().sub(S).dot(axis),centre=S.clone().addScaledVector(axis,along),radial=base.clone().sub(centre);
+    const iq=Bq.clone().invert(),a=S.clone().sub(O).applyQuaternion(iq),c=wrist.clone().sub(O).applyQuaternion(iq);
+    const sample=new T.Vector3();let best=base,bestScore=Infinity,bestAngle=0;
+    const penetrationAt=angle=>{
+      const elbow=radial.clone().applyAxisAngle(axis,angle).add(centre),b=elbow.clone().sub(O).applyQuaternion(iq);let score=0;
+      for(const [start,end,radius] of [[a,b,.09],[b,c,.065]])for(let i=0;i<=16;i++) {
+        sample.lerpVectors(start,end,i/16);const p=Math.max(0,radius-bladeEnvelope.distanceToPoint(sample));score+=p*p;
+      }
+      return score;
+    };
+    for(const angle of [0,-.3,.3,-.6,.6,-.9,.9,-1.2,1.2,-1.5,1.5,-1.8,1.8]) {
+      const elbow=radial.clone().applyAxisAngle(axis,angle).add(centre),b=elbow.clone().sub(O).applyQuaternion(iq);
+      let score=angle*angle*1e-6;
+      for(const [start,end,radius] of [[a,b,.09],[b,c,.065]]) for(let i=0;i<=16;i++) {
+        sample.lerpVectors(start,end,i/16);
+        const penetration=Math.max(0,radius-bladeEnvelope.distanceToPoint(sample));score+=penetration*penetration;
+      }
+      if(score<bestScore){bestScore=score;best=elbow;bestAngle=angle;}
+      if(bestScore===0)break;
+    }
+    if(PRODUCTION?.reference && bestAngle!==0 && penetrationAt(bestAngle)<1e-10) {
+      // Find the first clear bend, rather than jumping in 0.3-radian steps.
+      let lo=0,hi=Math.abs(bestAngle);const sign=Math.sign(bestAngle);
+      for(let i=0;i<12;i++){const mid=(lo+hi)/2;if(penetrationAt(mid*sign)>1e-10)lo=mid;else hi=mid;}
+      best=radial.clone().applyAxisAngle(axis,(hi+.003)*sign).add(centre);
+    }
+    return best;
+  }
+  // Rendering constraints only: gameplay contact/scoring still use people().
+  // Project the blade outside body/equipment capsules, then the two cuffs into
+  // arm reach. Both arm IK chains are solved to the corrected bat below.
+  function clearBat(O, Bq, pos, rest, padded, grippedSides = ['l','r']) {
+    const spine=pos.neck_01.clone().sub(pos.pelvis).normalize();
+    const capsules=[
+      [pos.pelvis.clone().addScaledVector(spine,.08),pos.neck_01.clone().addScaledVector(spine,-.04),.18],
+      [pos.head.clone().addScaledVector(spine,.045),pos.headTop,.16]
+    ];
+    for(const s of ['l','r']) {
+      capsules.push([pos['clavicle_'+s],pos['upperarm_'+s],.085]);
+      capsules.push([pos['thigh_'+s],pos['calf_'+s],.12]);
+      capsules.push([pos['calf_'+s],pos['foot_'+s],padded?.16:.075]);
+    }
+    for(const z of [0,PITCH])for(const x of [-.1,0,.1])capsules.push([new T.Vector3(x,0,z),new T.Vector3(x,.735,z),.019]);
+    const samples=[];
+    for(let i=0;i<=12;i++)samples.push(new T.Vector3(0,-.31-.54*i/12,-.02).applyQuaternion(Bq));
+    const point=new T.Vector3(),axis=new T.Vector3(),nearest=new T.Vector3(),delta=new T.Vector3();
+    for(let iteration=0;iteration<32;iteration++) {
+      let deepest=0;const push=new T.Vector3();
+      for(const offset of samples) {
+        point.copy(O).add(offset);
+        for(const [a,b,radius] of capsules) {
+          axis.subVectors(b,a);const l2=axis.lengthSq();
+          const t=l2?T.MathUtils.clamp(nearest.subVectors(point,a).dot(axis)/l2,0,1):0;
+          nearest.copy(a).addScaledVector(axis,t);delta.subVectors(point,nearest);
+          const distance=delta.length(),penetration=radius+.064-distance;
+          if(penetration>deepest) {
+            deepest=penetration;
+            if(distance<1e-7)delta.copy(spine).cross(new T.Vector3(0,0,1)).normalize();else delta.multiplyScalar(1/distance);
+            push.copy(delta).multiplyScalar(penetration+.002);
+          }
+        }
+      }
+      if(deepest>0)O.add(push.clampLength(0,.06));
+      let reachError=0;
+      for(const s of grippedSides) {
+        const wrist=GRIP3.side[s].cuffB.clone().applyQuaternion(Bq).add(O),sh=pos['upperarm_'+s];
+        const reach=(rest['lowerarm_'+s].distanceTo(rest['upperarm_'+s])+rest['hand_'+s].distanceTo(rest['lowerarm_'+s]))*.985;
+        delta.subVectors(wrist,sh);const distance=delta.length();
+        if(distance>reach){reachError=Math.max(reachError,distance-reach);O.addScaledVector(delta,-(distance-reach)/distance);}
+      }
+      if(deepest<.001 && reachError<.001)break;
+    }
   }
   const eqM = new T.Matrix4(), eX = new T.Vector3(), eY = new T.Vector3(), eZ = new T.Vector3();
   // place an equipment piece: its local -Y along 'down', local +Z toward 'face', at 'at', scaled by sy (sx = -1 mirrors it)
@@ -632,21 +735,30 @@ window.Cricket3D = function (G) {
       }
     }
     attach() {
-      const root = T.SkeletonUtils.clone(RIG.tmpl);
+      const useProduction = PRODUCTION && PRODUCTION.ready && PRODUCTION.slots.includes(pool.indexOf(this));
+      if (this.model) {
+        scene.remove(this.model);
+        this.model.traverse(o => { if (o.isMesh) for (const m of [].concat(o.material)) m.dispose(); });
+      }
+      this.kit = null; this.isProduction = !!useProduction;
+      const root = T.SkeletonUtils.clone(useProduction ? PRODUCTION.template : RIG.tmpl);
       this.model = root; this.bones = {}; this.parts = {};
       root.traverse(o => {
         if (o.isBone) this.bones[o.name] = o;
         if (o.isMesh) { o.frustumCulled = false; o.castShadow = true; o.receiveShadow = true;
-          const n = o.material.name; o.material = o.geometry.attributes._part ? (this.kit = kitMaterial()) : o.material.clone(); this.parts[n] = o;
+          const n = o.material.name; o.material = !useProduction && o.geometry.attributes._part ? (this.kit = kitMaterial()) : o.material.clone(); this.parts[n] = o;
           if (n === 'KIT_Emblem') o.visible = false; }   // the V2 chest badge's shape is broken; hidden until it's remade
       });
       scene.add(root);
       // the shape-built body stays for the equipment (pads, gloves, helmet, cap, bat, shirt number); the rest is hidden
+      this.hideLegacyBody();
+    }
+    hideLegacyBody() {
       for (const k of ['thighL', 'thighR', 'shinL', 'shinR', 'kneeL', 'kneeR', 'footL', 'footR', 'soleL', 'soleR', 'hips', 'delL', 'delR',
                        'upL', 'upR', 'foreL', 'foreR', 'elbL', 'elbR', 'neck', 'skull', 'jaw', 'nose', 'earL', 'earR', 'hair', 'shades']) this[k].visible = false;
-      this.hidden = true;
     }
     fit(pr, fwd, side, skinIdx, shirt, pants) {
+      this.sourceBat = pr.bat || null;
       const j = pr.j, B = this.bones, r = RIG.rest, W = this.wq || (this.wq = {}), Wp = this.wp || (this.wp = {});
       const pos = {};
       const pel = A(j.pelvis), neck = A(j.neck), headC = A(j.head);
@@ -671,43 +783,42 @@ window.Cricket3D = function (G) {
         pos['thigh_' + s] = hip; pos['calf_' + s] = kn;
         const ank = ft.clone(); ank.y += r['foot_' + s].y;
         pos['foot_' + s] = ank;
-        const yaw = Math.atan2(fwd.x, fwd.z), toe = v1.subVectors(r['ball_' + s], r['foot_' + s]).applyAxisAngle(new T.Vector3(0, 1, 0), yaw).clone();
+        const footDirection=j['footDir'+S]?A(j['footDir'+S]):fwd;
+        const yaw=Math.atan2(footDirection.x,footDirection.z),pitch=j['footPitch'+S]?.[0]||0,footAxis=new T.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
+        const toe = v1.subVectors(r['ball_' + s], r['foot_' + s]).applyAxisAngle(new T.Vector3(0, 1, 0), yaw).applyAxisAngle(footAxis,pitch).clone();
         pos['ball_' + s] = ank.clone().add(toe);
-        pos['toe_' + s] = pos['ball_' + s].clone().add(new T.Vector3(Math.sin(yaw) * 0.073, 0.006, Math.cos(yaw) * 0.073));
+        pos['toe_' + s] = pos['ball_' + s].clone().add(new T.Vector3(Math.sin(yaw) * 0.073, 0.006, Math.cos(yaw) * 0.073).applyAxisAngle(footAxis,pitch));
       }
       const lookV = pr.look ? new T.Vector3(pr.look[0], 0, pr.look[2]).normalize() : fwd.clone().setY(0).normalize();
       const hint = { side, hips: hipSide, fwd, up: new T.Vector3(0, 1, 0), look: new T.Vector3(lookV.z, 0, -lookV.x),
                      poleL: pole(pos.upperarm_l, pos.lowerarm_l, pos.hand_l, fwd), poleR: pole(pos.upperarm_r, pos.lowerarm_r, pos.hand_r, fwd),
                      kneeL: pole(pos.thigh_l, pos.calf_l, pos.foot_l, fwd), kneeR: pole(pos.thigh_r, pos.calf_r, pos.foot_r, fwd) };
+      if(PRODUCTION?.reference) {
+        hint.spineLow=hipSide.clone().lerp(side,.28).normalize();
+        hint.spineMid=hipSide.clone().lerp(side,.65).normalize();
+      }
       // the two-handed grip: the bat from the game's pose, the wrists moved to the gloves' anchors and the elbows re-solved
-      this.bat3 = null; let gripQ = null;
+      this.bat3 = null; this.gripResidual = null; let gripQ = null;
       const G3 = GRIP3.ready && this.gripG && pr.bat;
       if (G3 && !pr.bat.carry) {
         const bh = A(pr.bat.hands), bt = A(pr.bat.tip), Y = bh.clone().sub(bt).normalize();     // bat +Y: from the blade to the handle
-        const X = A(j.shR).sub(A(j.shL)); X.addScaledVector(Y, -X.dot(Y)); if (X.lengthSq() < 1e-8) X.copy(side); X.normalize();   // top (left) glove on -X
+        // Retain a width axis through the swing. Rebuilding from a fixed face
+        // normal flips the blade 180 degrees as it passes horizontal.
+        const X = pr.bat.width ? A(pr.bat.width) : A(j.shR).sub(A(j.shL));
+        X.addScaledVector(Y,-X.dot(Y));if(X.lengthSq()<1e-8)X.copy(side).addScaledVector(Y,-side.dot(Y));X.normalize();
         if (GRIP3.twist) X.applyAxisAngle(Y, GRIP3.twist);
         const Bq = new T.Quaternion().setFromRotationMatrix(new T.Matrix4().makeBasis(X, Y, new T.Vector3().crossVectors(X, Y)));
         const mid = GRIP3.side.l.anchor.clone().add(GRIP3.side.r.anchor).multiplyScalar(0.5);
         const O = bh.clone().sub(mid.applyQuaternion(Bq));                                           // the grip's middle where the game holds the bat
-        // if a wrist can't reach its glove, move the bat (not the arms past their length) until both can (looks only; play is unchanged)
-        for (let it = 0; it < 4; it++) {
-          let worst = null, wl = 0;
-          for (const s of ['l', 'r']) {
-            const w = GRIP3.side[s].cuffB.clone().applyQuaternion(Bq).add(O), sh = pos['upperarm_' + s];
-            const reach = (r['lowerarm_' + s].distanceTo(r['upperarm_' + s]) + r['hand_' + s].distanceTo(r['lowerarm_' + s])) * 0.985;
-            const d = w.distanceTo(sh);
-            if (d - reach > wl) { wl = d - reach; worst = w.sub(sh).normalize().multiplyScalar(d - reach); }
-          }
-          if (!worst) break;
-          O.sub(worst);
-        }
-        this.bat3 = { O, Bq }; gripQ = {};
+        clearBat(O,Bq,pos,r,pr.team==='bat' || pr.keeper);
+        this.bat3 = { O, Bq }; gripQ = {}; this.gripResidual = {};
         for (const s of ['l', 'r']) {
           const S3 = GRIP3.side[s];
           const wrist = S3.cuffB.clone().applyQuaternion(Bq).add(O), palm = S3.anchor.clone().applyQuaternion(Bq).add(O);
           const sh = pos['upperarm_' + s], L1 = r['lowerarm_' + s].distanceTo(r['upperarm_' + s]), L2 = r['hand_' + s].distanceTo(r['lowerarm_' + s]);
-          pos['lowerarm_' + s] = elbowFor(sh, wrist, pos['lowerarm_' + s], L1, L2);
+          pos['lowerarm_' + s] = elbowForBat(sh, wrist, pos['lowerarm_' + s], L1, L2, O, Bq);
           pos['hand_' + s] = pos['lowerarm_' + s].clone().add(v1.subVectors(wrist, pos['lowerarm_' + s]).normalize().multiplyScalar(L2));
+          this.gripResidual[s] = pos['hand_' + s].distanceTo(wrist);
           // the (hidden, shrunk) hand points from the wrist into the glove, knuckles along the handle
           const knuck = new T.Vector3(0, -1, 0).applyQuaternion(Bq);
           gripQ[s] = new T.Quaternion().setFromRotationMatrix(frame(v1.subVectors(palm, pos['hand_' + s]).clone(), knuck, m4a).multiply(S3.F0));
@@ -716,10 +827,28 @@ window.Cricket3D = function (G) {
         }
         hint.poleL = pole(pos.upperarm_l, pos.lowerarm_l, pos.hand_l, fwd); hint.poleR = pole(pos.upperarm_r, pos.lowerarm_r, pos.hand_r, fwd);
       }
+      if(G3 && pr.bat.carry) {
+        const s=A(pr.bat.hands).distanceTo(pos.hand_l)<A(pr.bat.hands).distanceTo(pos.hand_r)?'l':'r',S3=GRIP3.side[s];
+        const Y=A(pr.bat.hands).sub(A(pr.bat.tip)).normalize(),X=side.clone().addScaledVector(Y,-side.dot(Y));
+        if(X.lengthSq()<1e-8)X.set(1,0,0);X.normalize();
+        const Bq=new T.Quaternion().setFromRotationMatrix(new T.Matrix4().makeBasis(X,Y,new T.Vector3().crossVectors(X,Y)));
+        const O=pos['hand_'+s].clone().sub(S3.cuffB.clone().applyQuaternion(Bq));
+        clearBat(O,Bq,pos,r,pr.team==='bat' || pr.keeper,[s]);
+        const wrist=S3.cuffB.clone().applyQuaternion(Bq).add(O),palm=S3.anchor.clone().applyQuaternion(Bq).add(O),sh=pos['upperarm_'+s];
+        const L1=r['lowerarm_'+s].distanceTo(r['upperarm_'+s]),L2=r['hand_'+s].distanceTo(r['lowerarm_'+s]);
+        pos['lowerarm_'+s]=elbowForBat(sh,wrist,pos['lowerarm_'+s],L1,L2,O,Bq);
+        pos['hand_'+s]=pos['lowerarm_'+s].clone().add(wrist.clone().sub(pos['lowerarm_'+s]).normalize().multiplyScalar(L2));
+        pos['handTip_'+s]=pos['hand_'+s].clone().add(palm.clone().sub(pos['hand_'+s]).multiplyScalar(2));
+        gripQ={[s]:Bq.clone().multiply(S3.handInBat)};
+        this.bat3={O,Bq};this.gripResidual={[s]:pos['hand_'+s].distanceTo(wrist)};
+        this['glovePose_'+s]={p:palm,q:Bq};
+        hint[s==='l'?'poleL':'poleR']=pole(sh,pos['lowerarm_'+s],pos['hand_'+s],fwd);
+      }
       // world rotations, then local ones down the hierarchy (the bind pose has no rotation, so rest frames are world frames)
       for (const b of ORDER) {
         const [to, tw] = AIM[b];
-        frame(v4.subVectors(pos[to], pos[b]).clone(), hint[tw], m4a);
+        const rollHint=PRODUCTION?.reference && b==='spine_01'?hint.spineLow:PRODUCTION?.reference && b==='spine_02'?hint.spineMid:hint[tw];
+        frame(v4.subVectors(pos[to], pos[b]).clone(), rollHint, m4a);
         m4b.copy(RIG.restQ[b]).transpose();
         const q = (W[b] || (W[b] = new T.Quaternion())).setFromRotationMatrix(m4a.multiply(m4b));
         Wp[b] = pos[b];
@@ -729,14 +858,14 @@ window.Cricket3D = function (G) {
         bone.quaternion.copy(qb).multiply(q);
         bone.position.subVectors(pos[b], Wp[p]).applyQuaternion(qb);
       }
-      if (gripQ) for (const s of ['l', 'r']) {   // wrists turned to their gloves
+      if (gripQ) for (const s of Object.keys(gripQ)) {   // wrists turned to their gloves
         B['hand_' + s].quaternion.copy(qb.copy(W['lowerarm_' + s]).invert()).multiply(gripQ[s]); W['hand_' + s].copy(gripQ[s]);
       }
       const gloved3 = !!(G3 && pr.team === 'bat' && pr.gloves);
       if (this.gripG) {
         for (const s of ['l', 'r']) {
           const hq = W['hand_' + s], hp = pos['hand_' + s], rel = this.gripRel[s];
-          if (gripQ) {   // remember where the glove sits on the hand, for when he lets go with one hand
+          if (gripQ && gripQ[s]) {   // remember where the glove sits on the hand, for when he lets go with one hand
             const iq = hq.clone().invert(), gp = this['glovePose_' + s];
             this.gripRel[s] = { q: iq.clone().multiply(gp.q), p: gp.p.clone().sub(hp).applyQuaternion(iq) };
             if (!GRIP3.rel) GRIP3.rel = {};
@@ -748,10 +877,6 @@ window.Cricket3D = function (G) {
           const gp = this['glovePose_' + s], o = this.gripG[s];
           o.visible = gloved3; o.matrix.compose(gp.p, gp.q, v3.set(1, 1, 1)); o.matrixWorldNeedsUpdate = true;
           B['hand_' + s].scale.setScalar(gloved3 ? GRIP3.handScale : 1);
-        }
-        if (G3 && pr.bat.carry) {   // carrying the bat in one hand: the bat stays in that hand's glove
-          const s = A(pr.bat.hands).distanceTo(pos.hand_l) < A(pr.bat.hands).distanceTo(pos.hand_r) ? 'l' : 'r', gp = this['glovePose_' + s];
-          this.bat3 = { O: gp.p.clone().sub(GRIP3.side[s].anchor.clone().applyQuaternion(gp.q)), Bq: gp.q.clone() };
         }
       }
       // hands on the bat (without the grip gloves): each gripping hand turns so its knuckle line runs along the handle, and the bat goes through the top fist
@@ -784,7 +909,7 @@ window.Cricket3D = function (G) {
       this.headG.quaternion.copy(W.head);
       // the equipment helmet and cap ride on the head bone itself (its rest frame is the world frame, so the offset is simple)
       if (this.eqHelmet && this.eqHelmet.parent !== B.head) {
-        for (const o of [this.eqHelmet, this.eqCap]) { B.head.add(o); o.position.set(0, 0.075, -0.008); }
+        for (const o of [this.eqHelmet, this.eqCap]) { B.head.add(o); o.position.set(0, o===this.eqHelmet && PRODUCTION?.reference ? .035 : .075, -0.008); }
       }
       // fingers: a fist round the bat handle (gloves), relaxed otherwise
       const curl = RIG.curl[(pr.team === 'bat' && pr.gloves) || pr.keeper ? 'grip' : 'relax'];
@@ -794,6 +919,12 @@ window.Cricket3D = function (G) {
       if (P.KIT_Jersey) P.KIT_Jersey.material.color.copy(shirt.color);
       if (P.KIT_Trousers) P.KIT_Trousers.material.color.copy(pants.color);
       if (P.KIT_Trim) P.KIT_Trim.material.color.copy(pants.color).multiplyScalar(0.8);
+      if (this.isProduction) PRODUCTION.setAppearance(P, shirt.color, pants.color, SKIN_TONES[skinIdx % SKIN_TONES.length], G.inn?.[pr.team==='bat'?'bat':'bowl']?.id);
+      if(this.isProduction && PRODUCTION.reference && P.SKIN_Human?.morphTargetDictionary?.Blink!==undefined) {
+        const t=(G.clock+skinIdx*.613)%4.7;
+        const close=t<.12?T.MathUtils.smoothstep(t,0,.12):1-T.MathUtils.smoothstep(t,.16,.28);
+        P.SKIN_Human.morphTargetInfluences[P.SKIN_Human.morphTargetDictionary.Blink]=PRODUCTION.blinkOverride ?? (pr.bat?.contact ? .08 : Math.max(.08,close));
+      }
       if (this.kit && RIG.skinBase) {   // the body: team colours under the kit, and this player's skin tone (the model's colours carry the face and hair)
         const u = this.kit.userData.u, t = SKIN_TONES[skinIdx % SKIN_TONES.length];
         u.uShirt.value.copy(shirt.color); u.uPants.value.copy(pants.color); u.uTrim.value.copy(pants.color);
@@ -900,10 +1031,108 @@ window.Cricket3D = function (G) {
         seg(this.blade, mid, t, 1); this.blade.scale.x = 0.108; this.blade.scale.z = 0.03;
         seg(this.spine, mid, t, 1); this.spine.scale.x = 0.04; this.spine.scale.z = 0.055; this.spine.scale.y *= 0.85;
       }
+      // set() updates role-dependent visibility every frame. Keep fallback
+      // shins/hair hidden after those updates, not just once when GLB loads.
+      if (this.model) this.hideLegacyBody();
     }
   }
   const pool = [];
   for (let i = 0; i < 14; i++) pool.push(new Person());
+  if(PRODUCTION) PRODUCTION.framing=()=>{
+    scene.updateMatrixWorld(true);
+    return pool.slice(0,3).map((p,index)=>{
+      if(!p.model)return null;
+      let left=Infinity,right=-Infinity,top=Infinity,bottom=-Infinity;const v=new T.Vector3();
+      p.model.traverse(o=>{
+        if(!o.isMesh)return;
+        for(let parent=o;parent;parent=parent.parent)if(!parent.visible)return;
+        if(o.isSkinnedMesh)o.skeleton.update();
+        for(let i=0;i<o.geometry.attributes.position.count;i++) {
+          v.fromBufferAttribute(o.geometry.attributes.position,i);if(o.isSkinnedMesh)o.boneTransform(i,v);v.applyMatrix4(o.matrixWorld).project(camera);
+          const x=(v.x+1)*G.W/2,y=(1-v.y)*G.H/2;left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);
+        }
+      });
+      return {index,left,right,top,bottom,heightFraction:(bottom-top)/G.H,visible:p.model.visible};
+    });
+  };
+  // Slow, opt-in development check: intersect posed triangles, not projected
+  // silhouettes. Camera overlap alone does not establish a mesh intersection.
+  function auditPerson(p) {
+    if (!p.model) return null;
+    scene.updateMatrixWorld(true);
+    const stumpBoxes = [0,PITCH].flatMap(z => [-.1,0,.1].map(x => new T.Box3(new T.Vector3(x-.019,0,z-.019),new T.Vector3(x+.019,.735,z+.019))));
+    const bladeBox = new T.Box3(new T.Vector3(-.054, -.86, -.052), new T.Vector3(.054, -.30, .0124));
+    const batInverse = p.bat3 ? new T.Matrix4().compose(p.bat3.O,p.bat3.Bq,new T.Vector3(1,1,1)).invert() : null;
+    const result = { bodyWicket: 0, bladeBody: 0, bladeWicket: 0, bladeEquipment: 0, equipmentWicket: 0, byEquipment: {}, byMesh: {}, byBone: {}, examples: [], legacyBodyVisible: [] };
+    if(batInverse && p.sourceBat && p.sourceBat.contact)result.contactDistance=bladeBox.distanceToPoint(new T.Vector3().fromArray(p.sourceBat.contact).applyMatrix4(batInverse));
+    for (const k of ['shinL','shinR','hair','shades']) if (p[k].visible) result.legacyBodyVisible.push(k);
+    const a=new T.Vector3(),b=new T.Vector3(),c=new T.Vector3(),tri=new T.Triangle(a,b,c);
+    p.model.traverse(o => {
+      if (!o.isSkinnedMesh || !o.visible) return;
+      o.skeleton.update();
+      const g=o.geometry, positions=[];
+      for(let i=0;i<g.attributes.position.count;i++) {
+        const v=new T.Vector3().fromBufferAttribute(g.attributes.position,i);o.boneTransform(i,v);v.applyMatrix4(o.matrixWorld);positions.push(v);
+      }
+      const idx=g.index, count=idx?idx.count:positions.length;
+      let hits=0;
+      for(let i=0;i<count;i+=3) {
+        a.copy(positions[idx?idx.getX(i):i]);b.copy(positions[idx?idx.getX(i+1):i+1]);c.copy(positions[idx?idx.getX(i+2):i+2]);
+        if(stumpBoxes.some(box=>box.intersectsTriangle(tri))) result.bodyWicket++;
+        if(batInverse) {
+          a.applyMatrix4(batInverse);b.applyMatrix4(batInverse);c.applyMatrix4(batInverse);
+          if(bladeBox.intersectsTriangle(tri)) {
+            hits++;
+            const bone=o.skeleton.bones[g.attributes.skinIndex.getX(idx?idx.getX(i):i)].name;
+            result.byBone[bone]=(result.byBone[bone]||0)+1;
+            if(result.examples.length<8) result.examples.push({mesh:o.name,batLocal:a.clone().add(b).add(c).multiplyScalar(1/3).toArray()});
+          }
+        }
+      }
+      result.byMesh[o.name]=hits;result.bladeBody+=hits;
+    });
+    if(p.eqBat && p.eqBat.visible) p.eqBat.traverse(o=>{
+      if(!o.isMesh || o.material!==M3.blade)return;
+      const g=o.geometry,idx=g.index,count=idx?idx.count:g.attributes.position.count;
+      for(let i=0;i<count;i+=3) {
+        for(const [v,k] of [[a,0],[b,1],[c,2]])v.fromBufferAttribute(g.attributes.position,idx?idx.getX(i+k):i+k).applyMatrix4(o.matrixWorld);
+        if(stumpBoxes.some(box=>box.intersectsTriangle(tri)))result.bladeWicket++;
+      }
+    });
+    for(const key of ['eqPadL','eqPadR','helmet','eqHelmet','cap','eqCap']) {
+      const root=p[key];if(!root || !root.visible)continue;
+      let hits=0;
+      root.traverse(o=>{
+        if(!o.isMesh || !o.visible)return;
+        const g=o.geometry,idx=g.index,count=idx?idx.count:g.attributes.position.count;
+        for(let i=0;i<count;i+=3) {
+          for(const [v,k] of [[a,0],[b,1],[c,2]])v.fromBufferAttribute(g.attributes.position,idx?idx.getX(i+k):i+k).applyMatrix4(o.matrixWorld);
+          if(stumpBoxes.some(box=>box.intersectsTriangle(tri)))result.equipmentWicket++;
+          if(batInverse){a.applyMatrix4(batInverse);b.applyMatrix4(batInverse);c.applyMatrix4(batInverse);if(bladeBox.intersectsTriangle(tri))hits++;}
+        }
+      });
+      result.byEquipment[key]=hits;result.bladeEquipment+=hits;
+    }
+    return result;
+  }
+  if (PRODUCTION && (PRODUCTION.enabled || PRODUCTION.audit)) PRODUCTION.inspect = () => pool.filter(p => p.isProduction || PRODUCTION.audit && p.sourceBat).map(p => ({
+    visible: p.model.visible,
+    headMatrix: p.bones.head.matrixWorld.toArray(),
+    helmetMatrix: p.eqHelmet?.matrixWorld.toArray(),helmetVisible:!!p.eqHelmet?.visible,
+    bones: Object.fromEntries(Object.entries(p.bones).map(([name, b]) => [name, {
+      position: b.position.toArray(), quaternion: b.quaternion.toArray(), scale: b.scale.toArray()
+    }])),
+    meshes: Object.values(p.parts).map(o => ({ name: o.material.name,
+      triangles: (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3 })),
+    grip: p.bat3 ? { origin: p.bat3.O.toArray(), quaternion: p.bat3.Bq.toArray(), wristGapMetres: p.gripResidual } : null,
+    collisions: PRODUCTION.audit ? auditPerson(p) : undefined
+  }));
+  if(PRODUCTION)PRODUCTION.cameraAudit=()=>{
+    const invalid=[];scene.traverse(o=>{if(o.visible && o.matrixWorld.elements.some(x=>!Number.isFinite(x)))invalid.push(o.name||o.type);});
+    return {position:camera.position.toArray(),target:cam.tgt.slice(),near:camera.near,fov:camera.fov,invalid,
+      postfx:!!composer,contextLost:renderer.getContext().isContextLost(),size:[view.width,view.height],
+      ball:ballMesh.visible?ballMesh.position.clone().project(camera).toArray():null};
+  };
   const blobs = [];
   for (let i = 0; i < 14; i++) { const b = new T.Mesh(blobGeo, blobMat); b.scale.set(0.9, 1, 0.9); b.position.y = 0.012; scene.add(b); blobs.push(b); }
 
@@ -912,13 +1141,13 @@ window.Cricket3D = function (G) {
   const PP = window.POSTPROCESSING;
   let composer = null;
   function makeComposer() {
-    if (!PP) return null;
+    if (!PP || new URLSearchParams(location.search).get('postfx')==='off') return null;
     try {
       const gl2 = renderer.capabilities.isWebGL2;
       const c = new PP.EffectComposer(renderer, { frameBufferType: gl2 ? T.HalfFloatType : T.UnsignedByteType,
                                                   multisample: gl2 && !lowEnd ? Math.min(4, renderer.capabilities.maxSamples || 0) : 0 });
       c.addPass(new PP.RenderPass(scene, camera));
-      const bloom = new PP.BloomEffect({ intensity: 1.15, luminanceThreshold: 0.78, luminanceSmoothing: 0.25, mipmapBlur: true, radius: 0.72 });
+      const bloom = new PP.BloomEffect({ intensity: PRODUCTION?.reference ? .18 : 1.15, luminanceThreshold: 0.78, luminanceSmoothing: 0.25, mipmapBlur: true, radius: 0.72 });
       const tone = new PP.ToneMappingEffect({ mode: PP.ToneMappingMode.ACES_FILMIC });
       const grade = new PP.HueSaturationEffect({ saturation: -0.1 });
       const contrast = new PP.BrightnessContrastEffect({ brightness: 0.0, contrast: 0.1 });
@@ -959,6 +1188,7 @@ window.Cricket3D = function (G) {
     const bat = G.inn ? G.inn.bat : null, bowl = G.inn ? G.inn.bowl : null;
     M3.batShirt.color.set(bat ? bat.col : '#3d7dff'); M3.batPants.color.set(bat ? bat.dark : '#173f99');
     M3.helmet.color.set(bat ? (bat.helmet || bat.dark) : '#173f99');
+    if(PRODUCTION?.reference)M3.helmet.color.multiplyScalar(.30);
     M3.bowlShirt.color.set(bowl ? bowl.col : '#ffd23c'); M3.bowlPants.color.set(bowl ? bowl.dark : '#0e6b40');
     M3.cap.color.set(bowl ? bowl.dark : '#0e6b40');
   }
@@ -977,6 +1207,7 @@ window.Cricket3D = function (G) {
     const aspect = G.W / Math.max(1, G.H);
     let fov = cam.fov;
     if (aspect < 1.35) fov = 2 * Math.atan(Math.tan(cam.fov * deg / 2) / Math.pow(aspect / 1.35, aspect < 0.8 ? 0.72 : 0.5)) / deg;
+    if(PRODUCTION && PRODUCTION.reference && G.projectionFocal) fov=2*Math.atan(G.H/(2*G.projectionFocal))/deg;
     // the game may move the picture's centre up (upright screens): render a taller view and show its lower part
     const sh = G.camShift || 0, fullH = G.H + 2 * sh;
     if (sh) {
@@ -985,6 +1216,10 @@ window.Cricket3D = function (G) {
     } else if (camera.view) camera.clearViewOffset();
     camera.fov = fov; camera.aspect = G.W / Math.max(1, sh ? fullH : G.H); camera.updateProjectionMatrix();
     camera.position.set(cam.pos[0], cam.pos[1], cam.pos[2]); camera.lookAt(cam.tgt[0], cam.tgt[1], cam.tgt[2]);
+    // A long broadcast lens needs a tighter depth range: the old 0.3 m near
+    // plane quantised close garment/hair surfaces into the same depth at 80 m.
+    const near = PRODUCTION && PRODUCTION.reference && cam.fov < 10 && cam.pos[2] > 60 ? 8 : .3;
+    if(camera.near !== near){camera.near=near;camera.updateProjectionMatrix();}
 
     teamColours();
     updateCrowd();
@@ -992,7 +1227,7 @@ window.Cricket3D = function (G) {
     setStumps(stumpsFar, null, null);
 
     const list = G.M ? people() : [];
-    loadModel(); loadEquipment(); loadGrip();
+    loadModel(); loadEquipment(); loadGrip(); loadProduction();
     pool.forEach((p, i) => { if (i < list.length) p.set(list[i]); else { p.g.visible = false; if (p.model) p.model.visible = false; } });
     blobs.forEach((b, i) => { b.visible = i < list.length; if (b.visible) b.position.set(list[i].at[0], 0.012, list[i].at[2]); });
 
@@ -1000,6 +1235,11 @@ window.Cricket3D = function (G) {
     ballMesh.visible = ballGlow.visible = ballShadow.visible = !!bp;
     if (bp) {
       ballMesh.position.set(bp[0], bp[1], bp[2]); ballGlow.position.copy(ballMesh.position);
+      if(PRODUCTION?.reference && G.projectionFocal) {
+        const metresPerPixel=camera.position.distanceTo(ballMesh.position)/G.projectionFocal;
+        ballMesh.scale.setScalar(Math.max(1,2.2*metresPerPixel/.036));
+        const halo=Math.max(.12,9*metresPerPixel);ballGlow.scale.set(halo,halo,1);
+      }
       ballShadow.position.set(bp[0], 0.013, bp[2]);
     }
     const tr = G.ball && G.ball.trail;
