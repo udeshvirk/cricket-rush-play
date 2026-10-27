@@ -388,6 +388,17 @@
     body.reference-view.reference-touch .shotsel { flex-direction: row; }
     body.reference-view.reference-touch #delivery { bottom: 90px; }
   }
+  .credits { font-size: 11px; color: var(--muted); margin: 10px 0 0; text-align: center; }
+  /* cartoon look: chunky outlined lettering, rounded panels */
+  body.toon #banner .head { font-style: italic; letter-spacing: 0.01em; -webkit-text-stroke: 0.06em #1b1022; paint-order: stroke fill;
+                            text-shadow: 0 0.07em 0 #1b1022, 0 0.12em 0.05em rgba(0,0,0,0.35); transform: rotate(-3deg); }
+  body.toon #banner.small .head { color: #ffffff; }
+  body.toon #banner .line { border-radius: 999px; padding: 4px 16px; background: #1b1022; }
+  body.toon #tvcard .body { border-radius: 0 12px 12px 0; } body.toon #tvcard .bar { border-radius: 12px 0 0 12px; }
+  body.toon #tvcard .t { font-style: italic; }
+  body.toon #tvbar #scorebar > div:first-child { border-radius: 10px 0 0 10px; } body.toon #tvbar #scorebar > div:last-child { border-radius: 0 10px 10px 0; }
+  body.toon #tvbar #scorebar .runs { font-style: italic; }
+  body.toon .shotsel button, body.toon .batside button, body.toon .autopad button { border-radius: 16px; border-width: 2px; }
 </style>
 </head>
 <body>
@@ -548,6 +559,7 @@
       </div>
       <div class="tabs" id="pauseTabs"></div>
       <div class="scard" id="pauseCard"></div>
+      <p class="credits">Player model: “Indian Cricket Player – Rigged” by numaan.k99 (Sketchfab), CC BY 4.0.</p>
     </div>
   </div>
 
@@ -570,7 +582,8 @@
 <script src="vendor/postprocessing.min.js"></script>
 <script src="vendor/GLTFLoader.js"></script>
 <script src="vendor/SkeletonUtils.js"></script>
-<script async src="vendor/player-v2.js"></script>
+<script>/* the older player (rollback): ?player=v2 */ if (/[?&]player=(v2|production|mobile)\b/.test(location.search)) document.write('<script async src="vendor/player-v2.js"><\/script>');</script>
+<script async src="vendor/player-b.js"></script>
 <script async src="vendor/equipment-model.js"></script>
 <script async src="vendor/grip-model.js"></script>
 <script src="player-production/config.js"></script>
@@ -2682,7 +2695,8 @@ function render() {
       drawFigure(pr.j, KIT.bat, { pads: KIT.pads, helmet: pr.helmet, gloves: pr.gloves ? '#ffffff' : null });
       if (pr.bat.carry) line3(pr.bat.hands, pr.bat.tip, 0.07, '#d9b77a');
       else { line3(pr.bat.hands, lerp3(pr.bat.hands, pr.bat.tip, 0.3), 0.04, '#3a2a1a'); line3(lerp3(pr.bat.hands, pr.bat.tip, 0.3), pr.bat.tip, 0.1, '#d9b77a'); }
-    } else if (pr.keeper) drawFigure(pr.j, fc, { legs: fd, gloves: '#f3efe4', pads: '#f3efe4', helmet: fd });
+    } else if (pr.team === 'ump') drawFigure(pr.j, '#f3efe4', { legs: '#1e2030' });
+    else if (pr.keeper) drawFigure(pr.j, fc, { legs: fd, gloves: '#f3efe4', pads: '#f3efe4', helmet: fd });
     else drawFigure(pr.j, fc, { legs: fd });
   });
   // the ball
@@ -2825,6 +2839,18 @@ function livePeople() {
     out.push({ j: rj || figure(pos, f.face, { run:REFERENCE_VIEW?run*startBlend:run, phase: ph,
       gaitDistance:REFERENCE_VIEW && f.run>.9?f.phase*f.speed/11:undefined,crouch: wi.moving ? 0 : f.crouch, seed: fi + 1 }), at: pos, team: 'bowl', keeper: !!f.keeper,
                pid: fid(f.who), look: null });
+  }
+  // the umpire, behind the stumps at the bowler's end: crouches as the bowler arrives; signals out, four and six
+  {
+    const at = [-1.25, 0, PITCH + 2.6], face = Math.PI, F = [0, 0, -1], L = [-1, 0, 0];
+    const P = (a, b, h) => add(at, add(add(mul(F, a), mul(L, b)), [0, h, 0]));
+    const crouch = phase === 'runup' ? clamp(phaseT / RUNUP, 0, 1) * 0.25 : phase === 'flight' ? 0.25 : 0;
+    const sig = phase === 'result' && celebrate && phaseT > 0.6 ? clamp((phaseT - 0.6) / 0.3, 0, 1) : 0;
+    let o = { crouch, seed: 31 };
+    if (sig && celebrate.out) o = { seed: 31, handR: P(0.12, -0.2, lerp(0.95, 2.05, sig)) };                                   // finger up
+    else if (sig && celebrate.runs === 6) o = { seed: 31, handL: P(0.05, 0.26, lerp(0.95, 2.1, sig)), handR: P(0.05, -0.26, lerp(0.95, 2.1, sig)) };   // both arms up
+    else if (sig && celebrate.runs === 4) o = { seed: 31, handR: P(0.25, -lerp(0.24, 0.75, sig) - Math.sin(clock * 9) * 0.12 * sig, 1.2) };   // waves
+    out.push({ j: figure(at, face, o), at, team: 'ump', pid: 'umpire', look: null });
   }
   return out;
 }
