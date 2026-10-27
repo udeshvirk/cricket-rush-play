@@ -511,7 +511,6 @@ window.Cricket3D = function (G) {
     m.customProgramCacheKey = () => 'cricket-kit-v2';
     return m;
   }
-  let SKIN_AVG = null;
   const SKIN_TONES = ['#8d5a3b', '#b07650', '#c99872', '#e0b48f', '#6b4029', '#a36b47'].map(c => new T.Color(c));
   const qa = new T.Quaternion(), qb = new T.Quaternion(), m4a = new T.Matrix4(), m4b = new T.Matrix4();
   const v1 = new T.Vector3(), v2 = new T.Vector3(), v3 = new T.Vector3(), v4 = new T.Vector3();
@@ -967,7 +966,7 @@ window.Cricket3D = function (G) {
       const bb = {};
       root.traverse(o => {
         if (o.isBone) bb[o.name.replace(/_\d+$/, '')] = o;
-        if (o.isMesh) { o.frustumCulled = false; o.castShadow = true; o.receiveShadow = true; o.material = toonify(o.material.clone()); this.parts[o.material.name] = o; }
+        if (o.isMesh) { o.frustumCulled = false; o.castShadow = true; o.receiveShadow = true; o.material = /Skin|Body/.test(o.material.name) ? o.material.clone() : toonify(o.material.clone()); this.parts[o.material.name] = o; }
       });
       // outlines round the body, kit, hair and shoes (not the eyes and teeth)
       this.outlines = [];
@@ -1206,7 +1205,7 @@ window.Cricket3D = function (G) {
         u.uShoe.value.set('#1a1d24');
       }
       // gloves on the hands (batters and the keeper); fingers tuck a little inside them
-      const gloved = (pr.team === 'bat' && pr.gloves) || pr.keeper;
+      const gloved = !!((pr.team === 'bat' && pr.gloves) || pr.keeper);   // (a strict true/false: three.js draws objects whose visible is undefined)
       for (const s of ['l', 'r']) {
         const gl = pr.keeper ? this['eqK' + s] : this['eqG' + s], other = pr.keeper ? this['eqG' + s] : this['eqK' + s];
         if (other) other.visible = false;
@@ -1222,11 +1221,7 @@ window.Cricket3D = function (G) {
         const P = this.parts, sec = shirt === M3.batShirt ? M3.batPants : M3.bowlPants;
         if (P.Wolf3D_Outfit_Top && RIG.texTop) P.Wolf3D_Outfit_Top.material.map = teamTexture(RIG.texTop, shirt.color, pants.color);
         if (P.Wolf3D_Outfit_Bottom && RIG.texBottom) P.Wolf3D_Outfit_Bottom.material.map = teamTexture(RIG.texBottom, pants.color, shirt.color);
-        // a gentle per-player tone around his own skin colour (relative to the average tone, so faces stay bright)
-        const t = SKIN_TONES[skinIdx % SKIN_TONES.length], b0 = RIG.skinBase, avg = SKIN_AVG || (SKIN_AVG = SKIN_TONES.reduce((c, x) => c.add(x), new T.Color(0, 0, 0)).multiplyScalar(1 / SKIN_TONES.length));
-        const kr = T.MathUtils.lerp(1, t.r / avg.r, 0.55), kg = T.MathUtils.lerp(1, t.g / avg.g, 0.55), kb = T.MathUtils.lerp(1, t.b / avg.b, 0.55);
-        if (P.Wolf3D_Skin) P.Wolf3D_Skin.material.color.setRGB(kr, kg, kb);                    // the face texture, tinted
-        if (P.Wolf3D_Body) P.Wolf3D_Body.material.color.setRGB(b0.r * kr, b0.g * kg, b0.b * kb);   // the arms and hands, plain colour
+        // skin keeps the model's own colours (tinting it made faces blotchy and orange)
         if (P.Wolf3D_Hair) P.Wolf3D_Hair.visible = !(this.eqHelmet && this.eqHelmet.visible) && !(this.eqCap && this.eqCap.visible);
         if (EQ.helmetShell) EQ.helmetShell.color.copy(M3.helmet.color);
         this.retargetB();
