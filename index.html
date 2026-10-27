@@ -581,6 +581,7 @@
 (() => {
 'use strict';
 const REFERENCE_VIEW = !!(window.CR_PLAYER_PRODUCTION && window.CR_PLAYER_PRODUCTION.reference);
+const PRESENTATION_SLICE = !!window.CR_PLAYER_PRODUCTION?.slice;
 document.body.classList.toggle('reference-view',REFERENCE_VIEW);
 
 // ======================================================================= setup
@@ -1080,6 +1081,7 @@ function strokeKeys(sw) {
       F = { ...C, hy: -55, sy: -45 + sw.intent * 0.25, lean: 16, side: 6,
             h: [0.4 + dir[0] * 0.25, loft ? 1.78 : 1.55, 1.08 + dir[2] * 0.12], bd: norm(loft ? [0.3, 0.9, -0.3] : [0.45, 0.5, -0.75]) };
       if(REFERENCE_VIEW) F={...F,pel:[.45,.91,1.0],hy:-40,sy:-20,lean:8,side:2,rearFootPitch:.4,h:[.68,loft?1.90:1.78,1.16],bd:norm(loft?[.35,.83,-.43]:[.48,.65,-.58])};
+      if(PRESENTATION_SLICE) F={...F,pel:[.45,.91,1.04],hy:-32,sy:8,lean:7,side:0,h:[.36,loft?1.86:1.74,1.34],bd:norm(loft?[.12,.82,-.56]:[.12,.66,-.74])};
       break; }
     case 'fdef': case 'push': {
       const fr = front(0.3, 1.26), bd = norm([0, -1, -0.28]);
@@ -1134,6 +1136,7 @@ function strokeKeys(sw) {
     // Extend through the ball before folding over the shoulder. A direct
     // contact-to-finish arc cuts across the upper chest immediately after impact.
     const extension={...C,hy:-60,sy:-55,lean:20,side:8,h:[.55,1.24,1.54],bd:norm([.32,-.12,.94])};
+    if(PRESENTATION_SLICE) Object.assign(extension,{pel:[.45,.86,1.1],hy:-55,sy:-25,lean:12,side:4,rearFootPitch:.22,h:[.14,1.25,1.58],bd:norm([-.06,-.12,.99])});
     return [[0,R],[.07,B],[SWING_LAG,C,easeIn],[.24,extension],[tF,F,easeOut],[tF+v.hold,S],[tF+v.hold+.7,STANCE]];
   }
   return [[0, R], [0.07, B], [SWING_LAG, C, easeIn], [tF, F, easeOut], [tF + v.hold, S], [tF + v.hold + 0.7, STANCE]];

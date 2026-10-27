@@ -6,8 +6,9 @@
   const variant = q.get('player');
   const reference = q.get('presentation') === 'reference';
   const enabled = variant === 'production' || variant === 'mobile';
+  const slice = enabled && reference && q.get('slice') === '1';
   const config = window.CR_PLAYER_PRODUCTION = {
-    enabled, variant, reference, audit: q.get('audit') === '1', ready: false, error: null, template: null,
+    enabled, variant, reference, slice, audit: q.get('audit') === '1', ready: false, error: null, template: null,
     slots: reference ? [0,1,2] : [0,2], // reference review includes both batsmen and the bowler
     url: 'player-production/cricket_player_' + (reference ? (variant==='mobile'?'reference_mobile':'reference') : (variant==='mobile'?'mobile':'master')) + '.glb' + (reference?'?revision=3':''),
     setAppearance(parts, shirt, trousers, skinTone, teamId) {

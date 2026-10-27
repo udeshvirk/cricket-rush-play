@@ -6,6 +6,7 @@ window.Cricket3D = function (G) {
   if (!window.THREE) return null;
   const { touch, LIGHTS, BOARDS, STAND_IN, STAND_OUT, STAND_H, PITCH, CREASE, ROPE, lerp, people, ballPos, cam, deg, $ } = G;
   const T = THREE;
+  const presentationSlice = !!window.CR_PLAYER_PRODUCTION?.slice;
   if (T.ColorManagement) T.ColorManagement.legacyMode = false;   // colours given as '#hex' are sRGB, as in CSS
   const view = document.getElementById('view3d');
   let renderer;
@@ -62,6 +63,13 @@ window.Cricket3D = function (G) {
     fragmentShader: 'uniform vec3 top; uniform vec3 mid; uniform vec3 bot; varying float h; void main(){ vec3 c = h > 0.12 ? mix(mid, top, smoothstep(0.12, 0.6, h)) : mix(bot, mid, smoothstep(-0.05, 0.12, h)); gl_FragColor = vec4(c, 1.0);\n #include <tonemapping_fragment>\n #include <encodings_fragment>\n }',
   }));
   scene.add(sky);
+  if(presentationSlice) {
+    sky.material.uniforms.top.value.set('#608db7');
+    sky.material.uniforms.mid.value.set('#adcadc');
+    sky.material.uniforms.bot.value.set('#dce3dc');
+    scene.fog.color.set('#b7cbd2');
+    scene.background.set('#adcadc');
+  }
   {
     const n = 900, pos = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
@@ -69,15 +77,20 @@ window.Cricket3D = function (G) {
       pos[i * 3] = Math.cos(e) * Math.sin(a) * r; pos[i * 3 + 1] = Math.sin(e) * r; pos[i * 3 + 2] = Math.cos(e) * Math.cos(a) * r;
     }
     const g = new T.BufferGeometry(); g.setAttribute('position', new T.BufferAttribute(pos, 3));
-    scene.add(new T.Points(g, new T.PointsMaterial({ color: 0xc8d2ff, size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.7 })));
+    scene.add(new T.Points(g, new T.PointsMaterial({ color: 0xc8d2ff, size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: presentationSlice ? 0 : 0.7 })));
   }
 
   // ---------------------------------------------------------------- lights: four floodlight towers
   scene.add(new T.HemisphereLight(window.CR_PLAYER_PRODUCTION?.reference?0xc4cbd7:0x8ea4ff,0x1c2e1c,window.CR_PLAYER_PRODUCTION?.reference ? .62 : .35));
+  if(presentationSlice) {
+    // Broad daylight fill keeps eyes readable underneath the visor.
+    scene.add(new T.HemisphereLight(0xdfeeff,0x82745b,.55));
+  }
   const lightDirs = [];
   LIGHTS.forEach((L, i) => {
     const top = [L[0], 46, L[2]];
     const d = new T.DirectionalLight(0xfff3dd, i === 0 ? 1.15 : 0.32);
+    if(presentationSlice) d.intensity=i===0?1.5:.08;
     d.position.set(top[0], top[1], top[2]); d.target.position.set(0, 0, 8);
     scene.add(d); scene.add(d.target);
     if (i === 0) {
@@ -101,6 +114,7 @@ window.Cricket3D = function (G) {
     }) }));
     bank.position.set(top[0], top[1] + 2, top[2]); bank.lookAt(0, 0, 8); scene.add(bank);
     const glow = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: 0xfff4d8, transparent: true, depthWrite: false, blending: T.AdditiveBlending, fog: false }));
+    glow.visible = !presentationSlice;
     glow.position.copy(bank.position).multiplyScalar(0.985); glow.scale.set(60, 60, 1); scene.add(glow);
   });
 
@@ -537,7 +551,7 @@ window.Cricket3D = function (G) {
           if (--left === 0) { EQ.ready = true; if(PRODUCTION)PRODUCTION.equipmentReady=true; pool.forEach(p => p.attachEquipment()); }
         };
         if(k==='helmet' && PRODUCTION?.reference) {
-          new T.GLTFLoader().load('player-production/cricket_helmet_reference.glb',g=>{PRODUCTION.helmetReady=true;accept(g);},undefined,e=>{
+          new T.GLTFLoader().load('player-production/cricket_helmet_'+(presentationSlice?'slice':'reference')+'.glb',g=>{PRODUCTION.helmetReady=true;accept(g);},undefined,e=>{
             console.warn('Reference helmet failed',e);new T.GLTFLoader().parse(bin,'',accept,e=>console.warn('equipment',k,e));
           });
         } else new T.GLTFLoader().parse(bin,'',accept,e=>console.warn('equipment',k,e));
@@ -1139,7 +1153,7 @@ window.Cricket3D = function (G) {
   // ---------------------------------------------------------------- the TV look (pmndrs postprocessing, vendor/)
   // glow around the floodlights and the ball, filmic tone mapping, a slightly calmer colour grade and a soft vignette
   const PP = window.POSTPROCESSING;
-  let composer = null;
+  let composer = null, portraitFocus = null;
   function makeComposer() {
     if (!PP || new URLSearchParams(location.search).get('postfx')==='off') return null;
     try {
@@ -1147,6 +1161,11 @@ window.Cricket3D = function (G) {
       const c = new PP.EffectComposer(renderer, { frameBufferType: gl2 ? T.HalfFloatType : T.UnsignedByteType,
                                                   multisample: gl2 && !lowEnd ? Math.min(4, renderer.capabilities.maxSamples || 0) : 0 });
       c.addPass(new PP.RenderPass(scene, camera));
+      if(presentationSlice && !lowEnd) {
+        portraitFocus = new PP.DepthOfFieldEffect(camera,{worldFocusDistance:3,worldFocusRange:1.6,bokehScale:2.5,height:480});
+        portraitFocus.target=new T.Vector3();
+        c.addPass(new PP.EffectPass(camera,portraitFocus));
+      }
       const bloom = new PP.BloomEffect({ intensity: PRODUCTION?.reference ? .18 : 1.15, luminanceThreshold: 0.78, luminanceSmoothing: 0.25, mipmapBlur: true, radius: 0.72 });
       const tone = new PP.ToneMappingEffect({ mode: PP.ToneMappingMode.ACES_FILMIC });
       const grade = new PP.HueSaturationEffect({ saturation: -0.1 });
@@ -1220,6 +1239,13 @@ window.Cricket3D = function (G) {
     // plane quantised close garment/hair surfaces into the same depth at 80 m.
     const near = PRODUCTION && PRODUCTION.reference && cam.fov < 10 && cam.pos[2] > 60 ? 8 : .3;
     if(camera.near !== near){camera.near=near;camera.updateProjectionMatrix();}
+    if(portraitFocus) {
+      portraitFocus.target.fromArray(cam.tgt);
+      portraitFocus.cocMaterial.copyCameraSettings(camera);
+      // Use optical separation only for a close replay; live broadcast views
+      // retain the full field and ball in focus. Mobile skips this extra pass.
+      portraitFocus.bokehScale=camera.position.distanceTo(portraitFocus.target)<12?2.5:0;
+    }
 
     teamColours();
     updateCrowd();
