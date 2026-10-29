@@ -16,8 +16,8 @@ window.Cricket3D = function (G) {
 
   // ---------------------------------------------------------------- settings
   const KEY = 'cricket-rush-gfx';
-  let on = true;
-  try { on = localStorage.getItem(KEY) !== '2d'; } catch (e) {}
+  let on = false;   // the 2D view is the default; 3D only for players who chose it
+  try { on = localStorage.getItem(KEY) === '3d'; } catch (e) {}
   const lowEnd = touch;   // phones and tablets: lighter shadows and resolution
   renderer.outputEncoding = T.sRGBEncoding;
   renderer.toneMapping = T.ACESFilmicToneMapping;
@@ -1279,7 +1279,7 @@ window.Cricket3D = function (G) {
   }
 
   // ---------------------------------------------------------------- switch
-  function apply() { view.style.display = on ? 'block' : 'none'; const b = $('gfxToggle'); if (b) b.textContent = on ? 'Graphics: 3D' : 'Graphics: simple'; }
+  function apply() { view.style.display = on ? 'block' : 'none'; const b = $('gfxToggle'); if (b) b.textContent = on ? 'Graphics: 3D' : 'Graphics: 2D'; }
   const btn = $('gfxToggle');
   if (btn) {
     btn.hidden = false;

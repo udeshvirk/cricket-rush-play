@@ -541,7 +541,7 @@
         <button class="btn ghost" id="autoOver" type="button">Auto-play this over</button>
         <button class="btn ghost" id="autoInn" type="button">Simulate this innings</button>
         <button class="btn ghost" id="autoBowlToggle" type="button">Computer bowls for me</button>
-        <button class="btn ghost" id="gfxToggle" type="button" hidden>Graphics: 3D</button>
+        <button class="btn ghost" id="gfxToggle" type="button" hidden>Graphics: 2D</button>
         <button class="btn ghost" id="replayToggle" type="button" hidden>Replays: on</button>
         <button class="btn ghost" id="commentaryToggle" type="button" aria-pressed="false" title="Optional device-voice preview. Recorded commentary voices are not included.">Commentary preview: off</button>
         <button class="btn ghost" id="quit" type="button">Quit match</button>
@@ -739,6 +739,9 @@ const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
 // Long broadcast lens: comparable player size at both ends, without enlarging meshes.
 const BOWL_CAM = REFERENCE_VIEW ? { pos:[0,14.5,87],tgt:[0,.5,8],fov:5.7 }
   : { pos:[0,7.2,45],tgt:[0,.3,6.5],fov:18 };
+// the 2D view frames tighter, so the batter at the far end is bigger
+const BOWL_CAM_2D = { pos: [0, 6.2, 46], tgt: [0, 0.7, 10], fov: 11.5 };
+const homeCam = () => { try { return REFERENCE_VIEW || (R3D && R3D.active()) ? BOWL_CAM : BOWL_CAM_2D; } catch (e) { return BOWL_CAM; } };
 const cam = { pos: BOWL_CAM.pos.slice(), tgt: BOWL_CAM.tgt.slice(), fov: BOWL_CAM.fov };
 let cr, cu, cf, focal;
 const NEAR = 0.3;
@@ -961,20 +964,6 @@ function figure(pos, face, o = {}) {
   }
   return j;
 }
-function drawFigure(j, col, o = {}) {
-  const limb = 0.085, legCol = o.legs || col;
-  line3(j.hipL, j.kneeL, limb, legCol); line3(j.kneeL, j.footL, o.pads ? 0.13 : limb, o.pads || legCol);
-  line3(j.hipR, j.kneeR, limb, legCol); line3(j.kneeR, j.footR, o.pads ? 0.13 : limb, o.pads || legCol);
-  line3(j.pelvis, j.neck, 0.17, col);
-  line3(j.shL, j.shR, 0.1, col);
-  line3(j.shL, j.elL, limb, col); line3(j.elL, j.handL, limb, o.gloves || col);
-  line3(j.shR, j.elR, limb, col); line3(j.elR, j.handR, limb, o.gloves || col);
-  const h = toCam(j.head);
-  if (h[2] > NEAR) {
-    const s = proj(h), r = Math.max(2, 0.12 * focal / h[2]);
-    ctx.fillStyle = o.helmet || KIT.skin; ctx.beginPath(); ctx.arc(s[0], s[1], r, 0, Math.PI * 2); ctx.fill();
-  }
-}
 function shadow(p, r) {
   const c = toCam([p[0], 0.01, p[2]]);
   if (c[2] < NEAR) return;
@@ -982,6 +971,302 @@ function shadow(p, r) {
   const e = toCam([p[0], 0.01, p[2] + r]);
   const ry = e[2] > NEAR ? Math.max(1, Math.abs(proj(e)[1] - s[1])) : rx * 0.3;
   ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(s[0], s[1], rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+}
+
+// ----------------------------------------------------------------------- 2D cartoon cricketers (the batters and the bowler)
+// Drawn from the same joints as everyone else: bold outline, flat two-tone shading, a big head, kit in team colours.
+const SKINS2D = ['#8a5a3c', '#a46e4a', '#c08560', '#d9a77f', '#6c442c', '#b57a52'];
+const OUTLINE2D = '#161a24';
+function tint(hex, f) {   // f > 0 lighter, f < 0 darker
+  let n = parseInt(hex.slice(1), 16), c = [n >> 16, n >> 8 & 255, n & 255];
+  c = c.map(v => Math.round(f > 0 ? v + (255 - v) * f : v * (1 + f)));
+  return 'rgb(' + c.join(',') + ')';
+}
+const hashStr = s => { let h = 7; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h; };
+// Cut-out cricketer: every body part is a shaped outline in its bone's own frame (u along the bone, v across it in metres),
+// smoothed into curves, shaded toward the light and given its details (pad ridges and straps, folds, helmet grille, bat sticker).
+function splinePath(P) {
+  const n = P.length; ctx.beginPath(); ctx.moveTo(P[0][0], P[0][1]);
+  for (let i = 0; i < n; i++) {
+    const p0 = P[(i - 1 + n) % n], p1 = P[i], p2 = P[(i + 1) % n], p3 = P[(i + 2) % n];
+    ctx.bezierCurveTo(p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6, p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6, p2[0], p2[1]);
+  }
+  ctx.closePath();
+}
+let lodPx = 24, drawMs = 0;   // players nearer than lodPx (pixels per metre) get full detail; raised on slow devices
+function drawCricketer(pr, kit) {
+  const j = pr.j, S = p => { const c = toCam(p); if (c[2] <= NEAR) return null; const q = proj(c); return { x: q[0], y: q[1], s: focal / c[2], z: c[2] }; };
+  const hd = S(j.head); if (!hd) return;
+  const ol = clamp(0.012 * hd.s, 0.7, 2.6), seed = hashStr(pr.pid || 'x'), lod = hd.s < lodPx;   // far away: flat colours, no small details
+  const skin = SKINS2D[seed % SKINS2D.length], hair = ['#1b1410', '#2a1d14', '#120d0a', '#3a2718'][seed % 4];
+  const up = sub(j.neck, j.pelvis), fwd = norm(cross(sub(j.shL, j.shR), up)), toCamDir = norm(sub(cam.pos, j.head));
+  const look = norm(pr.look ? [pr.look[0], 0, pr.look[2]] : [fwd[0], 0, fwd[2]]);
+  const LIGHT = [-0.55, -0.83], parts = [];
+  const hex = c => (typeof c === 'string' && c[0] === '#' && c.length === 7) ? c : '#888888';
+
+  // a bone's frame on screen; `front` (world) says which side is the front, k = how side-on that front is to us
+  const frame = (a, b, front) => {
+    const A = S(a), B = S(b); if (!A || !B) return null;
+    const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy) || 1e-3;
+    let nx = -dy / L, ny = dx / L, k = 0;
+    if (front) {
+      const m = lerp3(a, b, 0.5), M = S(m), Fp = S(add(m, mul(norm(front), 0.1)));
+      if (M && Fp) { const d = ((Fp.x - M.x) * nx + (Fp.y - M.y) * ny) / (0.1 * M.s); k = clamp(Math.abs(d), 0, 1); if (d < 0) { nx = -nx; ny = -ny; } }
+    }
+    return { A, B, dx, dy, L, ux: dx / L, uy: dy / L, nx, ny, k, z: (A.z + B.z) / 2 };
+  };
+  const LP = (F, u, v, m = 0) => { const s = lerp(F.A.s, F.B.s, clamp(u, 0, 1)); return [F.A.x + F.dx * u + F.nx * v * s + F.ux * m * s, F.A.y + F.dy * u + F.ny * v * s + F.uy * m * s]; };
+  // an outline from a width profile [[u, front, back], ...] with rounded ends (caps in metres)
+  const prof = (F, P, c0 = 0.03, c1 = 0.03, keepK) => {
+    const w = (a, b) => keepK ? [a, b] : [lerp((a + b) / 2, a, F.k), lerp((a + b) / 2, b, F.k)], pts = [];
+    for (const [u, a, b] of P) pts.push(LP(F, u, w(a, b)[0]));
+    const e = P[P.length - 1], we = w(e[1], e[2]);
+    pts.push(LP(F, e[0], we[0] * 0.6, c1 * 0.8), LP(F, e[0], 0, c1), LP(F, e[0], -we[1] * 0.6, c1 * 0.8));
+    for (let i = P.length - 1; i >= 0; i--) { const [u, a, b] = P[i]; pts.push(LP(F, u, -w(a, b)[1])); }
+    const f = P[0], wf = w(f[1], f[2]);
+    pts.push(LP(F, f[0], -wf[1] * 0.6, -c0 * 0.8), LP(F, f[0], 0, -c0), LP(F, f[0], wf[0] * 0.6, -c0 * 0.8));
+    return pts;
+  };
+  // fill the current path with a lit-to-shadow gradient across the bone
+  const shade = (F, col, r = 0.08, gloss) => {
+    col = hex(col);
+    if (lod) { ctx.fillStyle = col; ctx.fill(); return; }
+    const mx = (F.A.x + F.B.x) / 2, my = (F.A.y + F.B.y) / 2, R = r * (F.A.s + F.B.s) / 2;
+    let nx = -F.uy, ny = F.ux; if (nx * LIGHT[0] + ny * LIGHT[1] < 0) { nx = -nx; ny = -ny; }
+    const g = ctx.createLinearGradient(mx + nx * R, my + ny * R, mx - nx * R, my - ny * R);
+    g.addColorStop(0, tint(col, gloss ? 0.45 : 0.2)); g.addColorStop(gloss ? 0.18 : 0.25, tint(col, 0.06)); g.addColorStop(0.5, col);
+    g.addColorStop(0.66, tint(col, -0.12)); g.addColorStop(1, tint(col, -0.34));
+    ctx.fillStyle = g; ctx.fill();
+  };
+  const edge = (col, w = 0.6) => { ctx.strokeStyle = tint(hex(col), -0.5); ctx.lineWidth = Math.max(0.5, ol * w); ctx.lineJoin = 'round'; ctx.stroke(); };
+  const lineIn = (F, pts, col, w, alpha = 1) => {   // a detail line in a bone's frame: pts [[u, v], ...]
+    ctx.globalAlpha = alpha; ctx.strokeStyle = col; ctx.lineWidth = Math.max(0.4, w * (F.A.s + F.B.s) / 2); ctx.lineCap = 'round';
+    ctx.beginPath(); pts.forEach((p, i) => { const q = LP(F, p[0], p[1]); i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); }); ctx.stroke(); ctx.globalAlpha = 1;
+  };
+  const part = (z, path, paint, noOutline) => parts.push({ z, path, paint, noOutline });
+  const limb = (F, P, col, o = {}) => {
+    if (!F) return; const pts = prof(F, P, o.c0, o.c1, o.keepK);
+    part(F.z + (o.dz || 0), () => splinePath(pts), () => { shade(F, col, o.r || 0.08, o.gloss); edge(col); if (o.after && !lod) { ctx.save(); splinePath(pts); ctx.clip(); o.after(F); ctx.restore(); } });
+  };
+
+  // ---------------- legs
+  const bodyFwd = [fwd[0], 0, fwd[2]];
+  for (const side of ['L', 'R']) {
+    const hip = j['hip' + side], knee = j['knee' + side], foot = j['foot' + side], ank = add(foot, [0, 0.08, 0]);
+    const kneeOut = sub(knee, lerp3(hip, ank, 0.5)), legFront = len(kneeOut) > 0.03 ? kneeOut : bodyFwd;
+    const fd = norm(j['footDir' + side] ? [j['footDir' + side][0], 0, j['footDir' + side][2]] : (len(bodyFwd) > 0.1 ? bodyFwd : [0, 0, 1]));
+    // thigh and shin in the trousers, with a fold behind the knee
+    limb(frame(hip, knee, legFront), [[0, 0.082, 0.088], [0.3, 0.082, 0.076], [0.65, 0.07, 0.064], [1, 0.058, 0.06]], kit.pants, { c0: 0.05, c1: 0.04,
+      after: F => { lineIn(F, [[0.55, -0.06], [0.8, -0.03], [0.95, -0.05]], tint(hex(kit.pants), -0.4), 0.006, 0.5); lineIn(F, [[0.15, 0.07], [0.4, 0.05]], tint(hex(kit.pants), 0.3), 0.005, 0.5); } });
+    limb(frame(knee, ank, legFront), [[0, 0.062, 0.062], [0.3, 0.055, 0.072], [0.7, 0.046, 0.05], [1, 0.042, 0.042]], kit.pants, { c0: 0.03, c1: 0.02, dz: 0.005 });
+    // the shoe: white upper, a dark sole, a stripe in the trim colour
+    const heel = add(foot, mul(fd, -0.07)), toe = add(foot, mul(fd, 0.2)), SF = frame(heel, toe, [0, 1, 0]);
+    if (SF) limb(SF, [[0, 0.1, 0.012], [0.18, 0.11, 0.012], [0.5, 0.075, 0.012], [0.8, 0.05, 0.012], [1, 0.035, 0.01]], '#f4f4f0', { c0: 0.015, c1: 0.02, r: 0.06, dz: -0.01,
+      after: F => { const v = F.k > 0.4 ? 1 : 0; lineIn(F, [[-0.05, -0.006], [1.05, -0.006]], '#30343c', 0.02, 1);
+        if (v) lineIn(F, [[0.2, 0.06], [0.55, 0.035], [0.8, 0.025]], hex(kit.trim), 0.014, 0.9); } });
+    // batting pad: knee roll, vertical bolsters, straps, the instep flap
+    if (kit.pads) {
+      const top = add(knee, mul(norm(sub(knee, ank)), 0.16)), PF = frame(top, add(ank, [0, -0.04, 0]), legFront);
+      if (PF) {
+        const W = (f, b) => [lerp(0.125, f, PF.k), lerp(0.125, b, PF.k)];
+        const P = [[0, ...W(0.07, 0.03)], [0.1, ...W(0.12, 0.05)], [0.22, ...W(0.13, 0.05)], [0.3, ...W(0.12, 0.05)], [0.55, ...W(0.125, 0.05)], [0.85, ...W(0.12, 0.05)], [1, ...W(0.13, 0.03)]];
+        limb(PF, P, '#f6f4ec', { keepK: true, c0: 0.03, c1: 0.03, dz: -0.035, r: 0.12, gloss: true, after: F => {
+          const rib = '#c9c6bb', k = F.k;
+          lineIn(F, [[0.3, -0.13], [0.3, 0.14]], rib, 0.006, 0.9);   // the knee roll's seam
+          for (const L of [-0.075, -0.025, 0.025, 0.075]) { const v = lerp(L, 0.035 + L * 0.45, k); lineIn(F, [[0.33, v], [0.97, v * 0.95]], rib, 0.006, 0.9); }
+          for (const L of [-0.06, 0, 0.06]) { const v = lerp(L, 0.03 + L * 0.4, k); lineIn(F, [[0.04, v], [0.27, v]], rib, 0.005, 0.8); }
+          for (const u of [0.48, 0.78]) {   // straps wrap round the back of the leg
+            lineIn(F, [[u, -0.16], [u + 0.01, 0.0], [u, 0.15]], tint(hex(kit.trim), -0.1), 0.028, 1);
+            lineIn(F, [[u - 0.01, -0.16], [u - 0.005, 0.15]], 'rgba(255,255,255,0.35)', 0.005, 1);
+          }
+          lineIn(F, [[0.2, lerp(-0.1, 0.0, k)], [0.2, lerp(0.1, 0.1, k)]], hex(kit.trim), 0.02, 0.9);   // a logo band on the knee roll
+        } });
+      }
+    }
+  }
+  // hips in the trousers, so the legs join the body
+  { const HF = frame(sub(j.pelvis, mul(norm(up), 0.1)), add(j.pelvis, mul(norm(up), 0.08)), bodyFwd);
+    const HA = S(j.pelvis), HB = S(add(j.pelvis, mul(norm(sub(j.hipL, j.hipR)), 0.1)));
+    const hc = HA && HB ? clamp(Math.hypot(HB.x - HA.x, HB.y - HA.y) / (0.1 * HA.s), 0, 1) : 1, hs = Math.sqrt(1 - hc * hc), e = (a, d) => Math.hypot(a * hc, d * hs);
+    if (HF) limb(HF, [[0, e(0.16, 0.09), e(0.16, 0.11)], [0.5, e(0.165, 0.1), e(0.165, 0.12)], [1, e(0.155, 0.1), e(0.155, 0.1)]], kit.pants, { keepK: true, c0: 0.04, c1: 0.02, dz: 0.03 }); }
+
+  // ---------------- torso: an ellipse cross-section turned toward us, chest at the front, shoulder blades behind
+  const base = sub(j.pelvis, mul(norm(up), 0.02)), neckB = add(j.neck, mul(norm(up), 0.0));
+  const TF = frame(base, neckB, bodyFwd);
+  if (TF) {
+    const lat = sub(j.shL, j.shR), LA = S(lerp3(j.shL, j.shR, 0.5)), LB = S(add(lerp3(j.shL, j.shR, 0.5), mul(norm(lat), 0.1)));
+    const cl = LA && LB ? clamp(Math.hypot(LB.x - LA.x, LB.y - LA.y) / (0.1 * LA.s), 0, 1) : 1, sl = Math.sqrt(1 - cl * cl);
+    const ext = (a, d) => Math.hypot(a * cl, d * sl);
+    const P = [[0.02, 0.165, 0.1, 0.12], [0.22, 0.155, 0.1, 0.1], [0.45, 0.15, 0.11, 0.09], [0.68, 0.175, 0.13, 0.1], [0.86, 0.205, 0.11, 0.11], [0.97, 0.17, 0.08, 0.08]]
+      .map(([u, a, f, b]) => [u, ext(a, f), ext(a, b)]);
+    const facing = dot(fwd, toCamDir), pts = prof(TF, P, 0.02, 0.05, true);
+    part(TF.z + 0.01, () => splinePath(pts), () => {
+      shade(TF, kit.shirt, 0.2); edge(kit.shirt);
+      if (lod) return;
+      ctx.save(); splinePath(pts); ctx.clip();
+      const S2 = (u, v) => LP(TF, u, v), pl = tint(hex(kit.shirt), -0.45);
+      // shading toward the belt
+      const g0 = S2(0.55, 0), g1 = S2(0.08, 0), gg = ctx.createLinearGradient(g0[0], g0[1], g1[0], g1[1]);
+      gg.addColorStop(0, 'rgba(0,0,0,0)'); gg.addColorStop(1, 'rgba(0,0,0,0.18)'); ctx.fillStyle = gg; ctx.fill();
+      // trousers and belt at the waist
+      ctx.fillStyle = hex(kit.pants); ctx.beginPath(); [S2(0.13, -0.4), S2(0.13, 0.4), S2(-0.2, 0.4), S2(-0.2, -0.4)].forEach((q, i) => i ? ctx.lineTo(...q) : ctx.moveTo(...q)); ctx.fill();
+      lineIn(TF, [[0.13, -0.4], [0.13, 0.4]], '#22252c', 0.03, 1);
+      // a trim panel down the side seam, folds at the waist
+      const sx = facing > 0 ? -1 : 1, side = P.map(([u, f, b]) => [u, sx > 0 ? f * 0.8 : -b * 0.8]);
+      lineIn(TF, side.slice(1, 5), hex(kit.trim), 0.035, 0.9);
+      for (const [u0, v0, u1, v1] of [[0.18, -0.06, 0.32, -0.02], [0.2, 0.05, 0.36, 0.08], [0.6, 0.1, 0.72, 0.14]]) lineIn(TF, [[u0, v0], [u1, v1]], pl, 0.006, 0.35);
+      if (facing > 0.25) {   // front: collar, buttons, a shield badge
+        lineIn(TF, [[0.97, -0.08], [0.86, 0], [0.97, 0.08]], hex(kit.trim), 0.025, 1);
+        for (const u of [0.8, 0.72]) { const q = S2(u, 0); ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.beginPath(); ctx.arc(q[0], q[1], Math.max(0.6, 0.008 * TF.A.s), 0, 7); ctx.fill(); }
+        const b = S2(0.72, 0.09 * cl), r = 0.032 * TF.B.s; ctx.fillStyle = hex(kit.trim);
+        ctx.beginPath(); ctx.moveTo(b[0] - r, b[1] - r); ctx.lineTo(b[0] + r, b[1] - r); ctx.lineTo(b[0] + r, b[1] + r * 0.2); ctx.quadraticCurveTo(b[0] + r * 0.4, b[1] + r * 1.1, b[0], b[1] + r * 1.3); ctx.quadraticCurveTo(b[0] - r * 0.4, b[1] + r * 1.1, b[0] - r, b[1] + r * 0.2); ctx.fill();
+      } else if (facing < -0.35 && TF.A.s > 40) {   // back: the shirt number
+        const n = 1 + seed % 98, q = S2(0.6, 0);
+        ctx.translate(q[0], q[1]); ctx.rotate(Math.atan2(TF.dx, -TF.dy));
+        ctx.font = '800 ' + Math.round(0.19 * TF.B.s) + 'px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.lineWidth = ol * 1.4; ctx.strokeStyle = tint(hex(kit.trim), -0.3); ctx.strokeText(n, 0, 0); ctx.fillStyle = '#ffffff'; ctx.fillText(n, 0, 0);
+      }
+      ctx.restore();
+    });
+  }
+
+  // ---------------- arms: skin, a short sleeve with a trim hem, gloves or hands
+  for (const side of ['L', 'R']) {
+    const sh = j['sh' + side], el = j['el' + side], hand = j['hand' + side];
+    const elOut = sub(el, lerp3(sh, hand, 0.5)), armFront = len(elOut) > 0.03 ? mul(elOut, -1) : bodyFwd;
+    const UF = frame(sh, el, armFront), FF = frame(el, hand, armFront);
+    limb(UF, [[0, 0.06, 0.06], [0.35, 0.058, 0.055], [0.75, 0.048, 0.046], [1, 0.044, 0.044]], skin, { c0: 0.03, c1: 0.03 });
+    limb(FF, [[0, 0.044, 0.044], [0.25, 0.05, 0.047], [0.7, 0.038, 0.036], [0.9, 0.032, 0.032]], skin, { c0: 0.02, c1: 0.02, dz: -0.005 });
+    if (UF) limb(UF, [[-0.05, 0.078, 0.078], [0.3, 0.075, 0.072], [0.62, 0.07, 0.068]], kit.shirt, { c0: 0.05, c1: 0.012, dz: -0.006,
+      after: F => { lineIn(F, [[0.6, -0.1], [0.6, 0.1]], hex(kit.trim), 0.022, 1); lineIn(F, [[0.2, 0.03], [0.45, 0.05]], tint(hex(kit.shirt), -0.4), 0.005, 0.4); } });
+    if (kit.gloves) {   // batting glove: a padded cuff, then a fist with finger rolls and a thumb
+      const fa = norm(sub(hand, el)), GF = frame(sub(hand, mul(fa, 0.07)), add(hand, mul(fa, 0.07)), armFront);
+      limb(GF, [[0, 0.055, 0.055], [0.3, 0.06, 0.06], [0.45, 0.068, 0.066], [0.75, 0.072, 0.07], [1, 0.06, 0.055]], '#f6f4ec', { c0: 0.01, c1: 0.025, dz: -0.04, r: 0.07, gloss: true,
+        after: F => { lineIn(F, [[0.3, -0.09], [0.3, 0.09]], hex(kit.trim), 0.03, 1);
+          for (const u of [0.58, 0.72, 0.86]) lineIn(F, [[u, -0.02], [u, 0.09]], '#b9b5a8', 0.005, 0.9);
+          lineIn(F, [[0.5, -0.03], [0.75, -0.07]], '#d6d2c6', 0.02, 1); } });
+    } else {
+      const fa = norm(sub(hand, el)), GF = frame(sub(hand, mul(fa, 0.03)), add(hand, mul(fa, 0.07)), armFront);
+      limb(GF, [[0, 0.036, 0.036], [0.4, 0.048, 0.045], [1, 0.04, 0.035]], skin, { c0: 0.01, c1: 0.02, dz: -0.01 });
+    }
+  }
+
+  // ---------------- the bat: rubber grip, shoulders, willow blade with grain, sticker and toe
+  if (pr.bat) {
+    const h = pr.bat.hands, t = pr.bat.tip, ax = norm(sub(t, h)), top = sub(h, mul(ax, 0.13));
+    const BF = frame(top, t, null);
+    if (BF) {
+      let wv = pr.bat.width ? norm(pr.bat.width) : cross(ax, [0, 1, 0]); if (len(wv) < 0.2) wv = [1, 0, 0]; wv = norm(wv);
+      const M = S(lerp3(h, t, 0.6)), Mw = S(add(lerp3(h, t, 0.6), mul(wv, 0.1)));
+      const cw = M && Mw ? clamp(Math.hypot(Mw.x - M.x, Mw.y - M.y) / (0.1 * M.s), 0, 1) : 1;
+      const hw = Math.hypot(0.054 * cw, 0.03 * Math.sqrt(1 - cw * cw));
+      const gripEnd = 0.31, P = [[0, 0.017, 0.017], [gripEnd, 0.016, 0.016], [0.34, hw * 0.75, hw * 0.75], [0.38, hw, hw], [0.8, hw, hw], [1, hw * 0.97, hw * 0.97]];
+      const pts = prof(BF, P, 0.012, 0.012, true);
+      part(S(lerp3(h, t, 0.55)).z + 0.02, () => splinePath(pts), () => {
+        shade(BF, '#e9d39f', hw + 0.01); edge('#e9d39f', 0.5);
+        ctx.save(); splinePath(pts); ctx.clip();
+        lineIn(BF, [[0, 0], [gripEnd + 0.01, 0]], hex(kit.grip || '#2a2f3a'), 0.04, 1);   // the grip, with its spiral
+        for (let u = 0.02; u < gripEnd; u += 0.035) lineIn(BF, [[u, -0.02], [u + 0.02, 0.02]], 'rgba(255,255,255,0.25)', 0.004, 1);
+        for (const v of [-0.6, -0.2, 0.25, 0.6]) lineIn(BF, [[0.42, v * hw], [0.98, v * hw * 0.98]], 'rgba(150,105,50,0.35)', 0.003, 1);   // grain
+        if (cw < 0.75) lineIn(BF, [[0.36, -hw * 0.75], [1, -hw * 0.75]], 'rgba(150,105,50,0.55)', hw * 0.5 * (1 - cw), 1);   // the edge
+        const st = (u0, u1, col, a) => { ctx.globalAlpha = a; ctx.fillStyle = col; ctx.beginPath(); [LP(BF, u0, -hw), LP(BF, u0, hw), LP(BF, u1, hw), LP(BF, u1, -hw)].forEach((q, i) => i ? ctx.lineTo(...q) : ctx.moveTo(...q)); ctx.fill(); ctx.globalAlpha = 1; };
+        st(0.4, 0.55, hex(kit.trim), cw); st(0.43, 0.52, '#ffffff', cw * 0.85); st(0.96, 1.02, '#3a3026', 0.7);
+        ctx.restore();
+      });
+    }
+  }
+
+  // ---------------- neck and head: skin, face, then hair or a helmet with its peak, ear guards and grille
+  limb(frame(j.neck, lerp3(j.neck, j.head, 0.7), bodyFwd), [[0, 0.055, 0.055], [1, 0.05, 0.05]], skin, { c0: 0.01, c1: 0.01, dz: 0.02 });
+  const H = S(add(j.head, [0, 0.03, 0]));
+  if (H) {
+    const r = 0.118 * H.s, lx = dot(look, cr), lz = dot(look, toCamDir), phi = Math.atan2(lx, lz);
+    const at = (al, y, d = 1) => [H.x + Math.sin(al + phi) * d * r, H.y + y * r], vis = al => Math.cos(al + phi);
+    const capPath = (R, yEdge, oy = 0) => {   // a cap over the skull down to an edge that runs round the head
+      ctx.beginPath(); const N = 24, a0 = -Math.PI / 2 - phi;
+      for (let i = 0; i <= N; i++) { const al = a0 + Math.PI * i / N, p = [H.x + Math.sin(al + phi) * R * r, H.y + (yEdge(al) + oy) * r]; i ? ctx.lineTo(...p) : ctx.moveTo(...p); }
+      const yl = yEdge(a0) + oy, yr = yEdge(a0 + Math.PI) + oy, cy0 = H.y + oy * r;
+      ctx.arc(H.x, cy0, R * r, Math.atan2(yr * r - oy * r, R * r), Math.atan2(yl * r - oy * r, -R * r), true); ctx.closePath();
+    };
+    part(H.z - 0.01, () => { ctx.beginPath(); ctx.ellipse(H.x + Math.sin(phi) * r * 0.06, H.y + r * 0.04, r * 0.9, r * 1.04, 0, 0, Math.PI * 2); }, () => {
+      const g = ctx.createRadialGradient(H.x - r * 0.35, H.y - r * 0.35, r * 0.1, H.x, H.y, r * 1.1);
+      g.addColorStop(0, tint(skin, 0.15)); g.addColorStop(0.6, skin); g.addColorStop(1, tint(skin, -0.3)); ctx.fillStyle = g; ctx.fill(); edge(skin);
+      // ears (under the helmet's guards for a batter)
+      if (!kit.helmet) for (const al of [-Math.PI / 2, Math.PI / 2]) if (vis(al) > -0.35) {
+        const p = at(al, 0.08, 0.92); ctx.fillStyle = tint(skin, -0.08); ctx.beginPath(); ctx.ellipse(p[0], p[1], r * 0.16 * Math.max(0.35, 1 - Math.abs(vis(al))), r * 0.22, 0, 0, 7); ctx.fill(); edge(skin, 0.4);
+      }
+      // the face
+      if (vis(0) > -0.1 && !lod) {
+        for (const al of [-0.36, 0.36]) if (vis(al) > 0.05) {
+          const p = at(al, 0.02, 0.96), sx = Math.max(0.3, vis(al));
+          ctx.fillStyle = '#f4efe6'; ctx.beginPath(); ctx.ellipse(p[0], p[1], r * 0.11 * sx, r * 0.075, 0, 0, 7); ctx.fill();
+          ctx.fillStyle = '#20150e'; ctx.beginPath(); ctx.ellipse(p[0] + Math.sin(phi) * r * 0.03, p[1], r * 0.055 * sx, r * 0.065, 0, 0, 7); ctx.fill();
+          ctx.strokeStyle = tint(hair, 0.1); ctx.lineWidth = Math.max(0.6, r * 0.07); ctx.lineCap = 'round';
+          const b0 = at(al - 0.16, -0.17, 0.97), b1 = at(al + 0.16, -0.19, 0.97); ctx.beginPath(); ctx.moveTo(...b0); ctx.lineTo(...b1); ctx.stroke();
+        }
+        ctx.strokeStyle = tint(skin, -0.35); ctx.lineWidth = Math.max(0.5, r * 0.05);
+        const n0 = at(0, 0.05, 1.0), n1 = at(0, 0.3, 1.1), n2 = at(-0.12, 0.33, 1.0); ctx.beginPath(); ctx.moveTo(...n0); ctx.lineTo(...n1); ctx.lineTo(...n2); ctx.stroke();
+        const m0 = at(-0.2, 0.55, 0.93), m1 = at(0.2, 0.55, 0.93); ctx.strokeStyle = '#5a2e22'; ctx.beginPath(); ctx.moveTo(...m0); ctx.quadraticCurveTo(...at(0, 0.6, 0.97), ...m1); ctx.stroke();
+      }
+      if (kit.cap) {   // a team cap with a peak
+        const cc = hex(kit.cap), yC = al => { const c = Math.cos(al); return c > 0 ? lerp(0.05, -0.3, c) : lerp(0.05, 0.25, -c); };
+        capPath(1.08, yC, -0.06); ctx.fillStyle = cc; ctx.fill(); ctx.strokeStyle = OUTLINE2D; ctx.lineWidth = ol; ctx.stroke();
+        if (!lod) { ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.beginPath(); ctx.ellipse(H.x - r * 0.35, H.y - r * 0.62, r * 0.28, r * 0.12, -0.5, 0, 7); ctx.fill(); }
+        if (vis(0) > -0.3) { ctx.beginPath(); for (let i = 0; i <= 10; i++) { const al = -1 + 2 * i / 10; const p = at(al, -0.32, 1.06); i ? ctx.lineTo(...p) : ctx.moveTo(...p); }
+          for (let i = 10; i >= 0; i--) { const al = -1 + 2 * i / 10; ctx.lineTo(...at(al, -0.22, 1.06 + 0.4 * Math.cos(al * 1.3))); }
+          ctx.closePath(); ctx.fillStyle = tint(cc, -0.3); ctx.fill(); ctx.stroke(); }
+        return;
+      }
+      if (!kit.helmet) {   // short hair with a hairline, sideburns and the back of the head
+        const yE = al => { const c = Math.cos(al); return c > 0.2 ? lerp(-0.05, -0.5, (c - 0.2) / 0.8) : lerp(0.55, -0.05, (c + 1) / 1.2); };
+        capPath(1.05, yE, 0); const g2 = ctx.createRadialGradient(H.x - r * 0.3, H.y - r * 0.6, r * 0.1, H.x, H.y, r * 1.2);
+        g2.addColorStop(0, tint(hair, 0.25)); g2.addColorStop(1, hair); ctx.fillStyle = g2; ctx.fill(); edge(hair, 0.5);
+        return;
+      }
+      // ---- the helmet
+      const hc = hex(kit.helmet), yH = al => { const c = Math.cos(al); return c > 0 ? lerp(0.25, -0.3, c) : lerp(0.25, 0.55, -c); };
+      capPath(1.12, yH, -0.04);
+      const g3 = ctx.createRadialGradient(H.x - r * 0.4, H.y - r * 0.6, r * 0.05, H.x, H.y - r * 0.1, r * 1.25);
+      g3.addColorStop(0, tint(hc, 0.55)); g3.addColorStop(0.25, tint(hc, 0.12)); g3.addColorStop(0.7, hc); g3.addColorStop(1, tint(hc, -0.4));
+      ctx.fillStyle = g3; ctx.fill(); ctx.strokeStyle = OUTLINE2D; ctx.lineWidth = ol; ctx.stroke();
+      if (lod) return;
+      // vents and a badge on the shell
+      for (const al of [-0.5, 0.5, 1.6, -1.6]) if (vis(al) > 0.15) { const p = at(al, -0.72, 0.8); ctx.fillStyle = tint(hc, -0.55); ctx.beginPath(); ctx.ellipse(p[0], p[1], r * 0.1 * vis(al), r * 0.05, 0, 0, 7); ctx.fill(); }
+      if (vis(0) > 0.2) { const p = at(0, -0.45, 1.05), b = r * 0.13; ctx.fillStyle = hex(kit.trim === hc ? '#ffffff' : kit.trim); ctx.beginPath(); ctx.moveTo(p[0] - b, p[1] - b); ctx.lineTo(p[0] + b, p[1] - b); ctx.lineTo(p[0] + b, p[1]); ctx.quadraticCurveTo(p[0], p[1] + b * 1.4, p[0] - b, p[1]); ctx.closePath(); ctx.fill(); }
+      // the neck guard at the back
+      if (vis(Math.PI) > 0) { const p = at(Math.PI, 0.6, 0.85); ctx.fillStyle = tint(hc, -0.25); ctx.beginPath(); ctx.ellipse(p[0], p[1], r * 0.55 * vis(Math.PI), r * 0.13, 0, 0, 7); ctx.fill(); }
+      // ear guards with holes
+      for (const al of [-1.45, 1.45]) if (vis(al) > -0.2) {
+        const p = at(al, 0.22, 1.02), sx = Math.max(0.25, Math.abs(vis(al)));
+        ctx.fillStyle = tint(hc, -0.08); ctx.beginPath(); ctx.ellipse(p[0], p[1], r * 0.26 * sx, r * 0.34, 0, 0, 7); ctx.fill(); ctx.strokeStyle = OUTLINE2D; ctx.lineWidth = ol * 0.7; ctx.stroke();
+        ctx.fillStyle = tint(hc, -0.6); for (const dy of [-0.1, 0.06, 0.2]) { ctx.beginPath(); ctx.arc(p[0], p[1] + dy * r, r * 0.035, 0, 7); ctx.fill(); }
+      }
+      // the peak
+      const pk = []; for (let i = 0; i <= 12; i++) { const al = -1.15 + 2.3 * i / 12; pk.push([al, 1.0 + 0.3 * Math.cos(al * 1.2)]); }
+      ctx.beginPath(); pk.forEach(([al], i) => { const p = at(al, -0.33, 1.06); i ? ctx.lineTo(...p) : ctx.moveTo(...p); });
+      for (let i = pk.length - 1; i >= 0; i--) { const [al, d] = pk[i]; ctx.lineTo(...at(al, -0.2 + 0.08 * Math.cos(al), 1.06 + (d - 1) * 1.1)); }
+      ctx.closePath(); ctx.fillStyle = tint(hc, -0.3); ctx.fill(); ctx.strokeStyle = OUTLINE2D; ctx.lineWidth = ol * 0.8; ctx.stroke();
+      // the grille: three bars round the face, three uprights, a chin guard
+      ctx.lineCap = 'round';
+      const bar = (pts, w) => {
+        for (const [col, ww] of [['#3b4048', w * 1.7], ['#c3c8d0', w]]) {
+          ctx.strokeStyle = col; ctx.lineWidth = Math.max(0.5, ww * r); ctx.beginPath(); let on = false;
+          for (const [al, y, d] of pts) { const p = at(al, y, d); if (vis(al) > -0.05) { on ? ctx.lineTo(...p) : ctx.moveTo(...p); on = true; } else on = false; }
+          ctx.stroke();
+        }
+      };
+      const arcPts = (y, d, a) => { const o = []; for (let i = 0; i <= 16; i++) { const al = -a + 2 * a * i / 16; o.push([al, y + 0.05 * Math.cos(al), d]); } return o; };
+      bar(arcPts(0.1, 1.24, 1.25), 0.05); bar(arcPts(0.38, 1.2, 1.1), 0.05); bar(arcPts(0.62, 1.08, 0.75), 0.05);
+      for (const al of [-0.45, 0, 0.45]) bar([[al, -0.2, 1.2], [al, 0.1, 1.24], [al, 0.4, 1.2], [al * 0.8, 0.66, 1.07]], 0.045);
+    });
+  }
+
+  // ---------------- draw: one outline pass for the whole silhouette, then the parts back to front
+  parts.sort((a, b) => b.z - a.z);
+  ctx.lineJoin = 'round';
+  for (const p of parts) { if (p.noOutline) continue; p.path(); ctx.strokeStyle = OUTLINE2D; ctx.lineWidth = ol * 2.2; ctx.stroke(); }
+  for (const p of parts) { p.path(); p.paint(); }
+  ctx.lineCap = 'butt'; ctx.globalAlpha = 1;
 }
 
 // ----------------------------------------------------------------------- posed bodies: batting strokes and the bowling action
@@ -2601,7 +2886,7 @@ function update(dt) {
   if (phase === 'result' && phaseT > (celebrate && (celebrate.out || celebrate.milestone) ? 3.0 : 2.1)) afterBall();
 
   // camera
-  let tp = BOWL_CAM.pos, tt = BOWL_CAM.tgt, tf = BOWL_CAM.fov, rate = 2.5;
+  const HC = homeCam(); let tp = HC.pos, tt = HC.tgt, tf = HC.fov, rate = 2.5;
   const followDelay=REFERENCE_VIEW ? (ball?.decision?.loft||ball?.swing?.loft ? .12 : .45) : .3;
   if (camMode === 'chase' && ball && ball.play && ball.play.t > followDelay) {
     // like TV: a camera high in the stands pans and zooms with the ball; it cuts to the other end when the ball goes behind
@@ -2679,11 +2964,11 @@ function render() {
   for (const pr of people()) push(pr.at, () => {
     shadow(pr.at, 0.45);
     if (pr.team === 'bat') {
-      drawFigure(pr.j, KIT.bat, { pads: KIT.pads, helmet: pr.helmet, gloves: pr.gloves ? '#ffffff' : null });
-      if (pr.bat.carry) line3(pr.bat.hands, pr.bat.tip, 0.07, '#d9b77a');
-      else { line3(pr.bat.hands, lerp3(pr.bat.hands, pr.bat.tip, 0.3), 0.04, '#3a2a1a'); line3(lerp3(pr.bat.hands, pr.bat.tip, 0.3), pr.bat.tip, 0.1, '#d9b77a'); }
-    } else if (pr.keeper) drawFigure(pr.j, fc, { legs: fd, gloves: '#f3efe4', pads: '#f3efe4', helmet: fd });
-    else drawFigure(pr.j, fc, { legs: fd });
+      const t = inn ? inn.bat : null;
+      drawCricketer(pr, { shirt: t ? t.col : '#3d7dff', pants: t ? t.dark : '#173f99', trim: t ? t.dark : '#173f99', pads: true, gloves: true, helmet: pr.helmet || '#18245a' });
+    } else if (pr.bowler) drawCricketer(pr, { shirt: fc, pants: fd, trim: fd });
+    else if (pr.keeper) drawCricketer(pr, { shirt: fc, pants: fd, trim: fd, pads: true, gloves: true, helmet: fd });
+    else drawCricketer(pr, { shirt: fc, pants: fd, trim: fd, cap: fd });
   });
   // the ball
   const bp = ballPos();
@@ -2704,7 +2989,11 @@ function render() {
       tr.push(bp.slice()); if (tr.length > 10) tr.shift();
     }
   }
+  const t0 = performance.now();
   items.sort((a, b) => b.d - a.d).forEach(i => i.draw());
+  // keep slow devices smooth: when the players take long to draw, fewer of them get full detail
+  drawMs = lerp(drawMs, performance.now() - t0, 0.05);
+  if (drawMs > 9) lodPx = Math.min(400, lodPx * 1.02); else if (drawMs < 4 && lodPx > 24) lodPx = Math.max(24, lodPx / 1.01);
   if (ball && ball.trail && ball.trail.length > 1) {
     for (let i = 1; i < ball.trail.length; i++) {
       ctx.globalAlpha = i / ball.trail.length * 0.5;
@@ -2809,7 +3098,7 @@ function livePeople() {
     : hurt && f.bowler ? headFig(pos, face, phaseT - 0.15, 3) : null;
   if (!afterHit) {
     const bw = bowlerState(), rj = react({ bowler: true }, bw.pos, Math.PI);
-    out.push({ j: rj || bw.j, at: bw.pos, team: 'bowl', pid: fid(inn ? inn.bowler : 0), look: null });
+    out.push({ j: rj || bw.j, at: bw.pos, team: 'bowl', bowler: true, pid: fid(inn ? inn.bowler : 0), look: null });
   }
   const wi = walkIn();
   for (const [fi, f] of fielders.entries()) {
@@ -2823,7 +3112,7 @@ function livePeople() {
     const rj = f.run < 0.3 ? react(f, pos, f.face) : null;
     const startBlend=REFERENCE_VIEW && f.target && ball?.play?smooth(clamp((ball.play.t-(f.keeper ? .12 : .32))/.18,0,1)):1;
     out.push({ j: rj || figure(pos, f.face, { run:REFERENCE_VIEW?run*startBlend:run, phase: ph,
-      gaitDistance:REFERENCE_VIEW && f.run>.9?f.phase*f.speed/11:undefined,crouch: wi.moving ? 0 : f.crouch, seed: fi + 1 }), at: pos, team: 'bowl', keeper: !!f.keeper,
+      gaitDistance:REFERENCE_VIEW && f.run>.9?f.phase*f.speed/11:undefined,crouch: wi.moving ? 0 : f.crouch, seed: fi + 1 }), at: pos, team: 'bowl', keeper: !!f.keeper, bowler: !!f.bowler,
                pid: fid(f.who), look: null });
   }
   return out;
