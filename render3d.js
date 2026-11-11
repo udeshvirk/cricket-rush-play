@@ -1396,6 +1396,7 @@ window.Cricket3D = function (G) {
     try {
       const gl2 = renderer.capabilities.isWebGL2;
       const c = new PP.EffectComposer(renderer, { frameBufferType: gl2 ? T.HalfFloatType : T.UnsignedByteType,
+                                                  stencilBuffer: true,   // gives the pass a 24-bit depth buffer: the default is 16-bit, too coarse at match-camera distance (heads showed through helmets, trousers through pads)
                                                   multisample: gl2 && !lowEnd ? Math.min(4, renderer.capabilities.maxSamples || 0) : 0 });
       c.addPass(new PP.RenderPass(scene, camera));
       if(presentationSlice && !lowEnd) {
@@ -1477,7 +1478,8 @@ window.Cricket3D = function (G) {
     camera.position.set(cam.pos[0], cam.pos[1], cam.pos[2]); camera.lookAt(cam.tgt[0], cam.tgt[1], cam.tgt[2]);
     // A long broadcast lens needs a tighter depth range: the old 0.3 m near
     // plane quantised close garment/hair surfaces into the same depth at 80 m.
-    const near = PRODUCTION && PRODUCTION.reference && cam.fov < 10 && cam.pos[2] > 60 ? 8 : .3;
+    // The near plane follows the camera's distance to what it looks at, so the depth buffer's precision goes where the players are.
+    const near = Math.max(.3, Math.min(12, Math.hypot(cam.pos[0] - cam.tgt[0], cam.pos[1] - cam.tgt[1], cam.pos[2] - cam.tgt[2]) * .22));
     if(camera.near !== near){camera.near=near;camera.updateProjectionMatrix();}
     if(portraitFocus) {
       portraitFocus.target.fromArray(cam.tgt);

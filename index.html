@@ -500,7 +500,7 @@
         want it to go: down the screen is straight, left is the off side, right is the leg side, up is behind you. A plain tap lets
         your timing choose. Loft goes in the air for more runs, but fielders can catch it. Watch the ball's shadow to judge the bounce.</p>
       <p class="how">Keyboard: hold <b>arrows</b> for the direction and press <b>S</b> to hit (S alone defends), <b>Shift</b> to loft,
-        <b>D</b> to step out, <b>A</b> to leave, <b>Q</b>/<b>E</b> to move across before the run-up.</p>
+        <b>D</b> to step out, <b>A</b> to leave, <b>left</b>/<b>right arrows</b> to move across before the run-up.</p>
       <div class="row"><button class="btn ghost" id="chaseBack" type="button">Back</button></div>
     </div>
   </div>
@@ -1376,7 +1376,7 @@ function strokeKeys(sw) {
       const fr = front(0.3, 1.26), bd = norm([0, -1, -0.28]);
       C = { ...R, fr, pel: [lerp(0.63, fr[0], 0.45), 0.8, 0.95], hy: -75, sy: -82, lean: 30, side: 14, h: at(bd, 0.5), bd, kpL: [-0.4, 0, 1] };
       F = sw.fam === 'push' ? { ...C, h: add(C.h, mul(dir, 0.2)), bd: norm([dir[0] * 0.5, -1, dir[2] * 0.3 - 0.1]) } : { ...C };
-      B.h = [0.25, 1.1, 0.82]; B.bd = norm([0.15, 0.6, -0.8]); tF = 0.35; break; }
+      B.h = [0.2, 1.12, 0.9]; B.bd = norm([-0.45, 0.75, -0.3]); tF = 0.35; break; }   // a short backlift out on the off side, where the camera sees it (it used to go behind the body)
     case 'bdef': case 'bdrive': {
       const bd = norm(sw.fam === 'bdef' ? [-.20,-1,.30] : [-.15,-1,.20]);
       // Shorten along the blade axis, rather than clamping only hand Y and
@@ -1388,13 +1388,13 @@ function strokeKeys(sw) {
     case 'cut': {
       const bd = norm([-0.95, -0.3, 0.15]);
       C = { ...R, fr: [0.52, 0, 1.08], bk: [0.3, 0, 0.6], pel: [0.42, 0.88, 0.70], hy: -95, sy: -92, lean: 22, side: -4, h: at(bd), bd, kpL: [-1, 0, 0.3], kpR: [-1, 0, 0] };
-      F = { ...C, sy: -105, h: [-0.05, 1.20, 1.0], bd: norm([-0.45, -0.55, -0.75]) };
-      B.h = [0.45, 1.5, 0.66]; B.bd = norm([0, 0.95, -0.3]); break; }
+      F = { ...C, sy: -100, h: [0.05, 1.32, 1.0], bd: norm([-0.5, 0.45, 0.75]) };   // the blade carries on round and up toward cover, in view
+      B.h = [0.28, 1.34, 0.72]; B.bd = norm([-0.5, 0.8, -0.3]); break; }   // backlift on the off side, not straight up behind the helmet
     case 'pull': {
       const bd = norm([-0.95, 0.05, 0.2]);
       C = { ...R, fr: [0.78, 0, 0.98], bk: [0.48, 0, 0.36], pel: [0.6, 0.9, 0.66], hy: -50, sy: -35, lean: 12, side: 0, h: at(bd), bd, kpL: [-0.3, 0, 1], kpR: [-1, 0, 0] };
       F = { ...C, hy: -20, sy: 20, h: [0.95, 1.58, 0.92], bd: norm([0.35, 0.35, -0.85]) };
-      B.h = [0.5, 1.5, 0.6]; B.bd = norm([0.2, 0.9, -0.35]); break; }
+      B.h = [0.3, 1.32, 0.68]; B.bd = norm([-0.45, 0.82, -0.36]); break; }
     case 'flick': {
       const fr = front(0.4, 1.28), bd = norm([0.12, -1, -0.05]);
       C = { ...R, fr, pel: [lerp(0.63, fr[0], 0.45), 0.82, 0.97], hy: -70, sy: -72, lean: 24, side: 10, h: at(bd), bd, kpL: [-0.4, 0, 1] };
@@ -1404,7 +1404,7 @@ function strokeKeys(sw) {
       const bd = norm([-0.9, -0.3, 0.25]);
       C = { ...R, fr: [0.75, 0, 1.25], pel: [0.66, 0.74, 0.86], hy: -45, sy: -30, lean: 28, side: 6, h: at(bd,.50), bd, kpL: [-0.2, 0, 1] };
       F = { ...C, hy: -10, sy: 30, lean: 8, h: [0.8, 1.6, 0.8], bd: norm([0.3, 0.6, -0.75]) };
-      B.h = [0.5, 1.45, 0.55]; B.bd = norm([0.25, 0.9, -0.35]); break; }
+      B.h = [0.3, 1.35, 0.66]; B.bd = norm([-0.4, 0.85, -0.35]); break; }
     case 'sweep': {
       const bd = norm([-0.9, -0.35, 0.25]);
       C = { ...R, fr: [0.42, 0, 1.22], bk: [0.78, 0, 0.22], pel: [0.62, 0.54, 0.82], hy: -70, sy: -60, lean: 30, side: 8, h: at(bd), bd,
@@ -1602,7 +1602,7 @@ function audio() {
     CLAPS = clapBuffer(4);
     // the crowd: a murmur all the time, and a roar that rises for the big moments
     const loop = (buf, gain) => { const s = actx.createBufferSource(); s.buffer = buf; s.loop = true; const g = actx.createGain(); g.gain.value = gain; s.connect(g); g.connect(crowdBus); s.start(); return g; };
-    crowdGain = loop(noiseLoop(6, [0.03, 0.12], 0.35), 0.16);
+    crowdGain = loop(noiseLoop(6, [0.03, 0.12], 0.35), 0);   // no constant murmur: the owner found it irritating. The crowd is heard only for boundaries and wickets (and a fifty or hundred)
     roarGain = loop(noiseLoop(5, [0.06, 0.3], 0.25), 0.0);
     document.addEventListener('visibilitychange', () => { if (!actx) return; if (document.hidden) actx.suspend(); else actx.resume(); });
   } catch (e) { actx = null; }
@@ -1681,7 +1681,8 @@ function sndHorn() {   // a fan's air horn for a six, after the roar starts
   f.connect(g); g.connect(crowdBus);
 }
 const sndTick = () => { if (live()) { ping(1900, 0.025, 0.05, 0, 'triangle'); } };
-function sndBuzz(level) {   // the crowd stirs as the bowler runs in
+function sndBuzz(level) {   // the crowd stirring as the bowler runs in: switched off with the murmur (see crowdGain)
+  return;
   if (!live() || !crowdGain) return;
   const t = actx.currentTime, g = crowdGain.gain;
   g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(0.16 + level, t + 0.8); g.setTargetAtTime(0.16, t + 1.6, 0.8);
@@ -2137,7 +2138,7 @@ function contact() {
   const d = ball.decision;
   if (d.kind === 'miss') return;
   sndBat(d.kind === 'edge' ? 'edge' : d.defend ? 'block' : 'middle', d.q * (d.loft ? 1 : 0.8) * (d.power || 1));
-  if (d.kind === 'edge') sndOoh(0.55);
+
   rec.hit = rec.t;
   if (d.kind === 'hit' && !d.defend && d.q > 0.88 && !quiet && !ff && !M.autoplay) slowmo = SLOWMO;
   const h = strike();
@@ -2469,8 +2470,6 @@ function finishBall(o, line) {
   else if (o.runs === 4) { showBanner('FOUR!', line, 'b4'); if (ours) { sndCrowd(0.7, 2.6); sndClap(0.6); cheer = 0.7; } else { sndCrowd(0.2, 1.5); sndClap(0.3); } }
   else {
     showBanner(o.runs === 0 ? 'DOT BALL' : o.runs + (o.runs === 1 ? ' RUN' : ' RUNS'), line, 'small');
-    if (o.runs && ours) sndClap(0.12 + o.runs * 0.04, 2.5);
-    if (/^Dropped/.test(line)) sndOoh(1.1);
   }
   if (!chaseMode && !o.out && c.runs >= 50 && c.runs - o.runs < 50) { showBanner(c.runs >= 100 ? 'HUNDRED!' : 'FIFTY!', who + c.runs + ' off ' + c.balls, 'b6'); sndClap(1, 7); sndCrowd(0.6, 4); }
   phase = 'result'; phaseT = 0;
@@ -2820,7 +2819,6 @@ function update(dt) {
         // through to the keeper
         const kp = fielders.find(f => f.keeper);
         sndGlove(0.8);
-        if (d && d.kind === 'miss' && !ball.wide && !ball.left) sndOoh(0.7);
         if (ball.charge && missed && Math.random() < (keeperZ > -5 ? 0.9 : 0.4)) finishBall({ runs: 0, out: { how: 'stumped', by: kp } }, 'Stumped!');
         else if (ball.charge && missed) finishBall({ runs: 0 }, 'Missed the stumping');
         else if (ball.wide && missed) finishBall({ runs: 0, wide: true }, 'Too wide · one extra run');
@@ -2881,7 +2879,7 @@ function update(dt) {
   if (showHint) {
     const t = shotType === 'defend' ? 'DEFEND' : shotType === 'loft' ? 'LOFT' : 'SHOT';
     const txt = touch ? t + ' chosen · swipe where you want it as the ball arrives'
-      : 'Arrows + S to hit · S alone defends · Shift = loft · D = step out · A = leave · Q/E = move across';
+      : 'Arrows + S to hit · S alone defends · Shift = loft · D = step out · A = leave · ◀ ▶ before the run-up = move across';
     if (hint.textContent !== txt) hint.textContent = txt;
   }
   hint.hidden = !showHint;
@@ -3487,6 +3485,8 @@ window.addEventListener('keydown', e => {
   if (!M || paused) return;
   if (phase === 'pick') { if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); pickGo(); } return; }
   const batting = inn && inn.userBats;
+  // before the bowler runs in, left and right move the batter across the crease (during the flight they aim the shot)
+  if (batting && !e.repeat && (e.code === 'ArrowLeft' || e.code === 'ArrowRight') && canMove()) moveGuard(e.code === 'ArrowLeft' ? -1 : 1);
   if (DIR_KEYS.includes(e.code) && !(batting && e.code.startsWith('Key'))) { e.preventDefault(); held.add(e.code); return; }
   if (e.repeat) return;
   if (e.code === 'KeyF' && (phase === 'play' || phase === 'result')) { setFF(true); return; }
