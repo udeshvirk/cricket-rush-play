@@ -688,7 +688,11 @@ const TEAMS = [
 const badgeHTML = t => '<span class="badge" style="background:linear-gradient(135deg,' + t.col + ' 0 55%,' + t.dark + ' 55%);color:' + onCol(t.col) + '">' + esc(t.short) + '</span>';
 // text colour that reads on a team colour
 const onCol = c => { const n = parseInt(c.slice(1), 16), l = (0.299 * (n >> 16) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255; return l > 0.55 ? '#0a1024' : '#f3efe4'; };
-for (const t of TEAMS) t.players = t.players.map(([name, bat, type, bowl]) => ({ name, bat, type: type || '', bowl: bowl || 0 }));
+// the left-handed batters
+const LEFT_HANDED = new Set(['Y. Jaiswar', 'R. Pantt', 'R. Jadeyja', 'A. Patell', 'T. Hedd', 'M. Starke', 'B. Duckitt', 'B. Stoaks', 'F. Zammaan', 'S. Ayube',
+  'Q. de Cok', 'R. Rickleton', 'D. Millar', 'D. Conwey', 'R. Ravindr', 'T. Lathem', 'M. Santnar', 'K. Pereira', 'C. Asalanke', 'D. Wellalagey',
+  'N. Pooraan', 'S. Hetmyre', 'T. Hassan', 'N. Shantoo', 'I. Zadraan', 'S. Attal']);
+for (const t of TEAMS) t.players = t.players.map(([name, bat, type, bowl]) => ({ name, bat, type: type || '', bowl: bowl || 0, left: LEFT_HANDED.has(name) || /[?&]lefty=1/.test(location.search) }));   // ?lefty=1: everyone bats left-handed (for testing)
 // Quick chase: you against England's quicks
 const YOU = { id: 'you', name: 'You', short: 'YOU', col: '#2ed3c6', helmet: '#18245a', wk: 0,
               players: Array.from({ length: 11 }, () => ({ name: 'You', bat: 70, type: '', bowl: 0 })) };
@@ -2241,7 +2245,7 @@ function beginBall(delay, announce) {
   } else if (M.mode === 'match' && inn.balls > 0 && inn.cards[inn.striker].balls === 0 && !inn.cards[inn.striker].out && inn.lastIn !== inn.striker) {
     inn.lastIn = inn.striker;
     const p = batterP(inn.striker);
-    tvCard('New batter · ' + p.name, inn.bat.name + ' ' + inn.runs + '/' + inn.wkts + ' · ' + ovStr(inn.balls) + ' overs', inn.bat.col);
+    tvCard('New batter · ' + p.name + (p.left ? ' (left-handed)' : ''), inn.bat.name + ' ' + inn.runs + '/' + inn.wkts + ' · ' + ovStr(inn.balls) + ' overs', inn.bat.col);
   }
   if (userBowling()) {
     phase = 'aim'; phaseT = 0;
@@ -2776,6 +2780,7 @@ function renderLevels() {
 
 // ======================================================================= update
 function update(dt) {
+  setMirror();
   clock += dt; phaseT += dt;
   cheer = Math.max(0, cheer - dt * 0.4);
   if (bannerUntil && clock > bannerUntil) hideBanner();
@@ -2784,7 +2789,7 @@ function update(dt) {
   if (phase === 'wait' && phaseT >= 0) { phase = 'runup'; phaseT = 0; $('delivery').classList.remove('show'); sndBuzz(0.07); }
   else if (phase === 'aim') {
     const [x, y] = keyAxes();
-    if (x || y) { marker.x = clamp(marker.x + x * 0.8 * dt, -1.3, 1.1); marker.z = clamp(marker.z - y * 3.5 * dt, -0.4, 11); }
+    if (x || y) { marker.x = clamp(marker.x + x * MIR * 0.8 * dt, -1.3, 1.1); marker.z = clamp(marker.z - y * 3.5 * dt, -0.4, 11); }
   } else if (phase === 'runup') {
     if (meter) {
       const v = meter.lock !== null ? meter.lock : needle();
@@ -2927,7 +2932,7 @@ function update(dt) {
 }
 
 // where the ball is now
-function ballPos() { return RP ? RP.ball : liveBallPos(); }
+function ballPos() { const b = RP ? RP.ball : liveBallPos(); return MIR < 0 ? mx(b) : b; }
 function liveBallPos() {
   if (!ball) return null;
   if (ball.frozenAt) return ball.frozenAt;
@@ -2950,6 +2955,10 @@ function liveBallPos() {
 
 // ======================================================================= render
 function render() {
+  if (MIR < 0) { cam.pos[0] = -cam.pos[0]; cam.tgt[0] = -cam.tgt[0]; }   // a left-hander on strike: see setMirror()
+  try { renderMirrored(); } finally { if (MIR < 0) { cam.pos[0] = -cam.pos[0]; cam.tgt[0] = -cam.tgt[0]; } }
+}
+function renderMirrored() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   setupCamera();
   if (R3D && R3D.active()) {   // the 3D view draws the world; this canvas only adds the guides on top
@@ -3016,7 +3025,28 @@ function render() {
 }
 
 // everyone on the field this frame: joints (world metres), team ('bat' | 'bowl'), bat, keeper; `at` = where they stand
-function people() { return RP ? RP.people : livePeople(); }
+function people() { const p = RP ? RP.people : livePeople(); return MIR < 0 ? p.map(mirrorPerson) : p; }
+// --- left-handers. The rules, physics and computer players all work for a right-hander. When a left-hander is on strike,
+// the picture is mirrored instead: everything that moves (players, ball, camera, marks on the pitch, the mini-map) has its x
+// negated, and each body's left and right are swapped so it isn't drawn inside out. The controls are mirrored too, so left
+// on the screen is always left. The scenery (stands, boards) is not mirrored, so its writing still reads.
+let MIR = 1;   // -1 while a left-hander is on strike (set between balls, so the picture never flips mid-ball)
+const mx = p => p ? [-p[0], p[1], p[2]] : p;
+function mirrorPerson(pr) {
+  const j = {};
+  for (const k in pr.j) {
+    const m = /^(.*[a-z])([LR])$/.exec(k), k2 = m ? m[1] + (m[2] === 'L' ? 'R' : 'L') : k;
+    j[k2] = /^footPitch/.test(k) ? pr.j[k] : mx(pr.j[k]);
+  }
+  const o = { ...pr, j, at: mx(pr.at), look: mx(pr.look) };
+  if (pr.bat) o.bat = { ...pr.bat, hands: mx(pr.bat.hands), tip: mx(pr.bat.tip), contact: mx(pr.bat.contact), width: mx(pr.bat.width) };
+  return o;
+}
+function setMirror() {
+  if (['runup', 'flight', 'play', 'result'].includes(phase) || RP) return;
+  const p = inn && inn.bat && inn.bat.players[inn.striker];
+  MIR = p && p.left ? -1 : 1;
+}
 // reactions after the ball: a leap with both arms up, hands on the head, a bat raised to the crowd, the walk back
 function cheerFig(pos, face, t, seed) {
   const L = [Math.cos(face), 0, -Math.sin(face)], F = [Math.sin(face), 0, Math.cos(face)];
@@ -3178,14 +3208,14 @@ let preBall = null;
 function drawBounceMark() {
   const b = ball || preBall;
   if (!inn || !inn.userBats || !b || !b.spot || !['wait', 'runup', 'flight'].includes(phase)) return;
-  const fade = clamp(1 - (b.t - b.tBounce) / 0.35, 0, 1) * (phase === 'wait' ? clamp(phaseT + 1.3, 0, 1) : 1), s = b.spot;
+  const fade = clamp(1 - (b.t - b.tBounce) / 0.35, 0, 1) * (phase === 'wait' ? clamp(phaseT + 1.3, 0, 1) : 1), s = MIR < 0 ? mx(b.spot) : b.spot;
   if (fade <= 0) return;
   const band = BANDS.find(b => s[2] >= b[0] && s[2] < b[1]) || BANDS[3];
   const col = { Yorker: '255,77,94', Full: '255,176,46', Good: '46,211,198', Short: '150,165,255' }[band[3]];
   const ring = (r, a) => { const pts = []; for (let i = 0; i < 20; i++) { const t = i / 20 * Math.PI * 2; pts.push([s[0] + Math.sin(t) * r, 0.008, s[2] + Math.cos(t) * r * 1.3]); } fillPoly(pts, 'rgba(' + col + ',' + a + ')'); };
   ring(0.5, 0.3 * fade); ring(0.32, 0.45 * fade); ring(0.14, 0.95 * fade);
   // the length, written beside the mark
-  const c = toCam([s[0] - 0.75, 0, s[2]]);
+  const c = toCam([s[0] - 0.75 * MIR, 0, s[2]]);
   if (c[2] > NEAR) {
     const q = proj(c);
     ctx.globalAlpha = fade; ctx.font = '800 15px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
@@ -3196,7 +3226,7 @@ function drawBounceMark() {
 }
 function drawAimGuide() {
   if (ball && ball.spot && ball.t > ball.tBounce && camMode === 'bowl') {
-    const s = ball.spot, pts = [];
+    const s = MIR < 0 ? mx(ball.spot) : ball.spot, pts = [];
     for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2; pts.push([s[0] + Math.sin(a) * 0.09, 0.006, s[2] + Math.cos(a) * 0.14]); }
     fillPoly(pts, 'rgba(70,45,20,0.55)');
   }
@@ -3208,13 +3238,13 @@ function drawAimGuide() {
     const c = toCam([-1.5, 0, (z0 + z1) / 2]);
     if (c[2] > NEAR) { const s = proj(c); ctx.fillStyle = 'rgba(243,239,228,0.8)'; ctx.fillText(name, s[0] - 4, s[1]); }
   }
-  const pul = 1 + 0.12 * Math.sin(clock * 6), rr = 0.26 * pul, n = 24;
+  const pul = 1 + 0.12 * Math.sin(clock * 6), rr = 0.26 * pul, n = 24, mk = { x: marker.x * MIR, z: marker.z };
   for (let i = 0; i < n; i++) {
     const a0 = i / n * Math.PI * 2, a1 = (i + 1) / n * Math.PI * 2;
-    line3([marker.x + Math.sin(a0) * rr, 0.01, marker.z + Math.cos(a0) * rr * 1.6], [marker.x + Math.sin(a1) * rr, 0.01, marker.z + Math.cos(a1) * rr * 1.6], 0.035, '#ffb02e');
+    line3([mk.x + Math.sin(a0) * rr, 0.01, mk.z + Math.cos(a0) * rr * 1.6], [mk.x + Math.sin(a1) * rr, 0.01, mk.z + Math.cos(a1) * rr * 1.6], 0.035, '#ffb02e');
   }
-  line3([marker.x - 0.08, 0.01, marker.z], [marker.x + 0.08, 0.01, marker.z], 0.025, '#ffb02e');
-  line3([marker.x, 0.01, marker.z - 0.13], [marker.x, 0.01, marker.z + 0.13], 0.025, '#ffb02e');
+  line3([mk.x - 0.08, 0.01, mk.z], [mk.x + 0.08, 0.01, mk.z], 0.025, '#ffb02e');
+  line3([mk.x, 0.01, mk.z - 0.13], [mk.x, 0.01, mk.z + 0.13], 0.025, '#ffb02e');
 }
 
 function renderMap(bp) {
@@ -3223,14 +3253,14 @@ function renderMap(bp) {
   mctx.fillStyle = 'rgba(10,16,36,0.78)'; mctx.beginPath(); mctx.arc(c, c, S / 2 - 2, 0, Math.PI * 2); mctx.fill();
   mctx.fillStyle = '#2a7a36'; mctx.beginPath(); mctx.arc(c, c, BOARDS * k, 0, Math.PI * 2); mctx.fill();
   mctx.strokeStyle = 'rgba(243,239,228,0.85)'; mctx.lineWidth = 2; mctx.beginPath(); mctx.arc(c, c, ROPE * k, 0, Math.PI * 2); mctx.stroke();
-  const M2 = p => [c + p[0] * k, c - (p[2] - PITCH / 2) * k];   // bowler's end at the top, off side on the left
+  const M2 = p => [c + p[0] * k * MIR, c - (p[2] - PITCH / 2) * k];   // bowler's end at the top, off side on the left (on the right for a left-hander)
   const a = M2([-1.5, 0, PITCH + 1]), b = M2([1.5, 0, -1]);
   mctx.fillStyle = '#c9b48a'; mctx.fillRect(a[0], a[1], b[0] - a[0], b[1] - a[1]);
   const dotAt = (p, r, col) => { const m = M2(p); mctx.fillStyle = col; mctx.beginPath(); mctx.arc(m[0], m[1], r, 0, Math.PI * 2); mctx.fill(); };
   const fc = fieldCol();
   for (const f of fielders) dotAt(f.bowler && !(ball && ball.play) ? [0.6, 0, PITCH] : f.pos, 5, f.keeper ? '#f3efe4' : fc);
   dotAt([0.6, 0, 0.6], 5, '#f3efe4');
-  if (bp) dotAt(bp, 4, '#ffffff');
+  if (bp) dotAt(MIR < 0 ? mx(bp) : bp, 4, '#ffffff');   // (bp comes mirrored already; M2 mirrors it back)
 }
 
 // ======================================================================= loop and input
@@ -3393,7 +3423,7 @@ function finishPress(dir) {
   swing(shotType === 'loft', p.t, aim, userWin());
   M.batBalls = (M.batBalls || 0) + 1;
 }
-function slideAim(dx, dy) { return Math.hypot(dx, dy) < SLIDE ? null : Math.atan2(dx, dy) / deg; }
+function slideAim(dx, dy) { return Math.hypot(dx, dy) < SLIDE ? null : Math.atan2(dx * MIR, dy) / deg; }
 const held = new Set();
 function keyAxes() {   // WASD only count while you're aiming your bowling (when batting, A S D are shots)
   const x = (held.has('ArrowRight') || held.has('KeyD') ? 1 : 0) - (held.has('ArrowLeft') || held.has('KeyA') ? 1 : 0);
@@ -3407,7 +3437,7 @@ const GUARD_MAX = 0.5;
 const canMove = () => canBat() && (phase === 'wait' || (phase === 'runup' && phaseT < 0.5));
 function moveGuard(d) {   // d: -1 = toward the off side, +1 = toward the leg side
   if (!canMove()) return;
-  guard = clamp(guard + d * 0.17, -GUARD_MAX, GUARD_MAX);
+  guard = clamp(guard + d * MIR * 0.17, -GUARD_MAX, GUARD_MAX);   // d is left/right on the screen
 }
 const canBat = () => !paused && inn && inn.userBats && ACTIVE.has(phase);
 function keyShot(shift) {
@@ -3434,7 +3464,7 @@ function keyLeave() {
 // arrows as on the screen: Down = straight, Down+Left = cover, Left = point, Up+Left = third man, Up = over the keeper ...
 function keyAim() {
   const [x, y] = keyAxes();
-  return !x && !y ? null : Math.atan2(x, -y) / deg;
+  return !x && !y ? null : Math.atan2(x * MIR, -y) / deg;
 }
 function onMove(e) {
   if (!pending || pending.keys || e.pointerId !== pending.id) return;
@@ -3460,7 +3490,7 @@ let aimDrag = null;
 function setMarker(e) {
   const r = canvas.getBoundingClientRect(), g = screenToGround(e.clientX - r.left, e.clientY - r.top);
   if (!g) return;
-  marker.x = clamp(g[0], -1.3, 1.1); marker.z = clamp(g[2], -0.4, 11);
+  marker.x = clamp(g[0] * MIR, -1.3, 1.1); marker.z = clamp(g[2], -0.4, 11);
 }
 canvas.addEventListener('pointerdown', e => {
   e.preventDefault(); audio();
