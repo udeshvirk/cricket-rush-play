@@ -94,6 +94,8 @@
   #banner.b4 .head { color: var(--teal); }
   #banner.b6 .head { color: var(--amber); }
   #banner.bw .head { color: var(--red); }
+  #banner.bw { top: 76%; }   /* clear of the batter's close-up: below him, or to his left on wide screens */
+  @media (min-aspect-ratio: 6/5) { #banner.bw { left: 27%; top: 58%; } }
   #banner.small .head { font-size: clamp(36px, 7vw, 64px); }
 
   #timing { left: 50%; bottom: calc(140px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
@@ -2914,6 +2916,14 @@ function update(dt) {
     }
     if (cam.end !== end) { cam.end = end; cam.pos = tp.slice(); cam.tgt = tt.slice(); cam.fov = tf; }
   } else cam.end = 0;
+  // a wicket (3D): cut to a close-up of the batter walking off, the stumps behind him
+  const wk = phase === 'result' && celebrate && celebrate.out && phaseT > 0.7 && !RP && R3D && R3D.active();
+  if (wk) {
+    const u = phaseT - 0.7, f = -2.2, d = [Math.sin(f), 0, Math.cos(f)], at = [0.6 + guard + d[0] * u * 1.2, 0, 0.75 + d[2] * u * 1.2];
+    const wide = W > H * 1.2, off = wide ? -1.0 : 0;   // on wide screens he stands right of centre, the banner to his left
+    tp = [at[0] + d[0] * 6.4 + d[2] * 1.6, 1.45, at[2] + d[2] * 6.4 - d[0] * 1.6]; tt = [at[0] + d[2] * off, 1.0, at[2] - d[0] * off]; tf = 24; rate = 6;
+  }
+  if (!!cam.wk !== !!wk) { cam.wk = wk; cam.pos = tp.slice(); cam.tgt = tt.slice(); cam.fov = tf; }   // cut, don't swoop
   const k = 1 - Math.exp(-rate * dt);
   cam.pos = lerp3(cam.pos, tp, k); cam.tgt = lerp3(cam.tgt, tt, Math.min(1, k * 2)); cam.fov = lerp(cam.fov, tf, k);
 }
@@ -3348,7 +3358,7 @@ function tick(dt) {
   else if (ACTIVE.has(phase)) {
     const n = ff ? 4 : 1; for (let s = 0; s < n && ACTIVE.has(phase); s++) update(dt);
     if (R3D && R3D.active()) recFrame(dt * n);
-    if (phase === 'result' && rec.kind && !rec.shown && phaseT > 1.0) { rec.shown = true; if (canReplay()) startReplay(); }
+    if (phase === 'result' && rec.kind && !rec.shown && phaseT > (celebrate && celebrate.out ? 2.0 : 1.0)) { rec.shown = true; if (canReplay()) startReplay(); }
   }
   else { clock += dt; update0(dt); }
 }
