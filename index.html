@@ -1373,7 +1373,7 @@ function strokeKeys(sw) {
       C = { ...R, fr, pel: [lerp(0.63, fr[0], 0.45), 0.8, 0.98], hy: -70, sy: -78, lean: 28, side: 14, h: at(bd), bd, kpL: [-0.4, 0, 1] };
       F = { ...C, hy: -55, sy: -45 + sw.intent * 0.25, lean: 16, side: 6,
             h: [0.4 + dir[0] * 0.25, loft ? 1.78 : 1.55, 1.08 + dir[2] * 0.12], bd: norm(loft ? [0.3, 0.9, -0.3] : [0.45, 0.5, -0.75]) };
-      if(MOTION2) F={...F,pel:[.45,.91,1.0],hy:-40,sy:-20,lean:8,side:2,rearFootPitch:.4,h:[.68,loft?1.90:1.78,1.16],bd:norm(loft?[.35,.83,-.43]:[.48,.65,-.58])};
+      if(MOTION2) F={...F,pel:[.45,.91,1.0],hy:-40,sy:-20,lean:8,side:2,rearFootPitch:.4,h:[.68,loft?1.90:1.78,1.16],bd:norm(loft?[.42,.88,-.2]:[.6,.74,-.28])};   // the finish stays up beside the head, not behind the helmet
       if(PRESENTATION_SLICE) F={...F,pel:[.45,.91,1.04],hy:-32,sy:8,lean:7,side:0,h:[.36,loft?1.86:1.74,1.34],bd:norm(loft?[.12,.82,-.56]:[.12,.66,-.74])};
       break; }
     case 'fdef': case 'push': {
@@ -1413,7 +1413,7 @@ function strokeKeys(sw) {
       const bd = norm([-0.9, -0.35, 0.25]);
       C = { ...R, fr: [0.42, 0, 1.22], bk: [0.78, 0, 0.22], pel: [0.62, 0.54, 0.82], hy: -70, sy: -60, lean: 30, side: 8, h: at(bd), bd,
             kpL: [-0.3, 0.6, 1], kpR: [-0.2, -1, 0.3] };
-      F = { ...C, sy: -20, h: [1.0, 0.93, 1.12], bd: norm([0.5, 0.2, -0.8]) };
+      F = { ...C, sy: -20, h: [1.0, 1.05, 1.12], bd: norm([0.75, 0.5, -0.3]) };   // the sweep finishes round on the leg side, in view
       B.h = [0.22, 1.2, 0.90]; B.bd = norm([-0.2, 0.8, -0.55]); break; }
   }
   // no two strokes quite alike: a little variety in the finish, and a held finish that settles instead of freezing
