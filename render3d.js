@@ -219,8 +219,8 @@ window.Cricket3D = function (G) {
     const parts = [];
     const add = (geo, part, x, y, z) => { geo = geo.toNonIndexed(); geo.translate(x, y, z); const n = geo.attributes.position.count;
       geo.setAttribute('part', new T.BufferAttribute(new Float32Array(n).fill(part), 1)); parts.push(geo); };
-    add(new T.BoxGeometry(0.42, 0.5, 0.26), 0, 0, 0.45, 0);                  // body
-    add(new T.IcosahedronGeometry(0.11, 0), 1, 0, 0.84, 0.01);               // head
+    { const b = new T.CylinderGeometry(0.2, 0.26, 0.56, 7); b.scale(1, 1, 0.62); add(b, 0, 0, 0.45, 0); }   // body: sloping shoulders, not a box
+    add(new T.IcosahedronGeometry(0.15, 1), 1, 0, 0.88, 0.01);               // head
     add(new T.BoxGeometry(0.08, 0.42, 0.08), 2, 0.2, 0.9, 0.02);             // arms (raised; shown when cheering)
     add(new T.BoxGeometry(0.08, 0.42, 0.08), 2, -0.2, 0.9, 0.02);
     const geo = new T.BufferGeometry();
@@ -237,11 +237,11 @@ window.Cricket3D = function (G) {
     }
     const N = seats.length;
     const shirtA = new Float32Array(N * 3), skinA = new Float32Array(N * 3), phaseA = new Float32Array(N);
-    const SHIRTS = ['#e8e4da', '#2a62d8', '#f2c230', '#1f8f4e', '#d23b4a', '#ff8a1f', '#3a3f55', '#7a4fc9', '#18a9c9', '#f0f0f0', '#1b2a6b', '#c9c1a8'];
+    const SHIRTS = ['#e8e4da', '#2a62d8', '#f2c230', '#1f8f4e', '#d23b4a', '#ff8a1f', '#6f7ea8', '#8f6fd0', '#18a9c9', '#f0f0f0', '#3b62c4', '#c9c1a8', '#e8e4da', '#f2c230'];
     const SKINS = ['#8d5a3b', '#b07650', '#c99872', '#e0b48f', '#6b4029'], c = new T.Color();
     const mesh = new T.InstancedMesh(geo, null, N), m = new T.Matrix4(), q = new T.Quaternion(), sc = new T.Vector3(), ps = new T.Vector3(), Y = new T.Vector3(0, 1, 0);
     seats.forEach(([a, r, y], i) => {
-      const x = Math.sin(a) * r, z = Math.cos(a) * r, k = 0.9 + Math.random() * 0.2;
+      const x = Math.sin(a) * r, z = Math.cos(a) * r, k = 1.25 + Math.random() * 0.3;   // drawn large, so rows overlap and the stand looks full
       m.compose(ps.set(x, y, z), q.setFromAxisAngle(Y, Math.atan2(-x, -z)), sc.set(k, k, k)); mesh.setMatrixAt(i, m);
       c.set(SHIRTS[(Math.random() * SHIRTS.length) | 0]).multiplyScalar(0.7 + Math.random() * 0.3); c.toArray(shirtA, i * 3);
       c.set(SKINS[(Math.random() * SKINS.length) | 0]).multiplyScalar(0.95); c.toArray(skinA, i * 3);
@@ -255,14 +255,14 @@ window.Cricket3D = function (G) {
       Object.assign(sh.uniforms, crowdU);
       sh.vertexShader = 'uniform float uCheer, uTime;\nattribute float part, aPhase;\nattribute vec3 aShirt, aSkin;\nvarying vec3 vCrowd;\n' +
         sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
-  vCrowd = part > 0.5 && part < 1.5 ? aSkin : aShirt;
+  vCrowd = part > 0.5 && part < 1.5 ? (position.y > 0.93 || position.z < -0.03 ? vec3(0.07, 0.05, 0.04) + aPhase * vec3(0.12, 0.08, 0.04) : aSkin) : part > 1.5 ? aSkin : aShirt;   // hair on top and behind; bare arms
   float up = uCheer * step(0.35, aPhase);
   if (part > 1.5) transformed.y = mix(0.72, transformed.y, up);    // arms fold away when calm
   transformed.y += max(0.0, sin(uTime * 9.0 + aPhase * 6.283)) * uCheer * 0.22;`);
       sh.fragmentShader = 'varying vec3 vCrowd;\n' + sh.fragmentShader.replace('vec4 diffuseColor = vec4( diffuse, opacity );', 'vec4 diffuseColor = vec4( vCrowd, opacity );')
         .replace('vec3 totalEmissiveRadiance = emissive;', 'vec3 totalEmissiveRadiance = emissive + vCrowd * 0.16;');
     };
-    mat.customProgramCacheKey = () => 'crowd-2';
+    mat.customProgramCacheKey = () => 'crowd-3';
     mesh.material = mat; mesh.frustumCulled = false;
     scene.add(mesh);
   }
