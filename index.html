@@ -740,7 +740,7 @@ const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
 // ======================================================================= camera and projection
 // Long broadcast lens: comparable player size at both ends, without enlarging meshes.
 const BOWL_CAM = REFERENCE_VIEW ? { pos:[0,14.5,87],tgt:[0,.5,8],fov:5.7 }
-  : { pos:[0,7.2,45],tgt:[0,.3,6.5],fov:18 };
+  : (() => { const q = (new URLSearchParams(location.search).get('cam') || '').split(':').map(Number); return q.length === 7 ? { pos: q.slice(0, 3), tgt: q.slice(3, 6), fov: q[6] } : { pos:[0,8.5,52],tgt:[0,.8,4],fov:11 }; })();
 // the 2D view frames tighter, so the batter at the far end is bigger
 const BOWL_CAM_2D = { pos: [0, 6.2, 46], tgt: [0, 0.7, 10], fov: 11.5 };
 const homeCam = () => { try { return REFERENCE_VIEW || (R3D && R3D.active()) ? BOWL_CAM : BOWL_CAM_2D; } catch (e) { return BOWL_CAM; } };
@@ -929,26 +929,26 @@ function figure(pos, face, o = {}) {
     j.footPitchL=[0,0,0];j.footPitchR=[0,0,0];
     if(run>.05) {
       const resting=Object.fromEntries(Object.entries(j).map(([key,value])=>[key,value.slice()]));
-      const stance=.28,strideLength=3.8,halfStride=stance*strideLength/2;
+      const stance=.24,strideLength=3.1,halfStride=stance*strideLength/2,under=-.12;   // the foot lands a little ahead of the hip and leaves well behind it
       const cycle=o.gaitDistance===undefined?ph:o.gaitDistance*Math.PI*2/strideLength;
       const step=angle=>{
         const u=((angle/(Math.PI*2))%1+1)%1;
         if(u<stance) {
           const v=u/stance,pitch=-.18*(1-smooth(clamp(v/.18,0,1)))+.42*smooth(clamp((v-.72)/.28,0,1));
           const lift=pitch>0?.14*Math.sin(pitch)+.06*(Math.cos(pitch)-1):-.04*Math.sin(pitch);
-          return [halfStride-2*halfStride*v,lift,pitch];
+          return [under+halfStride-2*halfStride*v,lift,pitch];
         }
         const v=(u-stance)/(1-stance);
         const tangent=-2*halfStride*(1-stance)/stance;
         const pitch=lerp(.42,-.18,smooth(clamp(v/.65,0,1)))-.2*Math.sin(v*Math.PI);
         const lift=.33*Math.pow(Math.sin(v*Math.PI),1.2)+(.14*Math.sin(.42)+.06*(Math.cos(.42)-1))*(1-smooth(clamp(v/.18,0,1)));
-        return [-halfStride+2*halfStride*smooth(v)+tangent*(2*v*v*v-3*v*v+v),lift,pitch];
+        return [under-halfStride+2*halfStride*smooth(v)+tangent*(2*v*v*v-3*v*v+v),lift,pitch];
       };
       const left=step(cycle),right=step(cycle+Math.PI);
       const sway=Math.sin(cycle)*.012*run,bob=Math.cos(cycle*2)*.025*run;
-      j.pelvis=P(.02,sway,.84+bob);j.neck=P(.14,sway*.5,1.39+bob);j.head=P(.17,sway*.3,1.58+bob);
+      j.pelvis=P(.02,sway,.87+bob);j.neck=P(.14,sway*.5,1.39+bob);j.head=P(.17,sway*.3,1.58+bob);
       const hips=.045*Math.sin(cycle),shoulders=-.055*Math.sin(cycle);
-      j.hipL=P(hips,.11,.84+bob);j.hipR=P(-hips,-.11,.84+bob);
+      j.hipL=P(hips,.11,.87+bob);j.hipR=P(-hips,-.11,.87+bob);
       j.shL=P(.14+shoulders,.19,1.34+bob);j.shR=P(.14-shoulders,-.19,1.34+bob);
       j.footL=P(left[0]*run,.15,left[1]*run);j.footR=P(right[0]*run,-.15,right[1]*run);
       const arm=Math.sin(cycle+Math.PI*.12)*.31*run;

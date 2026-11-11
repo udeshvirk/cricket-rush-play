@@ -16,8 +16,8 @@ window.Cricket3D = function (G) {
 
   // ---------------------------------------------------------------- settings
   const KEY = 'cricket-rush-gfx';
-  let on = false;   // the 2D view is the default; 3D only for players who chose it
-  try { on = localStorage.getItem(KEY) === '3d'; } catch (e) {}
+  let on = true;   // the 3D view is the default; 2D only for players who chose it
+  try { on = localStorage.getItem(KEY) !== '2d'; } catch (e) {}
   const lowEnd = touch;   // phones and tablets: lighter shadows and resolution
   renderer.outputEncoding = T.sRGBEncoding;
   renderer.toneMapping = T.ACESFilmicToneMapping;
@@ -123,13 +123,13 @@ window.Cricket3D = function (G) {
   outside.rotation.x = -Math.PI / 2; outside.position.y = -0.06; scene.add(outside);
 
   const grassTex = canvasTex(1024, 1024, (g, w, h) => {
-    g.fillStyle = '#2f7a35'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#1d6424'; g.fillRect(0, 0, w, h);
     const k = w / (BOARDS * 2), band = 5 * k;
     for (let x = 0; x < w; x += band * 2) { g.fillStyle = 'rgba(16,44,20,0.10)'; g.fillRect(x, 0, band, h); }   // a faint cut the other way: a chequered outfield
     // mowing stripes across the field (light, dark, light ...), with soft edges
     for (let y = 0; y < h; y += band * 2) {
       const gr = g.createLinearGradient(0, y, 0, y + band);
-      gr.addColorStop(0, 'rgba(18,48,22,0)'); gr.addColorStop(0.12, 'rgba(18,48,22,0.24)'); gr.addColorStop(0.88, 'rgba(18,48,22,0.24)'); gr.addColorStop(1, 'rgba(18,48,22,0)');
+      gr.addColorStop(0, 'rgba(8,34,12,0)'); gr.addColorStop(0.08, 'rgba(8,34,12,0.36)'); gr.addColorStop(0.92, 'rgba(8,34,12,0.36)'); gr.addColorStop(1, 'rgba(8,34,12,0)');
       g.fillStyle = gr; g.fillRect(0, y, w, band);
     }
     noise(g, w, h, 26000, ['rgba(255,255,255,0.035)', 'rgba(0,0,0,0.05)', 'rgba(20,60,20,0.08)'], 2);
@@ -139,7 +139,7 @@ window.Cricket3D = function (G) {
   });
   const field = new T.Mesh(new T.CircleGeometry(BOARDS, 128), new T.MeshStandardMaterial({ map: grassTex, roughness: 0.95 }));
   field.rotation.x = -Math.PI / 2; field.receiveShadow = true; scene.add(field);
-  const apron = new T.Mesh(new T.RingGeometry(BOARDS, STAND_IN + 0.5, 128, 1), new T.MeshStandardMaterial({ color: 0x2a6f34, roughness: 1 }));
+  const apron = new T.Mesh(new T.RingGeometry(BOARDS, STAND_IN + 0.5, 128, 1), new T.MeshStandardMaterial({ color: 0x1a5a22, roughness: 1 }));
   apron.rotation.x = -Math.PI / 2; apron.position.y = -0.01; apron.receiveShadow = true; scene.add(apron);
 
   // the square and the pitch (with the creases painted on)
@@ -147,8 +147,8 @@ window.Cricket3D = function (G) {
   const pitchTex = canvasTex(256, 2048, (g, w, h) => {
     const X = x => (x + PW / 2) / PW * w, Z = z => (z - z0) / PL * h;
     g.clearRect(0, 0, w, h);
-    g.fillStyle = '#c7b185'; g.fillRect(X(-1.52), 0, X(1.52) - X(-1.52), h);
-    g.fillStyle = '#d3bf95'; g.fillRect(X(-1.2), Z(2), X(1.2) - X(-1.2), Z(PITCH - 2) - Z(2));
+    g.fillStyle = '#b89c6c'; g.fillRect(X(-1.52), 0, X(1.52) - X(-1.52), h);
+    g.fillStyle = '#c4aa7a'; g.fillRect(X(-1.2), Z(2), X(1.2) - X(-1.2), Z(PITCH - 2) - Z(2));
     g.save(); g.beginPath(); g.rect(X(-1.52), 0, X(1.52) - X(-1.52), h); g.clip();
     noise(g, w, h, 9000, ['rgba(120,90,50,0.10)', 'rgba(255,255,240,0.06)'], 2); g.restore();
     // worn patches where the bowlers land and the batters stand
@@ -426,7 +426,7 @@ window.Cricket3D = function (G) {
     // a wing on each side of the knee, and the straps round the back
     for (const sgn of [-1, 1]) { const w = new T.SphereGeometry(1, 10, 8); w.scale(0.012, 0.06, 0.034); w.translate(sgn * 0.08, -0.005, -0.004); parts.push(w); }
     for (const y of [-0.11, -0.26, -0.41]) straps.push(gTube(arc(y, 0.058 - (y < -0.3 ? 0.008 : 0), 0.062, 1.7, 2 * Math.PI - 1.7, 12), 0.0065, 14, 5));
-    const g = new T.Group(), M = (geo, m) => { const x = new T.Mesh(geo, m); x.castShadow = true; x.frustumCulled = false; g.add(x); };
+    const g = new T.Group(), M = (geo, m) => { const x = new T.Mesh(geo, m); x.castShadow = true; x.frustumCulled = false; x.scale.set(1.26, 1, 1.34); g.add(x); };   // wide enough to cover the player's trouser leg
     M3.pads.side = T.DoubleSide; M3.pads.roughness = 0.7; M3.pads.color.set(0xdcd9cf);   // off-white, so the floodlights don't burn it out
     M(gMerge(parts), M3.pads); M(gMerge(straps), new T.MeshStandardMaterial({ color: 0xd9d6cc, roughness: 0.9 }));
     return g;
@@ -435,6 +435,7 @@ window.Cricket3D = function (G) {
   // ---------------------------------------------------------------- helmet and cap, built in code to fit the head
   // Coordinates are metres from the head bone (the top of the neck), +z = the face. Brow 0.135 up, eyes 0.10, nose tip 0.06 (0.146 out),
   // chin -0.005, ears +-0.085 across at 0.06, top of the hair 0.235.
+  const HEAD_SIZE = +(new URLSearchParams(location.search).get('head')) || 1.3;
   const HEADGEAR = (() => {
     const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
     const merge = geos => {   // one geometry from several (positions, normals)
@@ -777,7 +778,7 @@ window.Cricket3D = function (G) {
   // The bat has one transform (from the game's bat pose). The closed gloves sit at two palm anchors on the handle (bat space);
   // each arm is re-solved (two-bone IK) so its wrist lands where its glove needs it, and each wrist turns to match its glove.
   // A glove's fixed place on its hand bone follows from that, so the gloves ride on the hand bones and nothing is duplicated.
-  const GRIP3 = { tried: false, ready: false, side: {}, palmK: 0.5, twist: 0, handScale: 0.08 };   // the bare hand shrinks away inside its closed glove (the glove shows the hand)
+  const GRIP3 = { tried: false, ready: false, side: {}, palmK: 0.5, twist: 0, handScale: 0.08, size: 1.3 };   // size: the gloves are scaled up to fit this player's forearms   // the bare hand shrinks away inside its closed glove (the glove shows the hand)
   function loadGrip() {
     if (GRIP3.tried || !window.GRIP_GLB || !window.GRIP || !T.GLTFLoader || !RIG.restQ) return;
     GRIP3.tried = true;
@@ -786,9 +787,10 @@ window.Cricket3D = function (G) {
       const bin = Uint8Array.from(atob(window.GRIP_GLB[k]), c => c.charCodeAt(0)).buffer;
       new T.GLTFLoader().parse(bin, '', g => {
         let cuff = null;
-        g.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false;
+        g.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; o.material.side = T.DoubleSide;
           if (o.material.color && !o.material.userData.toned) { o.material.userData.toned = true; const c = o.material.color; if (c.r + c.g + c.b > 2.4) c.multiplyScalar(0.86); }   // whites a touch darker (floodlights)
-          if (/cuff/.test(o.name) || /cuff/.test(o.material.name)) { o.geometry.computeBoundingBox(); cuff = o.geometry.boundingBox.getCenter(new T.Vector3()); } } });
+          if (/cuff/.test(o.name) || /cuff/.test(o.material.name)) { o.geometry.computeBoundingBox(); cuff = o.geometry.boundingBox.getCenter(new T.Vector3()); }
+          if (/cuff|accent/.test(o.name)) o.visible = false; } });   // the model's rigid cuff can't follow the forearm; Person draws its own (cuffG)
         const r = RIG.rest, anchor = new T.Vector3().fromArray(s === 'l' ? window.GRIP.top : window.GRIP.bottom);
         // the hand inside the glove: wrist to knuckles runs from the cuff through the palm; knuckle line (index - pinky) toward the blade
         const dB = cuff ? cuff.clone().negate().normalize() : new T.Vector3(s === 'l' ? 1 : -1, -1, 0).normalize();
@@ -797,7 +799,7 @@ window.Cricket3D = function (G) {
         const FB = frame(dB, aB, new T.Matrix4()).clone(), F0 = frame(d0, a0, new T.Matrix4()).clone();
         const handInBat = new T.Quaternion().setFromRotationMatrix(FB.clone().multiply(F0.clone().transpose()));   // hand world = bat * handInBat
         // the cuff's centre in bat space: the wrist goes here, so the forearm enters the glove through its cuff
-        const cuffB = anchor.clone().add(cuff ? cuff.clone().multiplyScalar(0.8) : new T.Vector3(s === 'l' ? -0.04 : 0.04, 0.04, 0));
+        const cuffB = anchor.clone().add(cuff ? cuff.clone().multiplyScalar(0.72 * GRIP3.size) : new T.Vector3(s === 'l' ? -0.04 : 0.04, 0.04, 0));
         GRIP3.side[s] = { glove: g.scene, anchor, handInBat, palm: d0.clone().multiplyScalar(GRIP3.palmK), cuff, cuffB, F0: F0.clone().transpose() };
         if (--left === 0) { GRIP3.ready = true; if(PRODUCTION)PRODUCTION.gripReady=true; pool.forEach(p => p.attachGrip()); }
       }, e => console.warn('grip', k, e));
@@ -952,6 +954,17 @@ window.Cricket3D = function (G) {
       for (const s of ['l', 'r']) {
         const o = GRIP3.side[s].glove.clone(); o.matrixAutoUpdate = false; o.visible = false; this.g.add(o); this.gripG[s] = o;
       }
+      // a padded cuff on each forearm, running into the glove (y = along the forearm, 0 at the wrist)
+      if (!GRIP3.cuffGeo) {
+        const body = new T.CylinderGeometry(0.041, 0.048, 0.115, 14, 1, false).translate(0, -0.0275, 0), band = new T.CylinderGeometry(0.0495, 0.0495, 0.026, 14, 1, true).translate(0, -0.062, 0);
+        GRIP3.cuffGeo = [body, band];
+        GRIP3.cuffMat = [new T.MeshStandardMaterial({ color: 0xd6d4cc, roughness: 0.85, side: T.DoubleSide }), new T.MeshStandardMaterial({ color: 0x23262c, roughness: 0.7, side: T.DoubleSide })];
+      }
+      this.cuffG = {};
+      for (const s of ['l', 'r']) {
+        const c = new T.Group(); GRIP3.cuffGeo.forEach((geo, i) => { const m = new T.Mesh(geo, GRIP3.cuffMat[i]); m.castShadow = true; m.frustumCulled = false; c.add(m); });
+        c.matrixAutoUpdate = false; c.visible = false; this.g.add(c); this.cuffG[s] = c;
+      }
     }
     attach() {
       const useProduction = PRODUCTION && PRODUCTION.ready && PRODUCTION.slots.includes(pool.indexOf(this));
@@ -1096,8 +1109,10 @@ window.Cricket3D = function (G) {
             this['glovePose_' + s] = { q: hq.clone().multiply(R.q), p: R.p.clone().applyQuaternion(hq).add(hp) };
           }
           const gp = this['glovePose_' + s], o = this.gripG[s];
-          o.visible = gloved3; o.matrix.compose(gp.p, gp.q, v3.set(1, 1, 1)); o.matrixWorldNeedsUpdate = true;
+          o.visible = gloved3; o.matrix.compose(gp.p, gp.q, v3.setScalar(GRIP3.size)); o.matrixWorldNeedsUpdate = true;
           B['hand_' + s].scale.setScalar(gloved3 ? GRIP3.handScale : 1);
+          const cf = this.cuffG[s]; cf.visible = gloved3;
+          if (gloved3) { cf.matrix.compose(hp, qb.setFromUnitVectors(v1.set(0, 1, 0), v2.subVectors(hp, pos['lowerarm_' + s]).normalize()), v3.set(1, 1, 1)); cf.matrixWorldNeedsUpdate = true; }
         }
       }
       // hands on the bat (without the grip gloves): each gripping hand turns so its knuckle line runs along the handle, and the bat goes through the top fist
@@ -1128,6 +1143,7 @@ window.Cricket3D = function (G) {
       // the helmet or cap sits on the head and turns with it
       this.headG.position.copy(pos.head); this.gear.position.set(0, 0, 0);   // the helmet and cap are measured from the head bone
       this.headG.quaternion.copy(W.head);
+      B.head.scale.setScalar(HEAD_SIZE); this.headG.scale.setScalar(HEAD_SIZE);   // a slightly bigger head, so faces read from the match camera
       // the equipment helmet and cap ride on the head bone itself (its rest frame is the world frame, so the offset is simple)
       if (this.eqHelmet && this.eqHelmet.parent !== B.head) {
         for (const o of [this.eqHelmet, this.eqCap]) { B.head.add(o); o.position.set(0, o===this.eqHelmet && PRODUCTION?.reference ? .035 : .075, -0.008); }
@@ -1389,7 +1405,7 @@ window.Cricket3D = function (G) {
       }
       const bloom = new PP.BloomEffect({ intensity: PRODUCTION?.reference ? .18 : 0.9, luminanceThreshold: 0.9, luminanceSmoothing: 0.25, mipmapBlur: true, radius: 0.72 });
       const tone = new PP.ToneMappingEffect({ mode: PP.ToneMappingMode.ACES_FILMIC });
-      const grade = new PP.HueSaturationEffect({ saturation: 0.06 });
+      const grade = new PP.HueSaturationEffect({ saturation: 0.16 });
       const contrast = new PP.BrightnessContrastEffect({ brightness: 0.0, contrast: 0.1 });
       const vignette = new PP.VignetteEffect({ offset: 0.32, darkness: 0.42 });
       c.addPass(new PP.EffectPass(camera, bloom, tone, grade, contrast, vignette));
