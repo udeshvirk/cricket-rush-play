@@ -570,7 +570,7 @@
 <script src="vendor/postprocessing.min.js"></script>
 <script src="vendor/GLTFLoader.js"></script>
 <script src="vendor/SkeletonUtils.js"></script>
-<script async src="vendor/player-v2.js"></script>
+<script async src="vendor/player-rb.js"></script>
 <script async src="vendor/equipment-model.js"></script>
 <script async src="vendor/grip-model.js"></script>
 <script src="player-production/config.js"></script>
@@ -582,6 +582,8 @@
 'use strict';
 const REFERENCE_VIEW = !!(window.CR_PLAYER_PRODUCTION && window.CR_PLAYER_PRODUCTION.reference);
 const PRESENTATION_SLICE = !!window.CR_PLAYER_PRODUCTION?.slice;
+// the smoother movement (curved pose blending, a real running stride, feet that plant and roll); ?motion=old shows the earlier one
+const MOTION2 = REFERENCE_VIEW || new URLSearchParams(location.search).get('motion') !== 'old';
 document.body.classList.toggle('reference-view',REFERENCE_VIEW);
 
 // ======================================================================= setup
@@ -906,7 +908,7 @@ function figure(pos, face, o = {}) {
   const F = [Math.sin(face), 0, Math.cos(face)], L = [Math.cos(face), 0, -Math.sin(face)];
   const P = (a, b, h) => add(pos, add(add(mul(F, a), mul(L, b)), [0, h, 0]));
   const run = o.run || 0, ph = o.phase || 0, crouch = o.crouch || 0;
-  const sw = Math.sin(ph) * 0.42 * run, lean = 0.12 * run + crouch * 0.25;
+  const sw = Math.sin(ph) * 0.42 * run, lean = 0.12 * run + crouch * 0.25 + 0.025;   // (a standing player's weight is slightly forward)
   const still = Math.max(0, 1 - run * 2), sd = o.seed || 0, br = Math.sin(clock * 1.6 + sd * 3) * still, shift = Math.sin(clock * 0.45 + sd * 7) * 0.035 * still;
   const hip = 0.95 - crouch * 0.25 - Math.abs(Math.sin(ph)) * 0.04 * run + br * 0.007;
   const j = {};
@@ -923,7 +925,7 @@ function figure(pos, face, o = {}) {
   j.handL = o.handL || P(lean - arm + crouch * 0.35, 0.24, hip + 0.02 + crouch * 0.2);
   j.handR = o.handR || P(lean + arm + crouch * 0.35, -0.24, hip + 0.02 + crouch * 0.2);
   j.elL = add(lerp3(j.shL, j.handL, 0.5), mul(L, 0.05)); j.elR = add(lerp3(j.shR, j.handR, 0.5), mul(L, -0.05));
-  if(REFERENCE_VIEW) {
+  if(MOTION2) {
     j.footPitchL=[0,0,0];j.footPitchR=[0,0,0];
     if(run>.05) {
       const resting=Object.fromEntries(Object.entries(j).map(([key,value])=>[key,value.slice()]));
@@ -1272,7 +1274,7 @@ function drawCricketer(pr, kit) {
 // ----------------------------------------------------------------------- posed bodies: batting strokes and the bowling action
 // A pose: feet fr (left) and bk (right), pelvis pel, hips / shoulders facing hy / sy (degrees, 0 = toward the bowler's end),
 // lean (forward), side (toward the left shoulder), hands hL / hR; kpL / kpR / epL / epR point the knees / elbows.
-const LEG = 0.48, UPARM = 0.3, FOREARM = 0.29;
+const LEG = 0.45, UPARM = 0.3, FOREARM = 0.29;   // (0.45: a standing leg is nearly straight, as on the player model)
 const facing = d => [Math.sin(d * deg), 0, Math.cos(d * deg)];
 // the middle joint (knee, elbow) between a and c, bent toward `pole`
 function ik(a, c, l1, l2, pole) {
@@ -1293,9 +1295,9 @@ function buildBody(k) {
   const sc = sub(j.neck, mul(sp, 0.05));
   j.shL = add(sc, mul(s, 0.19)); j.shR = add(sc, mul(s, -0.19));
   j.head = add(add(j.neck, mul(sp, 0.18)), add(mul(n, 0.035), k.headOff || [0, 0, 0]));
-  if(REFERENCE_VIEW && k.headOff) j.head=add(j.neck,[0,.18,.025]); // batsman keeps his eyes level while the trunk leans
+  if(MOTION2 && k.headOff) j.head=add(j.neck,[0,.18,.025]); // batsman keeps his eyes level while the trunk leans
   j.footL = k.fr.slice(); j.footR = k.bk.slice();
-  if(REFERENCE_VIEW) {
+  if(MOTION2) {
     j.footDirL=norm(k.kpL||nH);j.footDirR=norm(k.kpR||nH);
     const pitch=k.rearFootPitch||0;j.footPitchR=[pitch,0,0];j.footPitchL=[0,0,0];
     j.footR[1]+=.14*Math.sin(pitch)+.06*(Math.cos(pitch)-1);
@@ -1311,7 +1313,7 @@ function mixPose(a, b, t) {
   const o = {};
   for (const key in a) {
     const x = a[key], y = b[key] === undefined ? x : b[key];
-    if(REFERENCE_VIEW && key==='bd') {
+    if(MOTION2 && key==='bd') {
       // A normalised linear blend rushes through almost-opposite backlift
       // directions. Interpolate the blade on the unit sphere instead.
       const cosine=clamp(dot(x,y),-1,1),angle=Math.acos(cosine),sine=Math.sin(angle);
@@ -1353,8 +1355,8 @@ function strokeFamily(a, loft, defend, push, short, spin) {
 // key poses for a stroke: ready, backlift, the bat meeting the ball at sw.target, the follow-through, then back to the stance
 function strokeKeys(sw) {
   const T = sw.target, a = sw.intent * deg, dir = [Math.sin(a), 0, Math.cos(a)], loft = sw.loft;
-  const R = REFERENCE_VIEW ? (sw.visualStart || PREPARE) : READY;
-  const B = REFERENCE_VIEW ? {...PREPARE,h:[.22,1.22,.94],bd:norm([-.28,.88,-.38]),lean:12}
+  const R = MOTION2 ? (sw.visualStart || PREPARE) : READY;
+  const B = MOTION2 ? {...PREPARE,h:[.22,1.22,.94],bd:norm([-.28,.88,-.38]),lean:12}
     : {...READY,h:[.52,1.3,.56],bd:norm([.2,.85,-.5]),lean:12};
   const at = (bd, d = 0.58) => sub(T, mul(bd, d));   // grip, so the middle of the bat meets the ball
   const tx = clamp(T[0], -0.9, 0.9), front = (x, z) => [clamp(tx + x, 0.05, 0.72), 0, z];
@@ -1365,7 +1367,7 @@ function strokeKeys(sw) {
       C = { ...R, fr, pel: [lerp(0.63, fr[0], 0.45), 0.8, 0.98], hy: -70, sy: -78, lean: 28, side: 14, h: at(bd), bd, kpL: [-0.4, 0, 1] };
       F = { ...C, hy: -55, sy: -45 + sw.intent * 0.25, lean: 16, side: 6,
             h: [0.4 + dir[0] * 0.25, loft ? 1.78 : 1.55, 1.08 + dir[2] * 0.12], bd: norm(loft ? [0.3, 0.9, -0.3] : [0.45, 0.5, -0.75]) };
-      if(REFERENCE_VIEW) F={...F,pel:[.45,.91,1.0],hy:-40,sy:-20,lean:8,side:2,rearFootPitch:.4,h:[.68,loft?1.90:1.78,1.16],bd:norm(loft?[.35,.83,-.43]:[.48,.65,-.58])};
+      if(MOTION2) F={...F,pel:[.45,.91,1.0],hy:-40,sy:-20,lean:8,side:2,rearFootPitch:.4,h:[.68,loft?1.90:1.78,1.16],bd:norm(loft?[.35,.83,-.43]:[.48,.65,-.58])};
       if(PRESENTATION_SLICE) F={...F,pel:[.45,.91,1.04],hy:-32,sy:8,lean:7,side:0,h:[.36,loft?1.86:1.74,1.34],bd:norm(loft?[.12,.82,-.56]:[.12,.66,-.74])};
       break; }
     case 'fdef': case 'push': {
@@ -1414,10 +1416,10 @@ function strokeKeys(sw) {
   C = { ...C, lean: C.lean + v.l * 0.4 };
   F = { ...F, lean: F.lean + v.l * firm, hy: F.hy + v.y * firm, sy: F.sy + v.y * firm, h: add(F.h, mul(v.h, firm)) };
   tF += v.f;
-  if(REFERENCE_VIEW && ['drive','fdef','push','flick','slog'].includes(sw.fam)) B.fr=add(lerp3(R.fr,C.fr,.65),[0,.035,0]);
+  if(MOTION2 && ['drive','fdef','push','flick','slog'].includes(sw.fam)) B.fr=add(lerp3(R.fr,C.fr,.65),[0,.035,0]);
   const S = { ...F, lean: F.lean - 4, h: add(F.h, [0, -0.06 * firm, 0]) };
   // the bat accelerates into the ball and decelerates through the follow-through
-  if(REFERENCE_VIEW && sw.fam==='drive') {
+  if(MOTION2 && sw.fam==='drive') {
     // Extend through the ball before folding over the shoulder. A direct
     // contact-to-finish arc cuts across the upper chest immediately after impact.
     const extension={...C,hy:-60,sy:-55,lean:20,side:8,h:[.55,1.24,1.54],bd:norm([.32,-.12,.94])};
@@ -1431,7 +1433,7 @@ function batterPose(sw) {
   let k;
   if (sw) {
     if (!sw.keys) sw.keys = strokeKeys(sw);
-    if(REFERENCE_VIEW) {if(!sw.curve)sw.curve=CricketMotion.prepare(sw.keys);k=CricketMotion.sample(sw.curve,sw.t);}
+    if(MOTION2) {if(!sw.curve)sw.curve=CricketMotion.prepare(sw.keys);k=CricketMotion.sample(sw.curve,sw.t);}
     else k=keyed(sw.keys,sw.t);
   }
   else {
@@ -1443,7 +1445,7 @@ function batterPose(sw) {
     const tp = (clock * 0.75) % 1, tap = tapOn * (tp < 0.2 ? Math.sin(tp / 0.2 * Math.PI) : 0);
     k = { ...k, pel: add(k.pel, [0, br * 0.008, 0]), lean: k.lean + br * 1.2,
           h: add(k.h, [0, 0.06 * tap, 0]), bd: norm(add(k.bd, [0, 0.35 * tap, -0.15 * tap])) };
-    if(REFERENCE_VIEW && phase==='flight' && ball && !ball.left) {
+    if(MOTION2 && phase==='flight' && ball && !ball.left) {
       const u=smooth(clamp((ball.t-(ball.Tstar-SWING_LAG-.28))/.28,0,1));k=mixPose(k,PREPARE,u);
     }
     if (ball && ball.left) {   // bat up out of the way; duck under a bouncer
@@ -1453,9 +1455,9 @@ function batterPose(sw) {
   }
   const bd = norm(k.bd);
   const j = buildBody({ ...k, hL: sub(k.h, mul(bd, 0.045)), hR: add(k.h, mul(bd, 0.045)), headOff: [0, 0, 0.04] });
-  const follow=REFERENCE_VIEW && sw?smooth(clamp((sw.t-SWING_LAG-.04)/.32,0,1)):0;
-  const gaze=facing(REFERENCE_VIEW && sw?clamp(sw.intent||0,-70,70)*follow:0);
-  if(REFERENCE_VIEW && sw?.loft)j.head[2]-=.035*follow;
+  const follow=MOTION2 && sw?smooth(clamp((sw.t-SWING_LAG-.04)/.32,0,1)):0;
+  const gaze=facing(MOTION2 && sw?clamp(sw.intent||0,-70,70)*follow:0);
+  if(MOTION2 && sw?.loft)j.head[2]-=.035*follow;
   return { j, hands: k.h.slice(), tip: add(k.h, mul(bd, 0.85)), pose:k,look:gaze };
 }
 
@@ -1502,8 +1504,8 @@ function bowlerState() {
     return runner([lerp(1.1, BOWLER_LANE_X, smooth(Math.min(1, u / 0.9))), 0, lerp(start, bound, u)], Math.PI, 1, phaseT * (spin ? 9 : 12));
   }
   if (tr < 0.5) {
-    if(REFERENCE_VIEW && !keys.curve)keys.curve=CricketMotion.prepare(keys);
-    const j = buildBody(REFERENCE_VIEW?CricketMotion.sample(keys.curve,tr):keyed(keys,tr));
+    if(MOTION2 && !keys.curve)keys.curve=CricketMotion.prepare(keys);
+    const j = buildBody(MOTION2?CricketMotion.sample(keys.curve,tr):keyed(keys,tr));
     if (tr < -0.26) {   // from the last running stride into the bound
       const r = runner([BOWLER_LANE_X, 0, bound - speed * (tr + 0.38)], Math.PI, 1, phaseT * (spin ? 9 : 12));
       return { pos: [j.pelvis[0], 0, j.pelvis[2]], j: mixJoints(r.j, j, smooth((tr + 0.38) / 0.12)) };
@@ -1854,7 +1856,7 @@ function swing(loft, pressT, aim, w) {
   if (aim && aim.defend) w *= 1.35;                                                     // a block is easier to time
   if (ball.charge) w *= high ? 0.8 : 1.15;                                              // down the pitch: a half-volley, unless it's a bouncer
   const okW = 0.1 * w, edgeW = 0.15 * w;
-  const visualStart=REFERENCE_VIEW?batterPose(null).pose:null;
+  const visualStart=MOTION2?batterPose(null).pose:null;
   ball.swing = { t: ball.t - pressT, loft: loft && !(aim && aim.defend), angle: 0, tc, defend: !!(aim && aim.defend),...(visualStart?{visualStart}:{}) };
   let kind;
   const a = Math.abs(dtTiming) * (low ? 1.35 : 1);
@@ -3040,7 +3042,7 @@ function livePeople() {
     const from = (leg % 2 === 0) ? startZ : (startZ < 10 ? PITCH - 0.6 : 0.6);
     const to = (leg % 2 === 0) ? (startZ < 10 ? PITCH - 0.6 : 0.6) : startZ;
     const z = prog >= total ? (total % 2 ? (startZ < 10 ? PITCH - 0.6 : 0.6) : startZ) : lerp(from, to, smooth(f));
-    const turn=REFERENCE_VIEW && leg<total-1?smooth(clamp((f-.87)/.13,0,1))*Math.PI:0;
+    const turn=MOTION2 && leg<total-1?smooth(clamp((f-.87)/.13,0,1))*Math.PI:0;
     const speed=prog>=total?0:Math.abs(to-from)*6*f*(1-f)/(runT<RUN1?RUN1:RUN_MORE);
     return { pos: [x, 0, z], face: (to > from ? 0 : Math.PI)+turn, moving: prog < total,runWeight:smooth(clamp(speed/4,0,1)),
       distance:Math.min(total,leg+smooth(f))*(PITCH-1.2) };
@@ -3063,7 +3065,7 @@ function livePeople() {
     out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look: [Math.sin(face), 0, Math.cos(face)],
                bat: { carry: true, hands: hR, tip: add(hR, [-0.1 * u, 0.85 * u - 0.6 * (1 - u), 0]) } });
   } else if (sr) {
-    const j = figure(sr.pos, sr.face, { run: REFERENCE_VIEW?sr.runWeight:sr.moving?1:0, phase: clock * 11,gaitDistance:sr.distance });
+    const j = figure(sr.pos, sr.face, { run: MOTION2?sr.runWeight:sr.moving?1:0, phase: clock * 11,gaitDistance:sr.distance });
     const hand = j.handR;
     out.push({ j, at: sr.pos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look: null,
                bat: { carry: true, hands: hand, tip: add(hand, [0, -0.7, sr.face ? -0.3 : 0.3]) } });
@@ -3079,14 +3081,14 @@ function livePeople() {
       if (ball.charge.t < 0.4) { const ph = Math.sin(ball.charge.t * 24) * 0.12; j.footL[2] += ph; j.footR[2] -= ph; j.kneeL[2] += ph / 2; j.kneeR[2] -= ph / 2; }
     }
     const stroke=ball && ball.swing;
-    const width=REFERENCE_VIEW && stroke && stroke.fam!=='drive' && stroke.keys
+    const width=MOTION2 && stroke && stroke.fam!=='drive' && stroke.keys
       ? norm(cross(mul(stroke.keys[2][1].bd,-1),[0,0,1])) : [1,0,0];
-    out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look, bat: { carry: false, hands, tip, contact,...(REFERENCE_VIEW?{width}:{}) } });
+    out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look, bat: { carry: false, hands, tip, contact,...(MOTION2?{width}:{}) } });
   }
   // the non-striker
   const ns = runner(PITCH - 0.6, -1.5);
   const nsPos = ns ? ns.pos : [-1.7, 0, PITCH - 0.4];
-  const nj = figure(nsPos, ns ? ns.face : Math.PI, { run: REFERENCE_VIEW?(ns?ns.runWeight:0):(ns&&ns.moving?1:0), phase: clock * 11 + 1,gaitDistance:ns?ns.distance+1.9:undefined, seed: 20 });
+  const nj = figure(nsPos, ns ? ns.face : Math.PI, { run: MOTION2?(ns?ns.runWeight:0):(ns&&ns.moving?1:0), phase: clock * 11 + 1,gaitDistance:ns?ns.distance+1.9:undefined, seed: 20 });
   out.push({ j: nj, at: nsPos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.non : 1), look: null,
              bat: { carry: true, hands: nj.handL, tip: add(nj.handL, [0.1, -0.75, ns && ns.face === 0 ? 0.25 : -0.25]) } });
   // the bowler, then the fielders (once the ball is hit, the bowler is one of the fielders)
@@ -3110,9 +3112,9 @@ function livePeople() {
       if (wi.moving) { run = Math.max(run, 0.3); ph = clock * 7 + f.phase; }
     }
     const rj = f.run < 0.3 ? react(f, pos, f.face) : null;
-    const startBlend=REFERENCE_VIEW && f.target && ball?.play?smooth(clamp((ball.play.t-(f.keeper ? .12 : .32))/.18,0,1)):1;
-    out.push({ j: rj || figure(pos, f.face, { run:REFERENCE_VIEW?run*startBlend:run, phase: ph,
-      gaitDistance:REFERENCE_VIEW && f.run>.9?f.phase*f.speed/11:undefined,crouch: wi.moving ? 0 : f.crouch, seed: fi + 1 }), at: pos, team: 'bowl', keeper: !!f.keeper, bowler: !!f.bowler,
+    const startBlend=MOTION2 && f.target && ball?.play?smooth(clamp((ball.play.t-(f.keeper ? .12 : .32))/.18,0,1)):1;
+    out.push({ j: rj || figure(pos, f.face, { run:MOTION2?run*startBlend:run, phase: ph,
+      gaitDistance:MOTION2 && f.run>.9?f.phase*f.speed/11:undefined,crouch: wi.moving ? 0 : f.crouch, seed: fi + 1 }), at: pos, team: 'bowl', keeper: !!f.keeper, bowler: !!f.bowler,
                pid: fid(f.who), look: null });
   }
   return out;
