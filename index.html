@@ -1392,7 +1392,7 @@ function strokeKeys(sw) {
       C = { ...R, fr, pel: [lerp(0.63, fr[0], 0.45), 0.8, 0.98], hy: -70, sy: -78, lean: 28, side: 14, h: at(bd), bd, kpL: [-0.4, 0, 1] };
       F = { ...C, hy: -55, sy: -45 + sw.intent * 0.25, lean: 16, side: 6,
             h: [0.4 + dir[0] * 0.25, loft ? 1.78 : 1.55, 1.08 + dir[2] * 0.12], bd: norm(loft ? [0.3, 0.9, -0.3] : [0.45, 0.5, -0.75]) };
-      if(MOTION2) F={...F,pel:[.45,.91,1.0],hy:-40,sy:-20,lean:8,side:2,rearFootPitch:.4,h:[.68,loft?1.90:1.78,1.16],bd:norm(loft?[.42,.88,-.2]:[.6,.74,-.28])};   // the finish stays up beside the head, not behind the helmet
+      if(MOTION2) F={...F,pel:[.45,.91,1.0],hy:-40,sy:-20,lean:8,side:2,rearFootPitch:.4,h:[.8,loft?1.86:1.74,1.16],bd:norm(loft?[.68,.72,-.12]:[.75,.6,-.2])};   // the finish leans out beside the head, so the bat doesn't stand up out of the helmet
       if(PRESENTATION_SLICE) F={...F,pel:[.45,.91,1.04],hy:-32,sy:8,lean:7,side:0,h:[.36,loft?1.86:1.74,1.34],bd:norm(loft?[.12,.82,-.56]:[.12,.66,-.74])};
       break; }
     case 'fdef': case 'push': {
@@ -1406,17 +1406,17 @@ function strokeKeys(sw) {
       // pulling the bat face away from the ball's contact point.
       const h = at(bd, Math.min(.45, Math.max(.20, (1.4-T[1])/-bd[1])));
       C = { ...R, fr: [0.5, 0, 0.94], bk: [0.38, 0, 0.36], pel: [0.47, 0.9, 0.64], hy: -80, sy: -84, lean: 10, side: 4, h, bd, kpL: [-1, 0, 0.3], kpR: [-1, 0, 0] };
-      F = sw.fam === 'bdef' ? { ...C } : { ...C, sy: -60, h: [0.38 + dir[0] * 0.2, 1.48, 0.95 + dir[2] * 0.1], bd: norm([0.4, 0.55, -0.7]) };
+      F = sw.fam === 'bdef' ? { ...C } : { ...C, sy: -60, h: [0.15 + dir[0] * 0.2, 1.45, 1.05 + dir[2] * 0.1], bd: norm([-0.6, 0.72, 0.35]) };   // finishes up in front of the off shoulder, not standing up behind the helmet
       if (sw.fam === 'bdef') tF = 0.35; break; }
     case 'cut': {
       const bd = norm([-0.95, -0.3, 0.15]);
       C = { ...R, fr: [0.52, 0, 1.08], bk: [0.3, 0, 0.6], pel: [0.42, 0.88, 0.70], hy: -95, sy: -92, lean: 22, side: -4, h: at(bd), bd, kpL: [-1, 0, 0.3], kpR: [-1, 0, 0] };
-      F = { ...C, sy: -100, h: [0.05, 1.32, 1.0], bd: norm([-0.5, 0.45, 0.75]) };   // the blade carries on round and up toward cover, in view
+      F = { ...C, sy: -100, h: [-0.05, 1.25, 0.95], bd: norm([-0.75, 0.5, 0.45]) };   // the blade carries on round and up toward cover, out to the side of the helmet
       B.h = [0.28, 1.34, 0.72]; B.bd = norm([-0.5, 0.8, -0.3]); break; }   // backlift on the off side, not straight up behind the helmet
     case 'pull': {
       const bd = norm([-0.95, 0.05, 0.2]);
       C = { ...R, fr: [0.78, 0, 0.98], bk: [0.48, 0, 0.36], pel: [0.6, 0.9, 0.66], hy: -50, sy: -35, lean: 12, side: 0, h: at(bd), bd, kpL: [-0.3, 0, 1], kpR: [-1, 0, 0] };
-      F = { ...C, hy: -20, sy: 20, h: [0.95, 1.58, 0.92], bd: norm([0.35, 0.35, -0.85]) };
+      F = { ...C, hy: -20, sy: 20, h: [1.0, 1.62, 1.0], bd: norm([0.6, 0.75, -0.25]) };   // finishes high over the leg-side shoulder, not wrapped round behind the back
       B.h = [0.3, 1.32, 0.68]; B.bd = norm([-0.45, 0.82, -0.36]); break; }
     case 'flick': {
       const fr = front(0.4, 1.28), bd = norm([0.12, -1, -0.05]);
@@ -1426,13 +1426,13 @@ function strokeKeys(sw) {
     case 'slog': {
       const bd = norm([-0.9, -0.3, 0.25]);
       C = { ...R, fr: [0.75, 0, 1.25], pel: [0.66, 0.74, 0.86], hy: -45, sy: -30, lean: 28, side: 6, h: at(bd,.50), bd, kpL: [-0.2, 0, 1] };
-      F = { ...C, hy: -10, sy: 30, lean: 8, h: [0.8, 1.6, 0.8], bd: norm([0.3, 0.6, -0.75]) };
+      F = { ...C, hy: -10, sy: 30, lean: 8, h: [0.9, 1.75, 0.95], bd: norm([0.45, 0.85, -0.2]) };   // a high finish, in view
       B.h = [0.3, 1.35, 0.66]; B.bd = norm([-0.4, 0.85, -0.35]); break; }
     case 'sweep': {
       const bd = norm([-0.9, -0.35, 0.25]);
       C = { ...R, fr: [0.42, 0, 1.22], bk: [0.78, 0, 0.22], pel: [0.62, 0.54, 0.82], hy: -70, sy: -60, lean: 30, side: 8, h: at(bd), bd,
             kpL: [-0.3, 0.6, 1], kpR: [-0.2, -1, 0.3] };
-      F = { ...C, sy: -20, h: [1.0, 1.05, 1.12], bd: norm([0.75, 0.5, -0.3]) };   // the sweep finishes round on the leg side, in view
+      F = { ...C, sy: -20, h: [1.05, 0.85, 1.25], bd: norm([0.8, 0.45, 0.1]) };   // the sweep finishes round on the leg side, low and in front, not behind the head
       B.h = [0.22, 1.2, 0.90]; B.bd = norm([-0.2, 0.8, -0.55]); break; }
   }
   // no two strokes quite alike: a little variety in the finish, and a held finish that settles instead of freezing
@@ -1452,6 +1452,31 @@ function strokeKeys(sw) {
     return [[0,R],[.07,B],[SWING_LAG,C,easeIn],[.24,extension],[tF,F,easeOut],[tF+v.hold,S],[tF+v.hold+.7,STANCE]];
   }
   return [[0, R], [0.07, B], [SWING_LAG, C, easeIn], [tF, F, easeOut], [tF + v.hold, S], [tF + v.hold + 0.7, STANCE]];
+}
+// The bat must never pass through the batter. Body parts as capsules (from, to, radius in metres, with pads, shirt and
+// helmet); if the blade would be inside one, it turns about the hands just far enough to pass outside it.
+const BLADE_GAP = 0.035;   // half the blade's thickness
+function bodyCapsules(j) {
+  return [[j.kneeL, j.footL, 0.085], [j.kneeR, j.footR, 0.085], [j.hipL, j.kneeL, 0.09], [j.hipR, j.kneeR, 0.09],
+          [j.pelvis, j.neck, 0.15], [j.head, j.head, 0.15], [j.shL, j.elL, 0.055], [j.shR, j.elR, 0.055]];
+}
+function closestOnSeg(p, a, b) { const ab = sub(b, a), t = clamp(dot(sub(p, a), ab) / Math.max(1e-9, dot(ab, ab)), 0, 1); return add(a, mul(ab, t)); }
+function bladeClear(j, h, bd) {
+  const caps = bodyCapsules(j);
+  for (let iter = 0; iter < 16; iter++) {
+    let worst = null;
+    for (const [a, b, r] of caps) for (let u = 0.3; u <= 1.0001; u += 0.1) {
+      const p = add(h, mul(bd, 0.85 * u)), q = closestOnSeg(p, a, b), d = len(sub(p, q)), pen = r + BLADE_GAP - d;
+      if (pen > 0 && (!worst || pen > worst.pen)) worst = { pen, p, q, u };
+    }
+    if (!worst) break;
+    // push that point of the blade straight out of the body part, keeping the hands where they are
+    let out = sub(worst.p, worst.q); out = sub(out, mul(bd, dot(out, bd)));
+    if (len(out) < 1e-6) out = norm(cross(bd, [0, 1, 0]));
+    const reach = 0.85 * worst.u;
+    bd = norm(add(mul(bd, reach), mul(norm(out), worst.pen + 0.01)));
+  }
+  return bd;
 }
 // the batter this frame: { j, hands, tip } (before moving across the crease or down the pitch)
 function batterPose(sw) {
@@ -1478,8 +1503,9 @@ function batterPose(sw) {
       k = mixPose(k, ball.atBat[1] > 1.45 ? DUCK : LEAVE, lk);
     }
   }
-  const bd = norm(k.bd);
+  let bd = norm(k.bd);
   const j = buildBody({ ...k, hL: sub(k.h, mul(bd, 0.045)), hR: add(k.h, mul(bd, 0.045)), headOff: [0, 0, 0.04] });
+  if (MOTION2) bd = bladeClear(j, k.h, bd);
   const follow=MOTION2 && sw?smooth(clamp((sw.t-SWING_LAG-.04)/.32,0,1)):0;
   const gaze=facing(MOTION2 && sw?clamp(sw.intent||0,-70,70)*follow:0);
   if(MOTION2 && sw?.loft)j.head[2]-=.035*follow;
