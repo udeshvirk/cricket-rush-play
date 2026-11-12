@@ -1433,12 +1433,12 @@ function strokeKeys(sw) {
     case 'cut': {
       const bd = norm([-0.95, -0.3, 0.15]);
       C = { ...R, fr: [0.52, 0, 1.08], bk: [0.3, 0, 0.6], pel: [0.42, 0.88, 0.70], hy: -95, sy: -92, lean: 22, side: -4, h: at(bd), bd, kpL: [-1, 0, 0.3], kpR: [-1, 0, 0] };
-      F = { ...C, sy: -100, h: [0.0, 1.08, 0.82], bd: norm([-0.8, -0.3, -0.5]) };   // the blade carries on down and round toward point, out on the off side where it's seen
+      F = { ...C, hy: -100, sy: -112, h: [0.12, 1.1, 0.68], bd: norm([-0.6, -0.1, -0.8]) };   // the blade carries on down and round toward point, out on the off side where it's seen
       B.h = [0.28, 1.34, 0.72]; B.bd = norm([-0.5, 0.8, -0.3]); break; }   // backlift on the off side, not straight up behind the helmet
     case 'pull': {
       const bd = norm([-0.95, 0.05, 0.2]);
       C = { ...R, fr: [0.78, 0, 0.98], bk: [0.48, 0, 0.36], pel: [0.6, 0.9, 0.66], hy: -50, sy: -35, lean: 12, side: 0, h: at(bd), bd, kpL: [-0.3, 0, 1], kpR: [-1, 0, 0] };
-      F = { ...C, hy: -20, sy: 20, h: [1.0, 1.62, 1.0], bd: norm([0.6, 0.75, -0.25]) };   // finishes high over the leg-side shoulder, not wrapped round behind the back
+      F = { ...C, hy: -5, sy: 40, h: [1.0, 1.62, 1.0], bd: norm([0.6, 0.75, -0.25]) };   // finishes high over the leg-side shoulder, not wrapped round behind the back
       B.h = [0.3, 1.32, 0.68]; B.bd = norm([-0.45, 0.82, -0.36]); break; }
     case 'flick': {
       const fr = front(0.4, 1.28), bd = norm([0.12, -1, -0.05]);
@@ -1448,7 +1448,7 @@ function strokeKeys(sw) {
     case 'slog': {
       const bd = norm([-0.9, -0.3, 0.25]);
       C = { ...R, fr: [0.75, 0, 1.25], pel: [0.66, 0.74, 0.86], hy: -45, sy: -30, lean: 28, side: 6, h: at(bd,.50), bd, kpL: [-0.2, 0, 1] };
-      F = { ...C, hy: -10, sy: 30, lean: 8, h: [0.9, 1.75, 0.95], bd: norm([0.45, 0.85, -0.2]) };   // a high finish, in view
+      F = { ...C, hy: 10, sy: 50, lean: 8, h: [0.9, 1.75, 0.95], bd: norm([0.45, 0.85, -0.2]) };   // a high finish, in view
       B.h = [0.3, 1.35, 0.66]; B.bd = norm([-0.4, 0.85, -0.35]); break; }
     case 'sweep': {
       const bd = norm([-0.9, -0.35, 0.25]);
@@ -1466,6 +1466,7 @@ function strokeKeys(sw) {
   if(MOTION2 && ['drive','fdef','push','flick','slog'].includes(sw.fam)) B.fr=add(lerp3(R.fr,C.fr,.65),[0,.035,0]);
   const S = { ...F, lean: F.lean - 4, h: add(F.h, [0, -0.06 * firm, 0]) };
   // the bat accelerates into the ball and decelerates through the follow-through
+  if (MOTION2 && !PRESENTATION_SLICE && SWING_PATHS[sw.fam]) return pathSwing(R, C, F, S, tF, v.hold, SWING_PATHS[sw.fam]);
   if (MOTION2 && !PRESENTATION_SLICE && STRAIGHT_FAMS.includes(sw.fam)) return straightSwing(R, C, F, S, tF, v.hold, dir, sw.fam);
   if (MOTION2 && !PRESENTATION_SLICE) return swingArc(R, C, F, S, tF, v.hold, sw.fam === 'cut' ? norm([0, -0.55, -0.85]) : dir);   // the cut comes down and across, behind square
   if(MOTION2 && sw.fam==='drive') {
@@ -1548,6 +1549,41 @@ function straightSwing(R, C, F, S, tF, hold, dir, fam) {
     const th = lerp(thC, thF, 1 - Math.pow(1 - u, 1.6)), w = smooth(u), off = add(mul(oC, 1 - w), mul(oF, w));
     keys.push([lerp(L, tF, u), { ...mixPose(C, F, smooth(u)), h: bez(C.h, hx, F.h, u), bd: norm(add(plane(th, sd), off)) }]);
   }
+  keys.push([tF, F], [tF + hold, S], [tF + hold + 0.7, STANCE]);
+  return keys;
+}
+// The cross-bat strokes: the bat follows set positions on its way down to the ball (down) and on through to the finish
+// (through), with the hands on a curve through hDown / hThrough. Bat directions are in the batter's frame: +x leg side,
+// +y up, +z toward the bowler (right-hander; left-handers are mirrored later).
+const SWING_PATHS = {
+  // a chop: the bat comes down from high over the off side, meets the ball beside the body, and the wrists roll it on
+  // round toward third man
+  cut: { down: [[-0.55, 0.8, 0.1], [-0.9, 0.38, 0.2]], hDown: [0.35, 1.5, 0.95], through: [[-0.85, -0.5, -0.15], [-0.75, -0.3, -0.55]], hThrough: [0.25, 1.12, 0.85] },
+  // cocked high behind on the off side, round flat in front of the chest, and over the leg-side shoulder
+  pull: { down: [[-0.6, 0.65, -0.45], [-0.95, 0.3, -0.1]], hDown: [0.45, 1.35, 0.8], through: [[-0.2, 0.1, 0.97], [0.75, 0.25, 0.6]], hThrough: [0.85, 1.3, 1.2] },
+  // a big heave: high backlift, down and round through the line, up into a high finish
+  slog: { down: [[-0.5, 0.75, -0.45], [-0.9, 0.25, -0.2]], hDown: [0.4, 1.15, 0.85], through: [[-0.1, 0.05, 0.99], [0.7, 0.45, 0.55]], hThrough: [0.8, 1.15, 1.25] },
+  // down on one knee, the bat sweeps flat across in front of the pad and finishes low on the leg side
+  sweep: { down: [[-0.6, 0.6, -0.4], [-0.95, 0.1, -0.1]], hDown: [0.35, 0.95, 0.9], through: [[-0.1, -0.35, 0.93], [0.75, -0.15, 0.6]], hThrough: [0.8, 0.5, 1.15] },
+};
+function slerpDir(a, b, t) {
+  const c = clamp(dot(a, b), -1, 1), th = Math.acos(c);
+  if (th < 1e-4) return a.slice();
+  const s = Math.sin(th); return norm(add(mul(a, Math.sin((1 - t) * th) / s), mul(b, Math.sin(t * th) / s)));
+}
+function alongDirs(list, s) {   // evenly through a list of directions
+  const n = list.length - 1, x = clamp(s, 0, 1) * n, i = Math.min(n - 1, Math.floor(x));
+  return slerpDir(norm(list[i]), norm(list[i + 1]), x - i);
+}
+function pathSwing(R, C, F, S, tF, hold, P) {
+  const L = SWING_LAG, bez = (a, m, b, u) => add(add(mul(a, (1 - u) * (1 - u)), mul(m, 2 * u * (1 - u))), mul(b, u * u));
+  const down = [R.bd, ...P.down, C.bd], thr = [C.bd, ...P.through, F.bd];
+  const keys = [[0, R]];
+  for (const u of [0.2, 0.4, 0.6, 0.8, 0.92])   // hands lead, the bat comes late and fast
+    keys.push([u * L, { ...mixPose(R, C, smooth(u)), h: bez(R.h, P.hDown, C.h, Math.pow(u, 1.15)), bd: alongDirs(down, Math.pow(u, 1.5)) }]);
+  keys.push([L, C]);
+  for (const u of [0.15, 0.3, 0.5, 0.7, 0.85])   // quick through the ball, slowing into the finish
+    keys.push([lerp(L, tF, u), { ...mixPose(C, F, smooth(u)), h: bez(C.h, P.hThrough, F.h, u), bd: alongDirs(thr, 1 - Math.pow(1 - u, 1.6)) }]);
   keys.push([tF, F], [tF + hold, S], [tF + hold + 0.7, STANCE]);
   return keys;
 }
