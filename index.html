@@ -3579,7 +3579,7 @@ function toggleFull() {
     if (isFull()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
     else {
       const r = (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen).call(fsEl);
-      if (r && r.then) r.then(() => { try { screen.orientation.lock('landscape').catch(() => {}); } catch (e) {} }).catch(() => {});
+      if (r && r.then) r.catch(() => {});   // no orientation lock: upright and sideways both work
     }
   } catch (e) {}
 }
