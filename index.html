@@ -560,7 +560,7 @@
         <button class="btn ghost" id="autoBowlToggle" type="button">Computer bowls for me</button>
         <button class="btn ghost" id="gfxToggle" type="button" hidden>Graphics: 2D</button>
         <button class="btn ghost" id="replayToggle" type="button" hidden>Replays: on</button>
-        <button class="btn ghost" id="commentaryToggle" type="button" aria-pressed="false" title="Optional device-voice preview. Recorded commentary voices are not included.">Commentary preview: off</button>
+        <button class="btn ghost" id="commentaryToggle" type="button" aria-pressed="false" title="Spoken commentary in the device's own voice.">Commentary: off</button>
         <button class="btn ghost" id="quit" type="button">Quit match</button>
       </div>
       <div class="tabs" id="pauseTabs"></div>
@@ -1565,7 +1565,7 @@ try{commentaryPreference=localStorage.getItem('cricket-rush-commentary-preview')
 commentary.setEnabled(commentaryPreference);
 function commentaryCall(event,data){commentary.setSuspended(paused||!!RP||document.hidden||ff);return commentary.emit(event,{...data,skip:quiet||ff||!!RP||paused||!!M?.autoplay});}
 const commentaryButton=$('commentaryToggle');
-function showCommentarySetting(){commentaryButton.textContent=commentary.supported?'Commentary preview: '+(commentary.enabled?'on':'off'):'Commentary preview unavailable';commentaryButton.disabled=!commentary.supported;commentaryButton.setAttribute('aria-pressed',String(commentary.enabled));}
+function showCommentarySetting(){commentaryButton.textContent=commentary.supported?'Commentary: '+(commentary.enabled?'on':'off'):'Commentary: not on this device';commentaryButton.disabled=!commentary.supported;commentaryButton.setAttribute('aria-pressed',String(commentary.enabled));}
 showCommentarySetting();
 commentaryButton.addEventListener('click',()=>{commentary.unlock();commentary.setEnabled(!commentary.enabled);try{localStorage.setItem('cricket-rush-commentary-preview',commentary.enabled?'on':'off');}catch(e){}showCommentarySetting();});
 document.addEventListener('pointerdown',()=>commentary.unlock(),{capture:true,once:true});
@@ -1915,6 +1915,7 @@ function swing(loft, pressT, aim, w) {
   ball.contactT = kind === 'miss' ? Infinity : ball.Tstar + clamp(dtTiming, -0.05, 0.015);
   let sn = kind === 'hit' ? shotName(angle, ball.swing.loft, ball.swing.defend, ball.decision.push) : kind === 'edge' ? 'Edged' : 'Missed';
   if (kind === 'hit' && ball.swing.fam === 'sweep') sn = Math.abs(angle) > 125 ? 'Fine sweep' : 'Sweep';
+  ball.decision.shot = kind === 'hit' ? sn : '';
   if (swipeVis) swipeVis.label = sn;
   if (!quiet) showTiming(dtTiming, kind, kind === 'hit' ? sn : '', w);
 }
@@ -2480,8 +2481,20 @@ function finishBall(o, line) {
   recordBall(o);
   updateScore();
   const c = i.cards[k], who = chaseMode ? '' : surname(batterP(k).name) + ' ';
-  commentaryCall('result',{...o,id:'ball-'+M.cur+'-'+i.balls+'-'+i.extras+'-'+i.runs+'-'+i.wkts,totalRuns:i.runs,wickets:i.wkts,
-    overDone:i.balls>0&&i.balls%6===0&&!o.wide,milestone:!o.out?(c.runs>=100&&c.runs-o.runs<100?100:c.runs>=50&&c.runs-o.runs<50?50:0):0});
+  {   // what the commentator needs: who, which shot, where it went, and the state of the match
+    const d = ball && ball.decision, pl = ball && ball.play, res = pl && pl.res, by = o.out && o.out.by;
+    const pt = res && res.point, fld = by || (res && res.fielder);
+    commentaryCall('result', { ...o, id: 'ball-' + M.cur + '-' + i.balls + '-' + i.extras + '-' + i.runs + '-' + i.wkts, totalRuns: i.runs, wickets: i.wkts,
+      overDone: i.balls > 0 && i.balls % 6 === 0 && !o.wide,
+      milestone: !o.out && !chaseMode ? (c.runs >= 100 && c.runs - o.runs < 100 ? 100 : c.runs >= 50 && c.runs - o.runs < 50 ? 50 : 0) : 0,
+      batter: surname(batterP(k).name), bowler: surname(bowlerP().name), team: i.bat.name, chase: !!i.target,
+      batRuns: c.runs, batBalls: c.balls, target: i.target || 0, need: i.target ? i.target - i.runs : 0, ballsLeft: i.maxBalls - i.balls,
+      lastOver: i.lastOver, shot: d && d.shot, contact: d ? d.kind : 'none', loft: !!(d && d.loft), defend: !!(d && d.defend),
+      left: /Left alone/.test(line), ducked: /Ducked/.test(line), playedOn: /Played on/.test(line), missedStumping: /Missed the stumping/.test(line),
+      dropped: !!(res && res.dropped), fielder: fld && !fld.keeper && !fld.bowler ? fld.name : '', keeper: !!(by && by.keeper), cAndB: !!(by && by.bowler),
+      region: pl ? regionName(pl.angle, pt ? Math.hypot(pt[0], pt[2]) : 60) : '', carry: res && res.carry || 0,
+      length: ball && ball.length, spin: !!(ball && (BOWL_TYPES[ball.type] || {}).turn) });
+  }
   const ours = i.userBats;   // the crowd is on your side
   if (!quiet && !ff) shake = o.out ? 0.9 : o.runs === 6 ? 0.6 : 0;
   { const cc = i.cards[k]; celebrate = { out: o.out || null, runs: o.runs || 0, milestone: !chaseMode && !o.out && cc.runs >= 50 && cc.runs - o.runs < 50 }; }
@@ -2512,7 +2525,7 @@ function startInnings(k) {
   varStreak = { vi: 0, n: 0 };
   updateScore();
   startOver();
-  commentaryCall('innings',{target:inn.target});
+  commentaryCall('innings', { target: inn.target, team: inn.bat.name, overs: Math.round(inn.maxBalls / 6) });
 }
 function endInnings() {
   phase = 'break'; showControls();
