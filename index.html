@@ -2933,6 +2933,13 @@ function update(dt) {
 
 // where the ball is now
 function ballPos() { const b = RP ? RP.ball : liveBallPos(); return MIR < 0 ? mx(b) : b; }
+// The striker's stumps as drawn: lean of each stump and the flying bails, mirrored for a left-hander
+function stumpsNow() {
+  const b = RP ? RP.snap : ball;
+  let tilt = b && b.tilt ? b.tilt.map(a => a * (b.tiltT || 0)) : null, bails = b && b.bails || null;
+  if (MIR < 0) { if (tilt) tilt = tilt.slice().reverse(); if (bails) bails = bails.map(x => ({ ...x, p: mx(x.p) })).reverse(); }
+  return { tilt, bails };
+}
 function liveBallPos() {
   if (!ball) return null;
   if (ball.frozenAt) return ball.frozenAt;
@@ -2975,7 +2982,7 @@ function renderMirrored() {
   const items = [];   // things drawn back to front
   const push = (p, draw) => { const c = toCam(p); if (c[2] > NEAR - 2) items.push({ d: c[2], draw }); };
 
-  push([0, 0, 0], () => drawStumps(0, ball && ball.tilt ? ball.tilt.map(a => a * (ball.tiltT || 0)) : null, ball && ball.bails));
+  push([0, 0, 0], () => { const st = stumpsNow(); drawStumps(0, st.tilt, st.bails); });
   push([0, 0, PITCH], () => drawStumps(PITCH, null, null));
 
   // the players, drawn back to front
@@ -3587,7 +3594,7 @@ try {
   R3D = window.Cricket3D ? window.Cricket3D({
     touch, LIGHTS, BOARDS, STAND_IN, STAND_OUT, STAND_H, PITCH, CREASE, ROPE, lerp, people, ballPos, cam, deg, $,
     get cheer() { return cheer; }, get clock() { return clock; }, get inn() { return inn; }, get M() { return M; },
-    get ball() { return RP ? RP.snap : ball; }, get W() { return W; }, get H() { return H; }, get camShift() { return camShift; }, get projectionFocal() { return focal; },
+    get ball() { return RP ? RP.snap : ball; }, get stumps() { return stumpsNow(); }, get W() { return W; }, get H() { return H; }, get camShift() { return camShift; }, get projectionFocal() { return focal; },
   }) : null;
 } catch (e) { R3D = null; }
 if (R3D) { const rb = $('replayToggle'); rb.hidden = false; setReplays(replaysOn); rb.addEventListener('click', () => setReplays(!replaysOn)); }

@@ -1491,7 +1491,7 @@ window.Cricket3D = function (G) {
 
     teamColours();
     updateCrowd();
-    setStumps(stumpsNear, G.ball && G.ball.tilt ? G.ball.tilt.map(a => a * (G.ball.tiltT || 0)) : null, G.ball && G.ball.bails);
+    { const st = G.stumps; setStumps(stumpsNear, st.tilt, st.bails); }
     setStumps(stumpsFar, null, null);
 
     const list = G.M ? people() : [];
