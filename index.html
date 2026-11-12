@@ -610,6 +610,7 @@
 <script async src="vendor/player-rb.js"></script>
 <script async src="vendor/equipment-model.js"></script>
 <script async src="vendor/grip-model.js"></script>
+<script src="vendor/fielder-clips.js"></script>
 <script src="player-production/config.js"></script>
 <script src="player-production/motion.js"></script>
 <script src="commentary.js"></script>
@@ -3049,7 +3050,7 @@ function update(dt) {
       if (ball.play.t > react) {
         const d = sub(f.target, f.pos); d[1] = 0;
         const l = Math.hypot(d[0], d[2]);
-        if (l > 0.4) { const step = Math.min(l, f.speed * dt); f.pos = add(f.pos, mul([d[0] / l, 0, d[2] / l], step)); f.face = Math.atan2(d[0], d[2]); f.run = 1; f.phase += dt * 11; f.crouch = 0; }
+        if (l > 0.4) { const step = Math.min(l, f.speed * dt); f.dist = (f.dist || 0) + step; f.pos = add(f.pos, mul([d[0] / l, 0, d[2] / l], step)); f.face = Math.atan2(d[0], d[2]); f.run = 1; f.phase += dt * 11; f.crouch = 0; }
         else { f.run = Math.max(0, f.run - dt * 4); f.crouch = 0.4; const bp = liveBallPos(); if (bp) f.face = turnTo(f.face, angTo(f.pos, bp), 1 - Math.exp(-6 * dt)); }   // arrived: turn to watch the ball
       }
     } else f.run = Math.max(0, f.run - dt * 4);
@@ -3248,6 +3249,55 @@ function setMirror() {
   const p = inn && inn.bat && inn.bat.players[inn.striker];
   MIR = p && p.left ? -1 : 1;
 }
+// Fielder animation clips (motion capture, vendor/fielder-clips.js, built by tools/fielder-clips/build.py): joint positions in
+// the player's own frame (x = his left, y = up, z = the way he faces). clipAt() reads one at a time (looping or held at the
+// end), placeClip() puts it where a player stands, mixJ() blends two poses. Fielders run, walk, stand and throw with these.
+const CLIP_J = ['pelvis', 'neck', 'head', 'shL', 'shR', 'elL', 'elR', 'handL', 'handR', 'hipL', 'hipR', 'kneeL', 'kneeR', 'footL', 'footR', 'toeL', 'toeR'];
+const CLIPS = (() => {
+  const src = window.FIELDER_CLIPS; if (!src) return null;
+  const K = 1.04, out = {};   // the clips' man is a little shorter than ours
+  for (const [name, c] of Object.entries(src)) {
+    const frames = c.frames.map(r => { const o = {}; CLIP_J.forEach((k, i) => { o[k] = [r[3 * i] * K, r[3 * i + 1] * K, r[3 * i + 2] * K]; }); return o; });
+    out[name] = { fps: c.fps, loop: c.loop, dur: frames.length / c.fps, frames };
+  }
+  // running: how far the body travels in one loop, from the planted foot sliding back under it (so feet don't skate)
+  for (const n of ['sprint', 'jog', 'walk']) {
+    const c = out[n]; if (!c) continue; let d = 0, k = 0;
+    for (let i = 0; i < c.frames.length; i++) {
+      const a = c.frames[i], b = c.frames[(i + 1) % c.frames.length];
+      for (const s of ['L', 'R']) if (a['foot' + s][1] < 0.04 && b['foot' + s][1] < 0.04) { const dz = a['foot' + s][2] - b['foot' + s][2]; if (dz > 0 && dz < 0.5) { d += dz; k++; } }
+    }
+    c.speed = k ? d / k * c.fps : 5; c.cycle = c.speed * c.dur;
+  }
+  // the throw: the moment of release is when the throwing hand moves fastest
+  const th = out.throw;
+  if (th) { let best = 0; for (let i = 1; i < th.frames.length; i++) { const v = len(sub(th.frames[i].handR, th.frames[i - 1].handR)); if (v > best) { best = v; th.release = i / th.fps; } } }
+  return out;
+})();
+function clipAt(name, t) {
+  const c = CLIPS[name], n = c.frames.length;
+  let x = t * c.fps; x = c.loop ? ((x % n) + n) % n : clamp(x, 0, n - 1);
+  const i = Math.floor(x), u = x - i, a = c.frames[i], b = c.frames[c.loop ? (i + 1) % n : Math.min(n - 1, i + 1)], o = {};
+  for (const k of CLIP_J) o[k] = lerp3(a[k], b[k], u);
+  return o;
+}
+function placeClip(lj, pos, face) {
+  const F = [Math.sin(face), 0, Math.cos(face)], L = [Math.cos(face), 0, -Math.sin(face)], j = {};
+  for (const k of CLIP_J) { const v = lj[k]; j[k] = add(pos, add(add(mul(L, v[0]), mul(F, v[2])), [0, v[1], 0])); }
+  for (const s of ['L', 'R']) {   // which way each foot points and how far its heel is up, for the 3D feet
+    const d = sub(j['toe' + s], j['foot' + s]); j['footDir' + s] = norm([d[0], 0, d[2]]);
+    j['footPitch' + s] = [clamp(Math.atan2(lj['foot' + s][1] - lj['toe' + s][1] + 0.015, 0.17), -0.5, 0.9), 0, 0];   // + = heel up (the ball of the foot stands 1.5 cm high)
+    delete j['toe' + s];
+  }
+  return j;
+}
+function mixJ(a, b, u) {
+  if (u <= 0) return a; if (u >= 1) return b;
+  const o = { ...a };
+  for (const k in b) if (a[k] && Array.isArray(b[k])) o[k] = k.startsWith('footDir') ? norm(lerp3(a[k], b[k], u)) : lerp3(a[k], b[k], u);
+  return o;
+}
+
 // The fielder who gets to the ball: he turns to watch it come, reaches up for a catch (hands together, then the ball held at
 // his chest), or bends to pick it up, turns to the keeper and throws (arm back, release overhead, follow-through).
 // Positions are game-space (right-hander), like the rest of people(); the ball sits in his hands (fielderBall).
@@ -3288,6 +3338,14 @@ function fielderAct(f) {
   const leftAim = at(face, 0.55, 0.12, 1.5), leftRest = at(face, 0.15, 0.24, 0.95);
   const rise = smooth(clamp((t - tc) / Math.max(0.2, ts - 0.32 - tc), 0, 1));
   if (t < ts - 0.32) { const hr = lerp3(pick, chest, rise); return { face, crouch: 1 - rise, bend: 0.8 * (1 - rise), handR: hr, handL: lerp3(add(pick, [0, 0, 0]), leftRest, rise), hold: hr }; }
+  if (CLIPS && CLIPS.throw) {   // the throw itself is motion capture, timed so the ball leaves his hand at throwStart
+    const th = CLIPS.throw, lead = Math.min(th.release, Math.max(0.3, ts - tc - 0.25)), t0 = ts - lead, ct = th.release - lead + (t - t0);
+    if (t >= t0) {
+      if (ct > th.dur + 0.35) return null;
+      const J = placeClip(clipAt('throw', ct), pos, face), w = smooth(clamp((t - t0) / 0.15, 0, 1)) * (1 - smooth(clamp((ct - th.dur) / 0.35, 0, 1)));
+      return { face, crouch: 0, handR: chest, handL: leftRest, clipJ: J, w, hold: ct < th.release ? (w > 0.5 ? J.handR : chest) : null };
+    }
+  }
   if (t < ts) { const u = smooth(clamp((t - (ts - 0.32)) / 0.22, 0, 1)), hr = lerp3(chest, back, u); return { face, crouch: 0, handR: hr, handL: lerp3(leftRest, leftAim, u), hold: hr }; }
   const u = clamp((t - ts) / 0.38, 0, 1);
   if (u >= 1) return t < ts + 0.9 ? { face, crouch: 0 } : null;
@@ -3310,10 +3368,10 @@ function headFig(pos, face, t, seed) {   // hands on the head
 }
 // how far the ring fielders have walked in with the bowler (0..1), and whether they're walking
 function walkIn() {
-  if (phase === 'runup') { const u = clamp(phaseT / (RUNUP - 0.25), 0, 1); return { w: smooth(u), moving: u < 1 }; }
+  if (phase === 'runup') { const u = clamp(phaseT / (RUNUP - 0.25), 0, 1); return { w: smooth(u), moving: u < 1, walk: 1 - smooth(clamp((phaseT - (RUNUP - 0.6)) / 0.4, 0, 1)) }; }
   if (phase === 'flight') return { w: 1, moving: false };
   if (ball && ball.play) return { w: 1 - smooth(clamp((ball.play.t - 0.3) / 0.45, 0, 1)), moving: false };
-  if (phase === 'result') { const u = clamp((phaseT - 0.6) / 1.2, 0, 1); return { w: 1 - smooth(u), moving: u > 0 && u < 1 }; }
+  if (phase === 'result') { const u = clamp((phaseT - 0.6) / 1.2, 0, 1); return { w: 1 - smooth(u), moving: u > 0 && u < 1, walk: clamp(Math.min(u, 1 - u) * 6, 0, 1) }; }
   return { w: 0, moving: false };
 }
 function livePeople() {
@@ -3400,14 +3458,24 @@ function livePeople() {
     const act = fielderAct(f), caughtCel = act && act.u !== undefined && act.u >= 1;
     const rj = f.run < 0.3 && (!act || caughtCel) ? react(f, pos, act ? act.face : f.face) : null;
     if (act && !rj) {
-      out.push({ j: figure(pos, act.face, { run: f.run * clamp(1 - (act.crouch || 0) - (act.bend || 0), 0, 1), phase: ph, crouch: act.crouch || 0, bend: act.bend || 0,
-        handL: act.handL, handR: act.handR, seed: fi + 1 }), at: pos, team: 'bowl', keeper: !!f.keeper, bowler: !!f.bowler, pid: fid(f.who), look: null });
+      let j = figure(pos, act.face, { run: f.run * clamp(1 - (act.crouch || 0) - (act.bend || 0), 0, 1), phase: ph, crouch: act.crouch || 0, bend: act.bend || 0,
+        handL: act.handL, handR: act.handR, seed: fi + 1 });
+      if (act.clipJ) j = mixJ(j, act.clipJ, act.w);
+      out.push({ j, at: pos, team: 'bowl', keeper: !!f.keeper, bowler: !!f.bowler, pid: fid(f.who), look: null });
       continue;
     }
     const startBlend=MOTION2 && f.target && ball?.play?smooth(clamp((ball.play.t-(f.keeper ? .12 : .32))/.18,0,1)):1;
-    out.push({ j: rj || figure(pos, f.face, { run:MOTION2?run*startBlend:run, phase: ph,
-      gaitDistance:MOTION2 && f.run>.9?f.phase*f.speed/11:undefined,crouch: wi.moving ? 0 : f.crouch, seed: fi + 1 }), at: pos, team: 'bowl', keeper: !!f.keeper, bowler: !!f.bowler,
-               pid: fid(f.who), look: null });
+    let j = rj || figure(pos, f.face, { run:MOTION2?run*startBlend:run, phase: ph,
+      gaitDistance:MOTION2 && f.run>.9?f.phase*f.speed/11:undefined,crouch: CLIPS ? f.crouch * (1 - (wi.walk || 0)) : wi.moving ? 0 : f.crouch, seed: fi + 1 });
+    if (CLIPS && !rj && !f.keeper) {   // motion capture: sprinting to the ball, walking in with the bowler, standing between balls
+      const runW = clamp(run * startBlend, 0, 1), still = () => figure(pos, f.face, { crouch: f.crouch, seed: fi + 1 });
+      if (f.run > 0.05 && runW > 0.02) j = mixJ(still(), placeClip(clipAt('sprint', (f.dist || 0) / CLIPS.sprint.cycle * CLIPS.sprint.dur), pos, f.face), runW);
+      else {
+        if (!f.bowler || afterHit) j = mixJ(j, placeClip(clipAt('idle', clock + fi * 0.37), pos, f.face), 0.85 * (1 - clamp(f.crouch / 0.45, 0, 1)));
+        if (wi.walk > 0 && r > 14 && !f.bowler) j = mixJ(j, placeClip(clipAt('walk', 1.6 * wi.w / CLIPS.walk.cycle * CLIPS.walk.dur + fi * 0.21), pos, f.face), wi.walk);
+      }
+    }
+    out.push({ j, at: pos, team: 'bowl', keeper: !!f.keeper, bowler: !!f.bowler, pid: fid(f.who), look: null });
   }
   return out;
 }
