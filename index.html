@@ -83,6 +83,10 @@
   #delivery.show { opacity: 1; }
   #ffTag { top: calc(52px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); font-weight: 700;
            letter-spacing: 0.14em; font-size: 13px; color: var(--amber); }
+  #nextTag { top: calc(52px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); font-weight: 700;
+             letter-spacing: 0.14em; font-size: 13px; color: #f3efe4; background: var(--panel); padding: 3px 10px;
+             display: flex; gap: 8px; align-items: baseline; pointer-events: none; }
+  #nextTag .skip { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: var(--muted); }
 
   #banner { left: 50%; top: 38%; transform: translate(-50%, -50%) scale(0.9); text-align: center; opacity: 0;
             transition: opacity 0.18s, transform 0.25s cubic-bezier(.2,1.6,.4,1); }
@@ -172,7 +176,7 @@
             padding: 24px max(16px, env(safe-area-inset-left, 0px)) 24px max(16px, env(safe-area-inset-right, 0px)); }
   .card { width: min(640px, 100%); display: flex; flex-direction: column; gap: 16px; }
   /* while a menu screen is up, the match's score, map and touch buttons don't show through it */
-  #game:has(> .screen:not([hidden])) :is(#tvbar, #minimap, #batpad, #bowlpad, #autopad, .vars, #delivery, #swipeHint) { visibility: hidden; }
+  #game:has(> .screen:not([hidden])) :is(#tvbar, #minimap, #batpad, #bowlpad, #autopad, .vars, #delivery, #swipeHint, #nextTag) { visibility: hidden; }
   .title { font-family: var(--display); font-weight: 900; font-size: clamp(54px, 12vw, 104px); line-height: 0.85;
            letter-spacing: 0.01em; text-wrap: balance; }
   .title span { color: var(--amber); }
@@ -307,7 +311,8 @@
     #swipeHint { top: calc(34px + env(safe-area-inset-top, 0px)); bottom: auto; left: 50%; right: auto; transform: translateX(-50%);
                  white-space: nowrap; font-size: 11px; padding: 2px 8px; max-width: calc(100vw - 260px); overflow: hidden; text-overflow: ellipsis; }
     #delivery { top: calc(6px + env(safe-area-inset-top, 0px)); font-size: 12px; padding: 2px 8px; }
-    #ffTag { top: calc(30px + env(safe-area-inset-top, 0px)); font-size: 10px; }
+    #ffTag, #nextTag { top: calc(30px + env(safe-area-inset-top, 0px)); font-size: 10px; }
+    #nextTag { top: calc(58px + env(safe-area-inset-top, 0px)); padding: 2px 8px; }
     #timing { bottom: calc(46px + env(safe-area-inset-bottom, 0px)); font-size: 13px; }
     #banner { top: 42%; }
     #tvcard { top: calc(54px + env(safe-area-inset-top, 0px)); } #tvcard .t { font-size: 15px; } #tvcard .s { font-size: 11px; } #tvcard .body { padding: 2px 9px 3px; }
@@ -353,6 +358,7 @@
     #tvbar { max-width: calc(100% - 110px); }
     #delivery { top: auto; bottom: calc(118px + env(safe-area-inset-bottom, 0px)); font-size: 13px; padding: 2px 10px; }
     #timing { bottom: auto; top: calc(128px + env(safe-area-inset-top, 0px)); font-size: 16px; }   /* up under the score, clear of the OUT banner and the buttons */
+    #nextTag { top: calc(158px + env(safe-area-inset-top, 0px)); }
     #tvcard { bottom: auto; top: calc(96px + env(safe-area-inset-top, 0px)); }
     .shotsel { gap: 6px; } .shotsel button { width: 28vw; height: 44px; }
     .batside { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); }
@@ -435,6 +441,7 @@
   </div>
   <div id="delivery" class="hud"></div>
   <div id="ffTag" class="hud" hidden>FAST-FORWARD ▸▸</div>
+  <div id="nextTag" class="hud" hidden>NEXT BALL<span class="skip">tap to skip</span></div>
   <div id="banner" class="hud"><div class="head"></div><div class="line"></div></div>
   <div id="tvcard" class="hud"><div class="bar"></div><div class="body"><div class="t"></div><div class="s"></div></div></div>
   <div id="replayTag" class="hud" hidden><span class="dot"></span>REPLAY<span class="skip">tap to skip</span></div>
@@ -2289,6 +2296,12 @@ function startOver() {
   beginBall(inn.balls === 0 ? 1.0 : 1.6, true);
 }
 
+// a short breather before each ball (the owner found the game too quick); tap, S, Space or Enter skips it
+const BALL_GAP = 1.8, GAP_END = -0.6;
+function skipGap() {
+  if (phase !== 'wait' || phaseT >= GAP_END) return false;
+  phaseT = GAP_END; return true;
+}
 function beginBall(delay, announce) {
   newFielders();
   pending = null; ball = null; preBall = null; celebrate = null; wantCharge = false; guard = 0; camMode = 'bowl'; meter = null; swipeVis = null;
@@ -2310,7 +2323,7 @@ function beginBall(delay, announce) {
     const el = $('delivery');
     el.innerHTML = touch ? 'Tap the pitch to aim, then <b>BOWL</b>' : 'Click the pitch or use the arrow keys to aim, then <b>BOWL</b> (Space)';
     el.classList.add('show');
-  } else { phase = 'wait'; phaseT = -delay - (inn.userBats ? 0.8 : 0); }
+  } else { phase = 'wait'; phaseT = -delay - (inn.userBats ? 0.8 : 0) - (ff || M.autoplay || quiet ? 0 : BALL_GAP); }
   if (inn.userBats) preBall = buildDelivery(aiSpec(bowlerP(), M.diff.aiBowl));   // so its bounce mark shows before the run-up
   showControls();
   updateScore();
@@ -2856,6 +2869,8 @@ function update(dt) {
   if (bannerUntil && clock > bannerUntil) hideBanner();
 
   if (cardUntil && clock > cardUntil) hideCard();
+  const gapOn = phase === 'wait' && phaseT < GAP_END && !ff && !paused;
+  const nt = $('nextTag'); if (nt.hidden === gapOn) { nt.hidden = !gapOn; nt.lastChild.textContent = touch ? 'tap to skip' : 'S or Space to skip'; }
   if (phase === 'wait' && phaseT >= 0) { phase = 'runup'; phaseT = 0; $('delivery').classList.remove('show'); sndBuzz(0.07); }
   else if (phase === 'aim') {
     const [x, y] = keyAxes();
@@ -2972,6 +2987,16 @@ function update(dt) {
     tt = [bp[0], bp[1] * 0.55, bp[2]];
     const d = len(sub(tt, tp));
     tf = clamp(2 * Math.atan(20 / d) / deg, 16, 50); rate = 5;
+    // as a fielder takes a catch or picks the ball up, the long lens zooms in on him; it lets go as he throws
+    const res = ball.play.res, f = res && res.fielder, pt = ball.play.t;
+    if (f && res.t != null && res.kind !== 'four' && res.kind !== 'six' && Math.hypot(f.pos[0], f.pos[2]) > 14) {   // not the keeper or slips: they're in view already
+      const out = res.kind === 'caught' ? 1e9 : res.throwStart + 0.15;
+      const w = smooth(clamp((pt - (res.t - 0.8)) / 0.55, 0, 1)) * (1 - smooth(clamp((pt - out) / 0.8, 0, 1)));
+      if (w > 0) {
+        const fp = add(f.pos, [0, 0.95, 0]), ft = lerp3(tt, fp, w), fd = len(sub(ft, tp));
+        tt = ft; tf = lerp(tf, clamp(2 * Math.atan(3.8 / fd) / deg, 3, 50), w); rate = 4 + 2 * w;
+      }
+    }
     if(REFERENCE_VIEW) {
       // Broadcast coverage of the play rather than a 40 m high field overview.
       // Keep a nearby fielder readable and leave room for an airborne ball.
@@ -3235,7 +3260,7 @@ function livePeople() {
   return out;
 }
 
-// what you swiped: an arrow under your finger, the shot's name, and the direction drawn on the field
+// what you swiped: an arrow under your finger and the shot's name (no arrow on the field: the owner found it distracting)
 function arrow(x0, y0, x1, y1, col, w) {
   const a = Math.atan2(y1 - y0, x1 - x0), h = Math.max(10, w * 3.2);
   ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = w; ctx.lineCap = 'round';
@@ -3251,13 +3276,6 @@ function drawSwipe() {
   if (fade <= 0) return;
   const kind = v.kind || shotType, col = kind === 'loft' ? '#ffb02e' : kind === 'defend' ? '#f3efe4' : '#2ed3c6';
   ctx.globalAlpha = fade;
-  // on the field: from the batter toward where the shot was aimed
-  if (v.dir !== undefined && v.dir !== null && camMode === 'bowl') {
-    const d = [Math.sin(v.dir * deg), 0, Math.cos(v.dir * deg)], from = [0.4, 0.02, 0.9 + (ball && ball.charge ? STEP : 0)];
-    const L = kind === 'defend' ? 5 : 12, to = add(from, mul(d, L));
-    const a = toCam(from), b = toCam(to);
-    if (a[2] > NEAR && b[2] > NEAR) { const sa = proj(a), sb = proj(b); arrow(sa[0], sa[1], sb[0], sb[1], col, 4); }
-  }
   // under the finger
   if (!v.keys) {
     let x1 = v.x1, y1 = v.y1;
@@ -3600,6 +3618,7 @@ canvas.addEventListener('pointerdown', e => {
   if (paused || !M) return;
   try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
   if (phase === 'play' || phase === 'result') { setFF(true); return; }
+  if (skipGap()) return;
   if (userBowling()) {
     if (phase === 'aim') { aimDrag = e.pointerId; setMarker(e); }
     else if (phase === 'runup') bowlPress();
@@ -3617,6 +3636,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'Escape' || e.code === 'KeyP') { if (paused) resume(); else openPause(); return; }
   if (!M || paused) return;
   if (phase === 'pick') { if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); pickGo(); } return; }
+  if (['Space', 'Enter', 'KeyS'].includes(e.code) && !e.repeat && skipGap()) { e.preventDefault(); return; }
   const batting = inn && inn.userBats;
   // before the bowler runs in, left and right move the batter across the crease (during the flight they aim the shot)
   if (batting && !e.repeat && (e.code === 'ArrowLeft' || e.code === 'ArrowRight') && canMove()) moveGuard(e.code === 'ArrowLeft' ? -1 : 1);
