@@ -2916,7 +2916,7 @@ function update(dt) {
   const followDelay=REFERENCE_VIEW ? (ball?.decision?.loft||ball?.swing?.loft ? .12 : .45) : .3;
   if (camMode === 'chase' && ball && ball.play && ball.play.t > followDelay) {
     // like TV: a camera high in the stands pans and zooms with the ball; it cuts to the other end when the ball goes behind
-    const bp = ballPos(), end = bp[2] < -8 ? -1 : 1;
+    const bp = RP ? RP.ball : liveBallPos(), end = bp[2] < -8 ? -1 : 1;   // unmirrored: render() mirrors the camera for a left-hander
     tp = end > 0 ? [bp[0] * 0.1, 15, 66] : [bp[0] * 0.1, 15, -50];
     tt = [bp[0], bp[1] * 0.55, bp[2]];
     const d = len(sub(tt, tp));
