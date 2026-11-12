@@ -1392,11 +1392,18 @@ const PREPARE = {...READY,fr:[.42,0,1.18],pel:[.58,.88,.80],h:[.24,1.3,.86],bd:n
 const LEAVE = { ...READY, lean: 6, h: [0.6, 1.5, 0.66], bd: norm([0.12, 0.95, -0.28]) };
 const DUCK = { ...LEAVE, pel: [0.66, 0.56, 0.7], lean: 48, h: [0.62, 1.0, 0.62], kpL: [-1, 0.2, 0.3], kpR: [-1, 0.2, 0] };
 // which stroke the batter plays (it shapes the swing, not where the ball goes)
-function strokeFamily(a, loft, defend, push, short, spin) {
+// which stroke it looks like, from where the player aimed (a: 0 straight, - off side, + leg side), the ball's length and
+// where it reaches the batter (at: x across, y height). Only the look depends on it.
+function strokeFamily(a, loft, defend, push, short, spin, at) {
   if (defend) return short ? 'bdef' : push ? 'push' : 'fdef';
-  if (short) return a < -60 ? 'cut' : a > 25 ? 'pull' : 'bdrive';
-  if (a > 35) return spin && !loft && a < 135 ? 'sweep' : loft && a < 120 ? 'slog' : 'flick';
-  if (a < -100) return 'cut';
+  const h = at ? at[1] : 0.5, wide = at ? at[0] < -0.12 : false;
+  if (short) return a < -45 ? 'cut' : a > 25 ? 'pull' : 'bdrive';
+  if (h > 1.05) return a < -40 ? 'cut' : a > 20 ? 'pull' : 'bdrive';   // chest high off a good length: a back-foot shot
+  if (a > 35) {
+    if (loft) return a < 120 ? 'slog' : 'flick';
+    return a >= 55 && h < 0.75 && (spin || a >= 80) ? 'sweep' : 'flick';   // square or fine on the leg side off a low ball: the sweep
+  }
+  if (a < -100 || (a < -65 && wide)) return 'cut';   // square on the off side to a wide ball: the cut
   return 'drive';
 }
 // key poses for a stroke: ready, backlift, the bat meeting the ball at sw.target, the follow-through, then back to the stance
@@ -2069,7 +2076,7 @@ function swing(loft, pressT, aim, w) {
   // how it looks: the stroke, and where the bat meets the ball (relative to the batter's guard)
   ball.swing.intent = wrapA(aimed ? aim.angle : angle);
   ball.swing.push = !!(aim && aim.defend && aimed);
-  ball.swing.fam = strokeFamily(ball.swing.intent, ball.swing.loft, ball.swing.defend, ball.swing.push, ball.short, !!(BOWL_TYPES[ball.type] || {}).turn);
+  ball.swing.fam = strokeFamily(ball.swing.intent, ball.swing.loft, ball.swing.defend, ball.swing.push, ball.short, !!(BOWL_TYPES[ball.type] || {}).turn, atBat);
   ball.swing.target = [atBat[0], clamp(atBat[1], 0.12, 1.9), 1.02];
   ball.decision = { kind, q, angle, loft: ball.swing.loft, defend: ball.swing.defend, push: !!(aim && aim.defend && aimed), dtTiming, power: ((aim && aim.power) || 1) * (ball.charge && !(aim && aim.defend) ? 1.1 : 1) };
   // the bat meets the ball in front of the batter (early) or beside the stumps (late), never behind them
