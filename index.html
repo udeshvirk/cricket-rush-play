@@ -176,7 +176,7 @@
             padding: 24px max(16px, env(safe-area-inset-left, 0px)) 24px max(16px, env(safe-area-inset-right, 0px)); }
   .card { width: min(640px, 100%); display: flex; flex-direction: column; gap: 16px; }
   /* while a menu screen is up, the match's score, map and touch buttons don't show through it */
-  #game:has(> .screen:not([hidden])) :is(#tvbar, #minimap, #batpad, #bowlpad, #autopad, .vars, #delivery, #swipeHint, #nextTag) { visibility: hidden; }
+  #game:has(> .screen:not([hidden])) :is(#tvbar, #minimap, #batpad, #bowlpad, #autopad, .vars, #delivery, #swipeHint, #nextTag, #tvcard) { visibility: hidden; }
   .title { font-family: var(--display); font-weight: 900; font-size: clamp(54px, 12vw, 104px); line-height: 0.85;
            letter-spacing: 0.01em; text-wrap: balance; }
   .title span { color: var(--amber); }
@@ -226,6 +226,8 @@
     .tag { font-size: 15px; margin-top: -4px; }
     .level { padding: 8px 12px; }
     .level .n { font-size: 24px; }
+    .levels:has(#goSeries) { grid-template-columns: repeat(3, 1fr); }   /* the three main-menu choices side by side */
+    .levels:has(#goSeries) .level .s { display: none; }
     .btn { padding: 9px 18px; font-size: 16px; }
   }
 
@@ -488,6 +490,8 @@
       <div class="levels">
         <button class="level" type="button" id="goMatch"><span class="n">Play a match</span><span class="d">Bat and bowl, two innings</span>
           <span class="s">Pick your team · 2 to 20 overs</span><span class="best" id="recordLine"></span></button>
+        <button class="level" type="button" id="goSeries"><span class="n">Mini series</span><span class="d">Best of 3 or 5 matches</span>
+          <span class="s">One opponent · series trophy · player of the series</span><span class="best" id="seriesLine"></span></button>
         <button class="level" type="button" id="goChase"><span class="n">Quick chase</span><span class="d">Chase a target</span>
           <span class="s">Gully · Club · Super Over</span><span class="best"></span></button>
       </div>
@@ -497,7 +501,8 @@
 
   <div id="setup" class="screen" hidden>
     <div class="card">
-      <div class="title sm">MATCH <span>SETUP</span></div>
+      <div class="title sm" id="setupTitle">MATCH <span>SETUP</span></div>
+      <div><div class="lbl2">Format</div><div class="opts" id="formatPick"></div></div>
       <div><div class="lbl2">Your team</div><div class="opts" id="teamA"></div></div>
       <div><div class="lbl2">Opponent</div><div class="opts" id="teamB"></div></div>
       <div><div class="lbl2">Overs per side</div><div class="opts" id="oversPick"></div></div>
@@ -2653,6 +2658,13 @@ function endMatch() {
   else if (winner === you) { t.textContent = 'YOU WON'; t.className = 'result win'; }
   else { t.textContent = 'YOU LOST'; t.className = 'result lose'; }
   $('endSub').textContent = text;
+  const sr = M.series;
+  if (sr) {
+    sr.games.push(!winner ? 'T' : winner === you ? 'W' : 'L'); seriesAddStats(sr); saveSeries();
+    const st = seriesState(sr);
+    $('endSub').textContent = text + ' ' + st.text + (st.done ? '!' : '.') + (st.done ? ' ' + seriesStar(sr) + '.' : '');
+    if (st.done) { t.textContent = st.won ? 'SERIES WON' : st.w === st.l ? 'SERIES DRAWN' : 'SERIES LOST'; t.className = 'result' + (st.won ? ' win' : st.w === st.l ? '' : ' lose'); }
+  }
   // stars of the match
   let top = null, bestB = null;
   for (const i of M.innings) {
@@ -2665,7 +2677,7 @@ function endMatch() {
     [bestB ? bestB.w + '–' + bestB.r : '-', 'Best bowling · ' + (bestB ? surname(bestB.n) : '')]]
     .map(([v, l]) => '<div><b>' + esc(v) + '</b><span>' + esc(l) + '</span></div>').join('');
   renderTabs('endTabs', 'endCard', 1);
-  $('again').textContent = 'Rematch';
+  $('again').textContent = sr ? (seriesState(sr).done ? 'New series' : 'Next match (' + (sr.games.length + 1) + ' of ' + sr.n + ')') : 'Rematch';
   saveRecord(winner === you);
   showScreen('end');
 }
@@ -2739,12 +2751,12 @@ function toMenu() {
   hideBanner(); $('delivery').classList.remove('show'); $('timing').classList.remove('show');
   $('batpad').hidden = false; $('bowlpad').hidden = true;
   newFielders();
-  renderRecord();
+  renderRecord(); renderSeriesLine();
   showScreen('menu');
 }
 
 // match setup (remembered in this browser)
-const setup = { a: 0, b: 1, overs: 5, diff: 1, autoBowl: true };
+const setup = { a: 0, b: 1, overs: 5, diff: 1, autoBowl: true, series: 0 };
 try { Object.assign(setup, JSON.parse(localStorage.getItem('boundary-rush-setup') || '{}')); } catch (e) {}
 function saveSetup() { try { localStorage.setItem('boundary-rush-setup', JSON.stringify(setup)); } catch (e) {} }
 function optButtons(boxId, items, isOn, onPick) {
@@ -2761,6 +2773,10 @@ function optButtons(boxId, items, isOn, onPick) {
 }
 function renderSetup() {
   const teamItems = TEAMS.map(t => ({ html: badgeHTML(t) + esc(t.name) }));
+  optButtons('formatPick', [0, 3, 5].map(v => ({ v, html: v ? 'Series, best of ' + v : 'One match' })), it => it.v === (setup.series || 0),
+    it => { setup.series = it.v; saveSetup(); renderSetup(); });
+  $('toToss').textContent = setup.series ? 'Start the series' : 'Go to the toss';
+  $('setupTitle').innerHTML = (setup.series ? 'SERIES' : 'MATCH') + ' <span>SETUP</span>';
   optButtons('teamA', teamItems, (it, k) => k === setup.a, (it, k) => { if (k === setup.b) setup.b = setup.a; setup.a = k; saveSetup(); renderSetup(); });
   optButtons('teamB', teamItems, (it, k) => k === setup.b, (it, k) => { if (k === setup.a) setup.a = setup.b; setup.b = k; saveSetup(); renderSetup(); });
   optButtons('oversPick', [2, 5, 10, 20].map(v => ({ v, html: v + ' overs' })), it => it.v === setup.overs, it => { setup.overs = it.v; saveSetup(); renderSetup(); });
@@ -2768,10 +2784,50 @@ function renderSetup() {
   optButtons('bowlPick', [{ v: true, html: 'Computer bowls for me' }, { v: false, html: 'I\'ll bowl' }], it => it.v === setup.autoBowl,
     it => { setup.autoBowl = it.v; saveSetup(); renderSetup(); });
 }
+// A mini series: best of 3 or 5 against one team, saved after every match so it can be continued later.
+const SERIES_KEY = 'cricket-rush-series';
+let series = null;
+try { series = JSON.parse(localStorage.getItem(SERIES_KEY) || 'null'); if (series && !TEAMS[series.a]) series = null; } catch (e) {}
+function saveSeries() { try { localStorage.setItem(SERIES_KEY, JSON.stringify(series)); } catch (e) {} }
+function newSeries() {
+  series = { n: setup.series, a: setup.a, b: setup.b, overs: setup.overs, diff: setup.diff, games: [], stats: {} };
+  saveSeries();
+}
+function seriesState(sr) {
+  const w = sr.games.filter(g => g === 'W').length, l = sr.games.filter(g => g === 'L').length, need = Math.floor(sr.n / 2) + 1;
+  const done = w >= need || l >= need || sr.games.length >= sr.n, A = TEAMS[sr.a].name, B = TEAMS[sr.b].name;
+  const score = Math.max(w, l) + '–' + Math.min(w, l);
+  let text;
+  if (done) text = w > l ? A + ' win the series ' + score : l > w ? B + ' win the series ' + score : 'The series is drawn ' + score;
+  else text = w > l ? A + ' lead the series ' + score : l > w ? B + ' lead the series ' + score : sr.games.length ? 'The series is level ' + score : 'First match';
+  return { w, l, done, text, won: done && w > l };
+}
+// runs and wickets across the series, for the player of the series
+function seriesAddStats(sr) {
+  for (const i of M.innings) {
+    i.cards.forEach((c, k) => { if (!c.in) return; const p = i.bat.players[k], e = sr.stats[p.name] || (sr.stats[p.name] = { t: i.bat.short, r: 0, b: 0, w: 0 }); e.r += c.runs; e.b += c.balls; });
+    for (const k of i.bowlOrder) { const p = i.bowl.players[k], e = sr.stats[p.name] || (sr.stats[p.name] = { t: i.bowl.short, r: 0, b: 0, w: 0 }); e.w += i.bowlers[k].wkts; }
+  }
+}
+function seriesStar(sr) {
+  let best = null;
+  for (const [n, e] of Object.entries(sr.stats)) { const v = e.r + 22 * e.w; if (!best || v > best.v) best = { n, e, v }; }
+  if (!best) return '';
+  const e = best.e, bits = [];
+  if (e.r) bits.push(plural(e.r, 'run')); if (e.w) bits.push(plural(e.w, 'wicket'));
+  return 'Player of the series: ' + best.n + ' (' + e.t + ', ' + bits.join(', ') + ')';
+}
+function renderSeriesLine() {
+  const el = $('seriesLine'); if (!el) return;
+  el.textContent = series && !seriesState(series).done ? 'Continue: ' + TEAMS[series.a].short + ' v ' + TEAMS[series.b].short + ', match ' + (series.games.length + 1) + ' of ' + series.n + ' · ' + seriesState(series).text : '';
+}
 function startToss() {
-  M = { mode: 'match', overs: setup.overs, diff: DIFFS[setup.diff], teams: [TEAMS[setup.a], TEAMS[setup.b]], innings: [], cur: 0, autoplay: null,
-        autoBowl: setup.autoBowl !== false, watchFast: false };
-  $('tossText').textContent = M.teams[0].name + ' v ' + M.teams[1].name + ', ' + M.overs + ' overs a side. Call it:';
+  const sr = series && !seriesState(series).done ? series : null, cfg = sr || setup;
+  M = { mode: 'match', overs: cfg.overs, diff: DIFFS[cfg.diff] || DIFFS[1], teams: [TEAMS[cfg.a], TEAMS[cfg.b]], innings: [], cur: 0, autoplay: null,
+        autoBowl: setup.autoBowl !== false, watchFast: false, series: sr };
+  $('tossText').textContent = (sr ? seriesState(sr).text + '. ' : '') +
+    M.teams[0].name + ' v ' + M.teams[1].name + ', ' + M.overs + ' overs a side. Call it:';
+  $('tossTitle').innerHTML = sr ? 'MATCH <span>' + (sr.games.length + 1) + ' OF ' + sr.n + '</span>' : 'THE <span>TOSS</span>';
   tossButtons([['Heads', () => callToss('heads')], ['Tails', () => callToss('tails')]]);
   showScreen('toss');
 }
@@ -3726,11 +3782,19 @@ document.addEventListener('fullscreenchange', fsButtons); document.addEventListe
 $('fsBtn').addEventListener('click', toggleFull);
 $('fsMenu').addEventListener('click', toggleFull);
 $('pauseBtn').addEventListener('click', () => { if (paused) resume(); else openPause(); });
-$('goMatch').addEventListener('click', () => { audio(); renderSetup(); showScreen('setup'); });
+$('goMatch').addEventListener('click', () => { audio(); setup.series = 0; renderSetup(); showScreen('setup'); });
 $('goChase').addEventListener('click', () => { audio(); renderLevels(); showScreen('chaseMenu'); });
 $('setupBack').addEventListener('click', toMenu);
 $('chaseBack').addEventListener('click', toMenu);
-$('toToss').addEventListener('click', () => { audio(); startToss(); });
+$('toToss').addEventListener('click', () => { audio(); if (setup.series) newSeries(); startTossOne(); });
+// a single match from the setup screen doesn't touch a series in progress
+function startTossOne() { if (setup.series) return startToss(); const keep = series; series = null; startToss(); series = keep; }
+$('goSeries').addEventListener('click', () => {
+  audio();
+  if (series && !seriesState(series).done) return startToss();   // carry on where you left off
+  if (!setup.series) setup.series = 3;
+  renderSetup(); showScreen('setup');
+});
 $('breakGo').addEventListener('click', () => { audio(); startInnings(1); });
 $('pickGo').addEventListener('click', pickGo);
 $('pickPause').addEventListener('click', () => { $('pick').hidden = true; openPause(); });
@@ -3740,7 +3804,13 @@ $('resume').addEventListener('click', resume);
 $('autoOver').addEventListener('click', () => requestAuto('over'));
 $('autoInn').addEventListener('click', () => requestAuto('innings'));
 $('quit').addEventListener('click', toMenu);
-$('again').addEventListener('click', () => { audio(); if (M && M.mode === 'match') startToss(); else startChase(level); });
+$('again').addEventListener('click', () => {
+  audio();
+  if (M && M.mode === 'match') {
+    if (M.series && seriesState(M.series).done) { Object.assign(setup, { series: M.series.n, a: M.series.a, b: M.series.b, overs: M.series.overs, diff: M.series.diff }); newSeries(); }
+    if (M.series) startToss(); else startTossOne();
+  } else startChase(level);
+});
 $('toMenu').addEventListener('click', toMenu);
 document.addEventListener('gesturestart', e => e.preventDefault());   // no pinch zoom on iPad
 
@@ -3756,6 +3826,7 @@ try {
 if (R3D) { const rb = $('replayToggle'); rb.hidden = false; setReplays(replaysOn); rb.addEventListener('click', () => setReplays(!replaysOn)); }
 // a soft click for buttons
 document.addEventListener('pointerdown', e => { if (e.target.closest && e.target.closest('button')) sndTick(); }, true);
+renderSeriesLine();
 newFielders();
 renderRecord();
 requestAnimationFrame(frame);
