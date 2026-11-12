@@ -102,6 +102,12 @@
             font-size: 18px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0;
             transition: opacity 0.2s; white-space: nowrap; }
   #timing.show { opacity: 1; }
+  /* after a shot: how early or late it was, on a small bar (green = well timed) */
+  #timing .tbar { display: block; position: relative; width: 150px; height: 6px; margin: 5px auto 0; border-radius: 3px; background: rgba(243, 239, 228, 0.22); }
+  #timing .tbar .ok { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: rgba(46, 211, 198, 0.75); }
+  #timing .tbar i { position: absolute; top: -4px; width: 4px; height: 14px; margin-left: -2px; border-radius: 2px; background: var(--chalk); box-shadow: 0 0 0 1.5px var(--night); }
+  #timing .tbar b { position: absolute; top: -3px; font: 600 10px var(--ui); letter-spacing: 0.06em; color: var(--muted); text-transform: none; }
+  #timing .tbar b.e { right: calc(100% + 6px); } #timing .tbar b.l { left: calc(100% + 6px); }
 
   /* bowling accuracy meter */
   #meter { left: 50%; transform: translateX(-50%); bottom: calc(108px + env(safe-area-inset-bottom, 0px));
@@ -561,6 +567,7 @@
         <button class="btn ghost" id="gfxToggle" type="button" hidden>Graphics: 2D</button>
         <button class="btn ghost" id="replayToggle" type="button" hidden>Replays: on</button>
         <button class="btn ghost" id="commentaryToggle" type="button" aria-pressed="false" title="Spoken commentary in the device's own voice.">Commentary: off</button>
+        <button class="btn ghost" id="guideToggle" type="button">Timing guide: on</button>
         <button class="btn ghost" id="quit" type="button">Quit match</button>
       </div>
       <div class="tabs" id="pauseTabs"></div>
@@ -1993,7 +2000,11 @@ function showTiming(dtT, kind, shot, w) {
   else if (a < 0.03 * w) { txt = 'Perfect'; col = 'var(--teal)'; }
   else if (dtT < 0) { txt = 'Early'; col = 'var(--amber)'; }
   else { txt = 'Late'; col = 'var(--amber)'; }
-  el.textContent = shot ? txt + ' · ' + shot : txt; el.style.color = col; el.classList.add('show');
+  // the bar spans 2.5 timing windows each way; the green part is the window for a clean hit
+  const span = 0.25 * w, okP = 0.1 * w / span * 50, pos = 50 + clamp(dtT / span, -1, 1) * 50;
+  el.innerHTML = esc(shot ? txt + ' · ' + shot : txt) +
+    '<span class="tbar"><b class="e">early</b><span class="ok" style="left:' + (50 - okP) + '%;width:' + 2 * okP + '%"></span><i style="left:' + pos + '%"></i><b class="l">late</b></span>';
+  el.style.color = col; el.classList.add('show');
 }
 
 // ----------------------------------------------------------------------- the computer batting
@@ -3030,7 +3041,7 @@ function renderMirrored() {
     ctx.clearRect(0, 0, W, H);
     R3D.render();
     if (RP) { renderMap(ballPos()); return; }
-    drawAimGuide(); drawBounceMark(); drawSwipe();
+    drawAimGuide(); drawBounceMark(); drawSwipe(); drawTimingAid();
     renderMap(ballPos());
     return;
   }
@@ -3085,7 +3096,7 @@ function renderMirrored() {
     }
     ctx.globalAlpha = 1;
   }
-  drawSwipe();
+  drawSwipe(); drawTimingAid();
   renderMap(bp);
 }
 
@@ -3270,6 +3281,27 @@ const BANDS = [[-0.4, 1.7, 'rgba(255,77,94,0.2)', 'Yorker'], [1.7, 3.9, 'rgba(25
                [3.9, 7, 'rgba(46,211,198,0.17)', 'Good'], [7, 11, 'rgba(125,139,214,0.2)', 'Short']];
 // batting: where the ball will bounce, shown before the run-up (coloured by length) so you can pick the shot
 let preBall = null;
+// Timing guide (batting): a ring closes onto the point where the bat will meet the ball. Press when the ring meets the
+// small circle; it turns green while the timing is good enough for a clean hit. It can be turned off in the pause menu.
+const GUIDE_KEY = 'cricket-rush-timing-guide';
+let timingGuide = true;
+try { timingGuide = localStorage.getItem(GUIDE_KEY) !== 'off'; } catch (e) {}
+function drawTimingAid() {
+  if (!timingGuide || RP || !inn || !inn.userBats || phase !== 'flight' || !ball || !ball.atBat || ball.swing || ball.left || pending) return;
+  const ideal = ball.Tstar - SWING_LAG, ahead = ideal - ball.t, okW = 0.1 * userWin();
+  if (ahead > 0.55 || ahead < -okW * 1.5) return;
+  const c = toCam(MIR < 0 ? mx(ball.atBat) : ball.atBat);
+  if (c[2] <= NEAR) return;
+  const [x, y] = proj(c), r0 = 12, r = r0 + Math.max(0, ahead) * 230, good = Math.abs(ahead) <= okW;
+  const alpha = clamp((0.55 - ahead) / 0.15, 0, 1) * (ahead < 0 ? clamp(1 + ahead / (okW * 1.5), 0, 1) : 1);
+  const col = good ? '46,211,198' : '243,239,228';
+  ctx.save(); ctx.globalAlpha = alpha;
+  const circle = (rad, lw, stroke) => { ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.lineWidth = lw + 2.5; ctx.strokeStyle = 'rgba(10,16,36,0.55)'; ctx.stroke(); ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.stroke(); };
+  circle(r0, 2, 'rgba(' + col + ',0.95)');
+  if (ahead > 0) circle(r, 2.5, 'rgba(' + col + ',' + (good ? 0.95 : 0.7) + ')');
+  if (good) { ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fillStyle = 'rgb(' + col + ')'; ctx.fill(); }
+  ctx.restore();
+}
 function drawBounceMark() {
   const b = ball || preBall;
   if (!inn || !inn.userBats || !b || !b.spot || !['wait', 'runup', 'flight'].includes(phase)) return;
@@ -3422,6 +3454,11 @@ function replayCam() {
     cam.fov = clamp(2 * Math.atan(26 / d) / deg, 22, 58);
   }
 }
+function setGuide(on) {
+  timingGuide = on; try { localStorage.setItem(GUIDE_KEY, on ? 'on' : 'off'); } catch (e) {}
+  $('guideToggle').textContent = 'Timing guide: ' + (on ? 'on' : 'off');
+}
+setGuide(timingGuide); $('guideToggle').addEventListener('click', () => setGuide(!timingGuide));
 function setReplays(on) {
   replaysOn = on; try { localStorage.setItem(REPLAY_KEY, on ? 'on' : 'off'); } catch (e) {}
   $('replayToggle').textContent = 'Replays: ' + (on ? 'on' : 'off');
