@@ -1466,7 +1466,7 @@ window.Cricket3D = function (G) {
     // the game's camera (the same maths as its 2D projection, so the guides line up)
     const aspect = G.W / Math.max(1, G.H);
     let fov = cam.fov;
-    if (aspect < 1.35) fov = 2 * Math.atan(Math.tan(cam.fov * deg / 2) / Math.pow(aspect / 1.35, aspect < 0.8 ? 0.72 : 0.5)) / deg;
+    if (aspect < 1.35) fov = 2 * Math.atan(Math.tan(cam.fov * deg / 2) / G.viewZoom(aspect)) / deg;
     if(PRODUCTION && PRODUCTION.reference && G.projectionFocal) fov=2*Math.atan(G.H/(2*G.projectionFocal))/deg;
     // the game may move the picture's centre up (upright screens): render a taller view and show its lower part
     const sh = G.camShift || 0, fullH = G.H + 2 * sh;

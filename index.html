@@ -31,7 +31,7 @@
     --ui: "Saira Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
     color-scheme: dark;
   }
-  html, body { height: 100%; }
+  html, body { height: 100%; margin: 0; }
   [hidden] { display: none !important; }
   body { background: var(--night); color: var(--chalk); font-family: var(--ui); overflow: hidden;
          -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -165,12 +165,14 @@
             background: linear-gradient(180deg, rgba(10,16,36,0.6), rgba(10,16,36,0.94) 60%);
             padding: 24px max(16px, env(safe-area-inset-left, 0px)) 24px max(16px, env(safe-area-inset-right, 0px)); }
   .card { width: min(640px, 100%); display: flex; flex-direction: column; gap: 16px; }
+  /* while a menu screen is up, the match's score, map and touch buttons don't show through it */
+  #game:has(> .screen:not([hidden])) :is(#tvbar, #minimap, #batpad, #bowlpad, #autopad, .vars, #delivery, #swipeHint) { visibility: hidden; }
   .title { font-family: var(--display); font-weight: 900; font-size: clamp(54px, 12vw, 104px); line-height: 0.85;
            letter-spacing: 0.01em; text-wrap: balance; }
   .title span { color: var(--amber); }
   .title.sm { font-size: clamp(40px, 8vw, 64px); }
   .tag { font-size: 18px; color: var(--muted); margin-top: -6px; }
-  .levels { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+  .levels { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 10px; }
   .level { text-align: left; background: rgba(243, 239, 228, 0.06); border: 1px solid var(--line);
            color: var(--chalk); padding: 12px 14px; cursor: pointer; font-family: var(--ui); display: flex;
            flex-direction: column; gap: 2px; border-radius: 4px; }
@@ -205,6 +207,17 @@
          letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; border-radius: 4px; }
   .btn.ghost { background: transparent; color: var(--chalk); border: 1px solid rgba(243, 239, 228, 0.4); }
   .btn:disabled { opacity: 0.4; cursor: default; }
+  /* a phone held sideways: a smaller title so the choices fit on the first screen */
+  @media (max-height: 460px) {
+    .screen { padding-top: 12px; padding-bottom: 12px; }
+    .card { gap: 10px; }
+    .title { font-size: clamp(36px, 15vh, 60px); }
+    .title.sm { font-size: clamp(30px, 11vh, 44px); }
+    .tag { font-size: 15px; margin-top: -4px; }
+    .level { padding: 8px 12px; }
+    .level .n { font-size: 24px; }
+    .btn { padding: 9px 18px; font-size: 16px; }
+  }
 
   /* bowler picker: a sheet over the field, so the game stays visible */
   .sheet { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(600px, calc(100% - 24px));
@@ -347,7 +360,9 @@
     #mapwrap { top: calc(5px + env(safe-area-inset-top, 0px)); right: calc(6px + env(safe-area-inset-right, 0px)); flex-direction: row; align-items: flex-start; gap: 4px; }
     .tools { margin: 0; } .tools button { width: 24px; height: 24px; font-size: 10px; }
     #minimap { width: 52px; height: 52px; }
-    #tvcard { bottom: calc(6px + env(safe-area-inset-bottom, 0px)); max-width: 34vw; } #tvcard .t { font-size: 13px; } #tvcard .s { font-size: 10px; } #tvcard .body { padding: 1px 7px 2px; }
+    /* the move / step-out buttons bottom left, clear of the bowler; the over card moves up under the score */
+    .batside { left: calc(8px + env(safe-area-inset-left, 0px)); transform: none; }
+    #tvcard { bottom: auto; top: calc(62px + env(safe-area-inset-top, 0px)); max-width: 34vw; } #tvcard .t { font-size: 13px; } #tvcard .s { font-size: 10px; } #tvcard .body { padding: 1px 7px 2px; }
     .shotsel button { width: 80px; height: 30px; font-size: 14px; }
     .batside button { height: 28px; font-size: 11px; }
     #swipeHint { top: calc(30px + env(safe-area-inset-top, 0px)); bottom: auto; font-size: 10px; }
@@ -754,6 +769,10 @@ const cam = { pos: BOWL_CAM.pos.slice(), tgt: BOWL_CAM.tgt.slice(), fov: BOWL_CA
 let cr, cu, cf, focal;
 const NEAR = 0.3;
 
+// Narrow screens zoom out (the same for the 2D and 3D views), but less than the width alone would need,
+// so the batter stays big enough on an upright phone. ?pz= tries another strength for upright screens.
+const PZ = +(new URLSearchParams(location.search).get('pz')) || 0.42;
+function viewZoom(aspect) { return aspect >= 1.35 ? 1 : Math.pow(aspect / 1.35, aspect < 0.8 ? PZ : 0.5); }
 function setupCamera() {
   cf = norm(sub(cam.tgt, cam.pos));
   cr = norm(cross(cf, [0, 1, 0]));
@@ -761,8 +780,8 @@ function setupCamera() {
   const ribbon=REFERENCE_VIEW && !$('tvbar').hidden ? $('tvbar').getBoundingClientRect() : null;
   const pictureH=ribbon && ribbon.top>0 ? Math.min(H,Math.max(H*.55,ribbon.top-6)) : H;
   let f = (pictureH / 2) / Math.tan(cam.fov * deg / 2);
+  if (!REFERENCE_VIEW) f *= viewZoom(W / H);
   const aspect = W / H;
-  if (!REFERENCE_VIEW && aspect < 1.35) f *= Math.pow(aspect / 1.35, aspect < 0.8 ? 0.72 : 0.5);   // portrait: zoom out, but less than the width alone would need
   focal = f;
   // an upright screen: the picture's centre sits higher, so the field fills the middle instead of the stands
   camShift = REFERENCE_VIEW ? (H-pictureH)/2 : aspect < 0.8 ? H * 0.06 : 0; cy = H / 2 - camShift;
@@ -3594,7 +3613,7 @@ try {
   R3D = window.Cricket3D ? window.Cricket3D({
     touch, LIGHTS, BOARDS, STAND_IN, STAND_OUT, STAND_H, PITCH, CREASE, ROPE, lerp, people, ballPos, cam, deg, $,
     get cheer() { return cheer; }, get clock() { return clock; }, get inn() { return inn; }, get M() { return M; },
-    get ball() { return RP ? RP.snap : ball; }, get stumps() { return stumpsNow(); }, get W() { return W; }, get H() { return H; }, get camShift() { return camShift; }, get projectionFocal() { return focal; },
+    get ball() { return RP ? RP.snap : ball; }, get stumps() { return stumpsNow(); }, get W() { return W; }, get H() { return H; }, get camShift() { return camShift; }, viewZoom, get projectionFocal() { return focal; },
   }) : null;
 } catch (e) { R3D = null; }
 if (R3D) { const rb = $('replayToggle'); rb.hidden = false; setReplays(replaysOn); rb.addEventListener('click', () => setReplays(!replaysOn)); }
