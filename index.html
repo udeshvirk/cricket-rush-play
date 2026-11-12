@@ -1619,6 +1619,36 @@ function bladeClear(j, h, bd) {
   }
   return bd;
 }
+// Before the shot (MOTION2), the batter moves like a real one: as the bowler jumps into his delivery, a small trigger step
+// back and across with the bat going back toward the slips; the bat at the top of the backlift as the ball is released;
+// then, once he sees the length, a stride forward to a full ball or back and across to a short one. The stroke starts
+// from wherever this has got to (swing() keeps it as visualStart).
+const TRIGGER = { ...READY, bk: [0.54, 0, 0.38], fr: [0.55, 0, 1.08], pel: [0.6, 0.87, 0.74], lean: 16, h: [0.34, 1.05, 0.66], bd: norm([-0.3, -0.35, -0.89]) };
+const TOPLIFT = { ...TRIGGER, h: [0.27, 1.3, 0.8], bd: norm([-0.3, 0.8, -0.52]) };
+function waitMove(k) {
+  const tt = phase === 'runup' ? phaseT - RUNUP : ball.t;   // time from the release
+  const trig = smooth(clamp((tt + 0.32) / 0.28, 0, 1)), lift = smooth(clamp((tt + 0.12) / 0.32, 0, 1));
+  let P = mixPose(k, TRIGGER, trig);
+  P = mixPose(P, TOPLIFT, lift);
+  P.bk = add(P.bk, [0, 0.06 * Math.sin(Math.PI * trig), 0]);   // the back foot lifts as it moves
+  if (phase === 'flight' && ball && ball.Tstar) {
+    const T0 = 0.1, T1 = Math.max(T0 + 0.14, Math.min(ball.Tstar - SWING_LAG - 0.02, T0 + 0.34));
+    const u = clamp((ball.t - T0) / (T1 - T0), 0, 1), w = smooth(u);
+    if (w > 0) {
+      const back = ball.short || (ball.atBat && ball.atBat[1] > 1.05);
+      const front = /Full|Yorker/.test(ball.length) ? 1 : 0.5;
+      const tx = ball.atBat ? clamp(ball.atBat[0] - guard, -0.9, 0.9) : 0;
+      const to = back
+        ? { ...P, bk: [0.42, 0, 0.3], fr: [0.5, 0, 0.96], pel: [0.5, 0.92, 0.62], lean: 8, h: [0.3, 1.38, 0.74] }
+        : { ...P, fr: [clamp(tx + 0.32, 0.1, 0.72), 0, lerp(1.08, 1.32, front)], pel: [lerp(0.6, 0.55, front), 0.85 - 0.04 * front, lerp(0.78, 0.94, front)],
+            lean: 20 + 8 * front, rearFootPitch: 0.25 * front, kpL: [-0.4, 0, 1] };
+      P = mixPose(P, to, w);
+      const step = 0.08 * Math.sin(Math.PI * w);   // the moving foot comes off the ground
+      if (back) P.bk = add(P.bk, [0, step, 0]); else P.fr = add(P.fr, [0, step, 0]);
+    }
+  }
+  return P;
+}
 // the batter this frame: { j, hands, tip } (before moving across the crease or down the pitch)
 function batterPose(sw) {
   let k;
@@ -1632,13 +1662,11 @@ function batterPose(sw) {
     k = ready ? mixPose(STANCE, READY, ready) : STANCE;
     // alive at the crease: breathing, and a tap of the bat until the bowler is well into his run
     const br = Math.sin(clock * 1.7);
-    const tapOn = phase === 'runup' ? clamp(1 - phaseT / 0.6, 0, 1) : ['flight', 'play', 'result'].includes(phase) ? 0 : 1;
+    const tapOn = phase === 'runup' ? (MOTION2 ? clamp((RUNUP - 0.5 - phaseT) / 0.25, 0, 1) : clamp(1 - phaseT / 0.6, 0, 1)) : ['flight', 'play', 'result'].includes(phase) ? 0 : 1;
     const tp = (clock * 0.75) % 1, tap = tapOn * (tp < 0.2 ? Math.sin(tp / 0.2 * Math.PI) : 0);
     k = { ...k, pel: add(k.pel, [0, br * 0.008, 0]), lean: k.lean + br * 1.2,
           h: add(k.h, [0, 0.06 * tap, 0]), bd: norm(add(k.bd, [0, 0.35 * tap, -0.15 * tap])) };
-    if(MOTION2 && phase==='flight' && ball && !ball.left) {
-      const u=smooth(clamp((ball.t-(ball.Tstar-SWING_LAG-.28))/.28,0,1));k=mixPose(k,PREPARE,u);
-    }
+    if (MOTION2 && (phase === 'runup' || (phase === 'flight' && ball))) k = waitMove(k);   // a leave blends from here too
     if (ball && ball.left) {   // bat up out of the way; duck under a bouncer
       const lk = smooth(clamp((ball.t - ball.left) / 0.2, 0, 1));
       k = mixPose(k, ball.atBat[1] > 1.45 ? DUCK : LEAVE, lk);
