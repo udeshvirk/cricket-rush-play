@@ -1388,7 +1388,7 @@ const STANCE = { fr: [0.58, 0, 1.06], bk: [0.64, 0, 0.44], pel: [0.63, 0.88, 0.7
 // Compact guard: the blade stays in front of the legs until the backlift.
 // The previous raised guard ran the blade through the chest/right sleeve.
 const READY = { ...STANCE, bk: [0.6, 0, 0.4], pel: [0.62, 0.89, 0.73], lean: 14, h: [0.24, 0.97, 0.88], bd: norm([-0.15, -0.98, 0.10]) };
-const PREPARE = {...READY,fr:[.42,0,1.18],pel:[.58,.88,.80],h:[.20,1.18,.93],bd:norm([-.42,.82,-.38])};
+const PREPARE = {...READY,fr:[.42,0,1.18],pel:[.58,.88,.80],h:[.24,1.3,.86],bd:norm([-.3,.8,-.52])};   // a high backlift as the ball comes
 const LEAVE = { ...READY, lean: 6, h: [0.6, 1.5, 0.66], bd: norm([0.12, 0.95, -0.28]) };
 const DUCK = { ...LEAVE, pel: [0.66, 0.56, 0.7], lean: 48, h: [0.62, 1.0, 0.62], kpL: [-1, 0.2, 0.3], kpR: [-1, 0.2, 0] };
 // which stroke the batter plays (it shapes the swing, not where the ball goes)
@@ -1414,7 +1414,7 @@ function strokeKeys(sw) {
       C = { ...R, fr, pel: [lerp(0.63, fr[0], 0.45), 0.8, 0.98], hy: -70, sy: -78, lean: 28, side: 14, h: at(bd), bd, kpL: [-0.4, 0, 1] };
       F = { ...C, hy: -55, sy: -45 + sw.intent * 0.25, lean: 16, side: 6,
             h: [0.4 + dir[0] * 0.25, loft ? 1.78 : 1.55, 1.08 + dir[2] * 0.12], bd: norm(loft ? [0.3, 0.9, -0.3] : [0.45, 0.5, -0.75]) };
-      if(MOTION2) F={...F,pel:[.45,.91,1.0],hy:-40,sy:-20,lean:8,side:2,rearFootPitch:.4,h:[.8,loft?1.86:1.74,1.16],bd:norm(loft?[.68,.72,-.12]:[.75,.6,-.2])};   // the finish leans out beside the head, so the bat doesn't stand up out of the helmet
+      if(MOTION2) F={...F,pel:[.45,.91,1.0],hy:-40,sy:-20,lean:8,side:2,rearFootPitch:.4,h:[.42,loft?1.86:1.76,1.3],bd:norm(loft?[.3,.8,-.52]:[.32,.72,-.62])};   // high finish: hands up in front, the bat over the front shoulder   // the finish leans out beside the head, so the bat doesn't stand up out of the helmet
       if(PRESENTATION_SLICE) F={...F,pel:[.45,.91,1.04],hy:-32,sy:8,lean:7,side:0,h:[.36,loft?1.86:1.74,1.34],bd:norm(loft?[.12,.82,-.56]:[.12,.66,-.74])};
       break; }
     case 'fdef': case 'push': {
@@ -1466,6 +1466,7 @@ function strokeKeys(sw) {
   if(MOTION2 && ['drive','fdef','push','flick','slog'].includes(sw.fam)) B.fr=add(lerp3(R.fr,C.fr,.65),[0,.035,0]);
   const S = { ...F, lean: F.lean - 4, h: add(F.h, [0, -0.06 * firm, 0]) };
   // the bat accelerates into the ball and decelerates through the follow-through
+  if (MOTION2 && !PRESENTATION_SLICE && STRAIGHT_FAMS.includes(sw.fam)) return straightSwing(R, C, F, S, tF, v.hold, dir, sw.fam);
   if (MOTION2 && !PRESENTATION_SLICE) return swingArc(R, C, F, S, tF, v.hold, sw.fam === 'cut' ? norm([0, -0.55, -0.85]) : dir);   // the cut comes down and across, behind square
   if(MOTION2 && sw.fam==='drive') {
     // Extend through the ball before folding over the shoulder. A direct
@@ -1512,6 +1513,41 @@ function swingArc(R, C, F, S, tF, hold, dir) {
   keys.push([L, C]);
   // follow-through: quick at first, settling into the finish
   if (tF > L + 0.05) for (const u of [0.18, 0.4, 0.65]) keys.push([lerp(L, tF, u), key(c0, cF, C, F, u, 1 - (1 - u) * (1 - u), 1 - Math.pow(1 - u, 2.4), u * u)]);
+  keys.push([tF, F], [tF + hold, S], [tF + hold + 0.7, STANCE]);
+  return keys;
+}
+// A straight bat (drives and the flick): the bat comes down from a high backlift in the upright plane of the shot, through
+// the line of the ball, and carries on through the ball and up into a high finish over the front shoulder. Bat angle th in
+// that plane: 0 = straight down, + = back toward the keeper (the backlift), - = forward along the shot and on up and over.
+// Hands lead and the wrists release late, so the bat speeds into the ball; anything outside the plane (the backlift's
+// angle, the finish's lean) fades in and out.
+const STRAIGHT_FAMS = ['drive', 'bdrive', 'flick'];
+function straightSwing(R, C, F, S, tF, hold, dir, fam) {
+  const L = SWING_LAG, dn = [0, -1, 0];
+  let sd = norm([dir[0], 0, dir[2]]); if (sd[2] < 0.3) sd = norm([sd[0], 0, 0.3]);   // the swing plane faces up the pitch
+  // the bat comes down nearly straight whatever the shot (a straight bat); it follows the shot's direction after the ball
+  const sdD = norm([sd[0] * 0.3, 0, 1]);
+  const inPlane = (bd, d) => Math.atan2(-dot(bd, d), dot(bd, dn));
+  const plane = (th, d) => add(mul(dn, Math.cos(th)), mul(d, -Math.sin(th)));
+  let thR = inPlane(R.bd, sdD); if (thR < 0.4) thR += 2 * Math.PI;
+  const thCD = inPlane(C.bd, sdD), thC = inPlane(C.bd, sd); let thF = inPlane(F.bd, sd); while (thF > thC - 0.3) thF -= 2 * Math.PI;
+  if (fam === 'flick') thF = Math.max(thF, thC - 1.9);   // the flick rolls the wrists rather than finishing high
+  const oR = sub(R.bd, plane(thR, sdD)), oCD = sub(C.bd, plane(thCD, sdD)), oC = sub(C.bd, plane(thC, sd)), oF = sub(F.bd, plane(thF, sd));   // the parts outside the plane
+  const bez = (a, m, b, u) => add(add(mul(a, (1 - u) * (1 - u)), mul(m, 2 * u * (1 - u))), mul(b, u * u));
+  const keys = [[0, R]];
+  // downswing: hands drop and move forward to the contact grip (a gentle curve, just in front of the hip), the bat follows late
+  const hm = [lerp(R.h[0], C.h[0], 0.7), Math.max(R.h[1], C.h[1]) + 0.04, lerp(R.h[2], C.h[2], 0.45)];
+  for (const u of [0.25, 0.5, 0.72, 0.88]) {
+    const th = lerp(thR, thCD, Math.pow(u, 1.7)), off = add(mul(oR, 1 - u), mul(oCD, u));
+    keys.push([u * L, { ...mixPose(R, C, smooth(u)), h: bez(R.h, hm, C.h, Math.pow(u, 1.15)), bd: norm(add(plane(th, sdD), off)) }]);
+  }
+  keys.push([L, C]);
+  // through the ball and up: hands go out along the shot first (extension), then up to the finish
+  const hx = add(C.h, add(mul(sd, 0.42), [0, 0.12, 0]));
+  for (const u of [0.15, 0.35, 0.6, 0.82]) {
+    const th = lerp(thC, thF, 1 - Math.pow(1 - u, 1.6)), w = smooth(u), off = add(mul(oC, 1 - w), mul(oF, w));
+    keys.push([lerp(L, tF, u), { ...mixPose(C, F, smooth(u)), h: bez(C.h, hx, F.h, u), bd: norm(add(plane(th, sd), off)) }]);
+  }
   keys.push([tF, F], [tF + hold, S], [tF + hold + 0.7, STANCE]);
   return keys;
 }
@@ -1610,7 +1646,8 @@ function bowlerState() {
   const bound = PITCH - 0.6 + 2.6, speed = spin ? 4.6 : T.speed[0] > 130 ? 8.5 : 7.4;
   const start = Math.min(T.start, bound + speed * (RUNUP - 0.38));
   const home = [1.7, 0, 17.2];
-  const runner = (pos, face, run, ph) => ({ pos, j: figure(pos, face, { run, phase: ph,gaitDistance:Math.hypot(pos[0]-1.1,pos[2]-start) }) });
+  const runner = (pos, face, run, ph, dist) => { const d = dist !== undefined ? dist : Math.hypot(pos[0] - 1.1, pos[2] - start);
+    return { pos, j: runFig(figure(pos, face, { run, phase: ph, gaitDistance: d }), pos, face, d, run, spin ? 'jog' : 'sprint') }; };
   if (tr === null) return runner([1.1, 0, start], Math.PI, 0, 0);
   if (tr < -0.38) {   // running in, at an angle from the right
     const u = clamp((tr + RUNUP) / (RUNUP - 0.38), 0, 1);
@@ -1627,7 +1664,7 @@ function bowlerState() {
   }
   // after the follow-through: jog off the pitch to his fielding spot
   const end = keys[keys.length - 1][1], from = [end.pel[0], 0, end.pel[2]], u = clamp((tr - 0.5) / 0.9, 0, 1);
-  const pos = lerp3(from, home, smooth(u)), r = runner(pos, Math.atan2(home[0] - from[0], home[2] - from[2]), Math.max(0, 1 - u * 1.1), clock * 11);
+  const pos = lerp3(from, home, smooth(u)), r = runner(pos, Math.atan2(home[0] - from[0], home[2] - from[2]), Math.max(0, 1 - u * 1.1), clock * 11, Math.hypot(pos[0] - from[0], pos[2] - from[2]));
   if (tr < 0.65) return { pos, j: mixJoints(buildBody(end), r.j, smooth((tr - 0.5) / 0.15)) };
   return r;
 }
@@ -2275,7 +2312,14 @@ function contact() {
   camMode = 'chase';
   // send fielders
   for (const f of fielders) {
-    if (f === res.fielder) f.target = res.point ? res.point.slice() : null;
+    if (f === res.fielder) {
+      f.target = res.point ? res.point.slice() : null;
+      // stand half a metre short of where the ball arrives, facing it, so it comes into his hands in front of him
+      if (f.target && res.t != null && !f.keeper && (res.kind === 'caught' || res.kind === 'runs')) {
+        const a = watchAng(f, ball.play, 1e9, res.point);
+        f.target = [res.point[0] - Math.sin(a) * 0.5, 0, res.point[2] - Math.cos(a) * 0.5];
+      }
+    }
     else if (res.kind === 'four' || res.kind === 'six') f.target = null;
     else {
       // others drift toward the ball's path a little; the keeper heads to the stumps
@@ -3061,7 +3105,9 @@ function update(dt) {
         const d = sub(f.target, f.pos); d[1] = 0;
         const l = Math.hypot(d[0], d[2]);
         if (l > 0.4) { const step = Math.min(l, f.speed * dt); f.dist = (f.dist || 0) + step; f.pos = add(f.pos, mul([d[0] / l, 0, d[2] / l], step)); f.face = Math.atan2(d[0], d[2]); f.run = 1; f.phase += dt * 11; f.crouch = 0; }
-        else { f.run = Math.max(0, f.run - dt * 4); f.crouch = 0.4; const bp = liveBallPos(); if (bp && ball.play.res.fielder !== f) f.face = turnTo(f.face, angTo(f.pos, bp), 1 - Math.exp(-6 * dt)); }   // arrived: turn to watch the ball
+        else { f.run = Math.max(0, f.run - dt * 4); f.crouch = 0.4; const bp = liveBallPos(), rs = ball.play.res;   // arrived: turn to watch the ball (the one taking it faces the way it comes)
+          if (rs.fielder === f && rs.t != null && ball.play.t < rs.t) f.face = turnTo(f.face, watchAng(f, ball.play, ball.play.t), 1 - Math.exp(-8 * dt));
+          else if (bp && rs.fielder !== f) f.face = turnTo(f.face, angTo(f.pos, bp), 1 - Math.exp(-6 * dt)); }
       }
     } else f.run = Math.max(0, f.run - dt * 4);
   }
@@ -3287,6 +3333,12 @@ const CLIPS = (() => {
   if (th) { let best = 0; for (let i = 1; i < th.frames.length; i++) { const v = len(sub(th.frames[i].handR, th.frames[i - 1].handR)); if (v > best) { best = v; th.release = i / th.fps; } } }
   return out;
 })();
+// a running pose blended into j with weight w: the motion-capture run, its stride timed by the distance covered (metres)
+function runFig(j, pos, face, dist, w, name = 'sprint') {
+  if (!CLIPS || !CLIPS[name] || !(w > 0.02)) return j;
+  const c = CLIPS[name];
+  return mixJ(j, placeClip(clipAt(name, dist / c.cycle * c.dur), pos, face), clamp(w, 0, 1));
+}
 function clipAt(name, t) {
   const c = CLIPS[name], n = c.frames.length;
   let x = t * c.fps; x = c.loop ? ((x % n) + n) % n : clamp(x, 0, n - 1);
@@ -3319,12 +3371,13 @@ const turnTo = (a, b, u) => { let d = ((b - a) % (2 * Math.PI) + 3 * Math.PI) % 
 const THROW_TO = [0, 0.9, -0.6];
 // which way to face to watch the ball come: where it was a moment before it reaches him (the point where he takes it is in his
 // hands or over his head, so it can't give a direction)
-function watchAng(f, pl, t) {
+function watchAng(f, pl, t, from) {
+  const o = from || f.pos;
   for (let k = Math.min(t, pl.res.t - 0.35); k >= 0; k -= 0.15) {
     const p = samplePath(pl.fp.path, k);
-    if (Math.hypot(p[0] - f.pos[0], p[2] - f.pos[2]) > 2.5) return angTo(f.pos, p);
+    if (Math.hypot(p[0] - o[0], p[2] - o[2]) > 2.5) return angTo(o, p);
   }
-  return angTo(f.pos, [0, 0, 0]);
+  return angTo(o, [0, 0, 0]);
 }
 function fielderAct(f) {
   const pl = ball && ball.play, res = pl && pl.res;
@@ -3475,7 +3528,7 @@ function livePeople() {
     out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look: [Math.sin(face), 0, Math.cos(face)],
                bat: { carry: true, hands: hR, tip: add(hR, [-0.1 * u, 0.85 * u - 0.6 * (1 - u), 0]) } });
   } else if (sr) {
-    const j = figure(sr.pos, sr.face, { run: MOTION2?sr.runWeight:sr.moving?1:0, phase: clock * 11,gaitDistance:sr.distance });
+    const j = runFig(figure(sr.pos, sr.face, { run: MOTION2?sr.runWeight:sr.moving?1:0, phase: clock * 11,gaitDistance:sr.distance }), sr.pos, sr.face, sr.distance, sr.runWeight);
     const hand = j.handR;
     out.push({ j, at: sr.pos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look: null,
                bat: { carry: true, hands: hand, tip: add(hand, [0, -0.7, sr.face ? -0.3 : 0.3]) } });
@@ -3498,7 +3551,8 @@ function livePeople() {
   // the non-striker
   const ns = runner(PITCH - 0.6, -1.5);
   const nsPos = ns ? ns.pos : [-1.7, 0, PITCH - 0.4];
-  const nj = figure(nsPos, ns ? ns.face : Math.PI, { run: MOTION2?(ns?ns.runWeight:0):(ns&&ns.moving?1:0), phase: clock * 11 + 1,gaitDistance:ns?ns.distance+1.9:undefined, seed: 20 });
+  let nj = figure(nsPos, ns ? ns.face : Math.PI, { run: MOTION2?(ns?ns.runWeight:0):(ns&&ns.moving?1:0), phase: clock * 11 + 1,gaitDistance:ns?ns.distance+1.9:undefined, seed: 20 });
+  if (ns) nj = runFig(nj, nsPos, ns.face, ns.distance + 1.9, ns.runWeight);
   out.push({ j: nj, at: nsPos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.non : 1), look: null,
              bat: { carry: true, hands: nj.handL, tip: add(nj.handL, [0.1, -0.75, ns && ns.face === 0 ? 0.25 : -0.25]) } });
   // the bowler, then the fielders (once the ball is hit, the bowler is one of the fielders)
