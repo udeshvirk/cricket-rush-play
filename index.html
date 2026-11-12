@@ -1426,7 +1426,7 @@ function strokeKeys(sw) {
     case 'cut': {
       const bd = norm([-0.95, -0.3, 0.15]);
       C = { ...R, fr: [0.52, 0, 1.08], bk: [0.3, 0, 0.6], pel: [0.42, 0.88, 0.70], hy: -95, sy: -92, lean: 22, side: -4, h: at(bd), bd, kpL: [-1, 0, 0.3], kpR: [-1, 0, 0] };
-      F = { ...C, sy: -100, h: [-0.05, 1.25, 0.95], bd: norm([-0.75, 0.5, 0.45]) };   // the blade carries on round and up toward cover, out to the side of the helmet
+      F = { ...C, sy: -100, h: [0.0, 1.08, 0.82], bd: norm([-0.8, -0.3, -0.5]) };   // the blade carries on down and round toward point, out on the off side where it's seen
       B.h = [0.28, 1.34, 0.72]; B.bd = norm([-0.5, 0.8, -0.3]); break; }   // backlift on the off side, not straight up behind the helmet
     case 'pull': {
       const bd = norm([-0.95, 0.05, 0.2]);
@@ -1436,7 +1436,7 @@ function strokeKeys(sw) {
     case 'flick': {
       const fr = front(0.4, 1.28), bd = norm([0.12, -1, -0.05]);
       C = { ...R, fr, pel: [lerp(0.63, fr[0], 0.45), 0.82, 0.97], hy: -70, sy: -72, lean: 24, side: 10, h: at(bd), bd, kpL: [-0.4, 0, 1] };
-      F = { ...C, hy: -40, sy: -20, lean: 14, h: [0.75, 1.2, 1.05], bd: norm([0.75, 0.35, 0.1 + dir[2] * 0.3]) };
+      F = { ...C, hy: -40, sy: -20, lean: 14, h: [0.42, 1.22, 1.3], bd: norm([0.8, 0.3, 0.35 + dir[2] * 0.2]) };   // wrists roll; the bat ends out in front, pointing to the leg side
       break; }
     case 'slog': {
       const bd = norm([-0.9, -0.3, 0.25]);
@@ -1459,6 +1459,7 @@ function strokeKeys(sw) {
   if(MOTION2 && ['drive','fdef','push','flick','slog'].includes(sw.fam)) B.fr=add(lerp3(R.fr,C.fr,.65),[0,.035,0]);
   const S = { ...F, lean: F.lean - 4, h: add(F.h, [0, -0.06 * firm, 0]) };
   // the bat accelerates into the ball and decelerates through the follow-through
+  if (MOTION2 && !PRESENTATION_SLICE) return swingArc(R, C, F, S, tF, v.hold, sw.fam === 'cut' ? norm([0, -0.55, -0.85]) : dir);   // the cut comes down and across, behind square
   if(MOTION2 && sw.fam==='drive') {
     // Extend through the ball before folding over the shoulder. A direct
     // contact-to-finish arc cuts across the upper chest immediately after impact.
@@ -1467,6 +1468,45 @@ function strokeKeys(sw) {
     return [[0,R],[.07,B],[SWING_LAG,C,easeIn],[.24,extension],[tF,F,easeOut],[tF+v.hold,S],[tF+v.hold+.7,STANCE]];
   }
   return [[0, R], [0.07, B], [SWING_LAG, C, easeIn], [tF, F, easeOut], [tF + v.hold, S], [tF + v.hold + 0.7, STANCE]];
+}
+// One smooth swing (MOTION2): the bat comes down from the waiting backlift on an arc through the ball and carries on up
+// into the finish. The arc lies in the plane of the blade at contact and the shot's direction, with the hands circling a
+// point above the contact grip; the wrists stay cocked early and release late, so the bat speeds up into the ball and
+// slows through the follow-through. Whatever part of the start and finish poses lies outside that plane fades in or out
+// smoothly, so the swing starts and ends exactly on the authored poses.
+function swingArc(R, C, F, S, tF, hold, dir) {
+  const a = norm(C.bd); let s = sub(dir, mul(a, dot(dir, a)));
+  if (len(s) < 0.2) s = sub([0, 0, 1], mul(a, a[2]));
+  s = norm(s);
+  const r = 0.42, O = sub(C.h, mul(a, r)), L = SWING_LAG;
+  const arcH = th => add(O, add(mul(a, r * Math.cos(th)), mul(s, r * Math.sin(th))));
+  const arcB = ph => add(mul(a, Math.cos(ph)), mul(s, Math.sin(ph)));
+  const coords = (P, after) => {
+    const rel = sub(P.h, O); let th = Math.atan2(dot(rel, s), dot(rel, a)), ph = Math.atan2(dot(P.bd, s), dot(P.bd, a));
+    if (after) { if (ph < -0.3) ph += 2 * Math.PI; if (th < -0.3) th += 2 * Math.PI; }   // a finish is reached going forward
+    else { if (ph > 0.3) ph -= 2 * Math.PI; if (th > 0.3) th -= 2 * Math.PI; }           // a backlift is behind the ball
+    return { th, ph, dh: sub(P.h, arcH(th)), db: sub(P.bd, arcB(ph)) };
+  };
+  const key = (from, to, P0, P1, u, thU, phU, fade) => {
+    const th = lerp(from.th, to.th, thU), ph = lerp(from.ph, to.ph, phU);
+    const h = add(arcH(th), add(mul(from.dh, 1 - fade), mul(to.dh, fade)));
+    const bd = norm(add(arcB(ph), add(mul(from.db, 1 - fade), mul(to.db, fade))));
+    return { ...mixPose(P0, P1, smooth(u)), h, bd };
+  };
+  const c0 = { th: 0, ph: 0, dh: [0, 0, 0], db: [0, 0, 0] }, cR = coords(R, false), cF = coords(F, true);
+  const keys = [[0, R]];
+  // downswing: hands steady, wrists release late (the bat accelerates into the ball)
+  // the bat loops down from the off side (toward gully), as real batters' do, so the camera behind the bowler sees it
+  // come down beside the body instead of end-on behind it
+  for (const u of [0.2, 0.4, 0.6, 0.8, 0.92]) {
+    const k = key(cR, c0, R, C, u, u * (2 - u), Math.pow(u, 1.6), 1 - (1 - u) * (1 - u)), loop = Math.sin(Math.PI * Math.pow(u, 0.8));
+    keys.push([u * L, { ...k, h: add(k.h, [-0.07 * loop, 0, 0]), bd: norm(add(k.bd, [-0.75 * loop, 0, 0])) }]);
+  }
+  keys.push([L, C]);
+  // follow-through: quick at first, settling into the finish
+  if (tF > L + 0.05) for (const u of [0.18, 0.4, 0.65]) keys.push([lerp(L, tF, u), key(c0, cF, C, F, u, 1 - (1 - u) * (1 - u), 1 - Math.pow(1 - u, 2.4), u * u)]);
+  keys.push([tF, F], [tF + hold, S], [tF + hold + 0.7, STANCE]);
+  return keys;
 }
 // The bat must never pass through the batter. Body parts as capsules (from, to, radius in metres, with pads, shirt and
 // helmet); if the blade would be inside one, it turns about the hands just far enough to pass outside it.
