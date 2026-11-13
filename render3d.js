@@ -29,6 +29,19 @@ window.Cricket3D = function (G) {
   scene.fog = new T.Fog(0x16224a, 190, 520);
   scene.background=new T.Color(0x14243b);
   const camera = new T.PerspectiveCamera(30, 1, 0.3, 900);
+  const profiling = new URLSearchParams(location.search).get('profile') === '1';
+  const perf = profiling && window.CricketDiagnostics ? window.CricketDiagnostics.create({
+    userAgent: navigator.userAgent, devicePixelRatio: window.devicePixelRatio || 1,
+    webgl2: renderer.capabilities.isWebGL2, threeRevision: T.REVISION,
+    renderer: renderer.getContext().getParameter(renderer.getContext().RENDERER),
+    query: location.search
+  }) : null;
+  let perfLast = null;
+  if (perf) {
+    renderer.info.autoReset = false;
+    window.CR_PERF = { snapshot: perf.snapshot, samples: perf.samples, reset() { perf.reset(); perfLast = null; } };
+    document.addEventListener('visibilitychange', () => { perfLast = null; });
+  }
   const V = (a) => new T.Vector3(a[0], a[1], a[2]);
 
   // canvas textures
@@ -285,8 +298,10 @@ window.Cricket3D = function (G) {
   // ---------------------------------------------------------------- the ball
   const ballMesh = new T.Mesh(new T.SphereGeometry(window.CR_PLAYER_PRODUCTION?.reference ? .036 : .045, 14, 10), new T.MeshBasicMaterial({ color: 0xffffff }));
   scene.add(ballMesh);
-  const ballGlow = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: 0xffffff, transparent: true, opacity: 0.7, depthWrite: false, blending: T.AdditiveBlending }));
-  ballGlow.scale.set(0.55, 0.55, 1); scene.add(ballGlow);
+  // A compact highlight keeps the ball readable without washing out the
+  // blade at impact. The old 55 cm halo was six times the ball's diameter.
+  const ballGlow = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: 0xffffff, transparent: true, opacity: 0.22, depthWrite: false, blending: T.AdditiveBlending }));
+  ballGlow.scale.set(0.18, 0.18, 1); scene.add(ballGlow);
   if(window.CR_PLAYER_PRODUCTION?.reference){ballGlow.scale.set(.12,.12,1);ballGlow.material.opacity=.18;}
   const blobGeo = new T.PlaneGeometry(1, 1); blobGeo.rotateX(-Math.PI / 2);
   const blobMat = new T.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false });
@@ -1062,8 +1077,9 @@ window.Cricket3D = function (G) {
         hint.poleL = pole(pos.upperarm_l, pos.lowerarm_l, pos.hand_l, fwd); hint.poleR = pole(pos.upperarm_r, pos.lowerarm_r, pos.hand_r, fwd);
       }
       if(G3 && pr.bat.carry) {
-        const s=A(pr.bat.hands).distanceTo(pos.hand_l)<A(pr.bat.hands).distanceTo(pos.hand_r)?'l':'r',S3=GRIP3.side[s];
-        const Y=A(pr.bat.hands).sub(A(pr.bat.tip)).normalize(),X=side.clone().addScaledVector(Y,-side.dot(Y));
+        const s=pr.bat.carryHand || (A(pr.bat.hands).distanceTo(pos.hand_l)<A(pr.bat.hands).distanceTo(pos.hand_r)?'l':'r'),S3=GRIP3.side[s];
+        const Y=A(pr.bat.hands).sub(A(pr.bat.tip)).normalize(),X=pr.bat.width?A(pr.bat.width):side.clone();
+        X.addScaledVector(Y,-X.dot(Y));
         if(X.lengthSq()<1e-8)X.set(1,0,0);X.normalize();
         const Bq=new T.Quaternion().setFromRotationMatrix(new T.Matrix4().makeBasis(X,Y,new T.Vector3().crossVectors(X,Y)));
         const O=pos['hand_'+s].clone().sub(S3.cuffB.clone().applyQuaternion(Bq));
@@ -1461,6 +1477,7 @@ window.Cricket3D = function (G) {
   }
 
   function render3d() {
+    const perfStart = perf ? performance.now() : 0;
     quality(performance.now());
     size();
     // the game's camera (the same maths as its 2D projection, so the guides line up)
@@ -1494,9 +1511,12 @@ window.Cricket3D = function (G) {
     { const st = G.stumps; setStumps(stumpsNear, st.tilt, st.bails); }
     setStumps(stumpsFar, null, null);
 
+    const perfPeople = perf ? performance.now() : 0;
     const list = G.M ? people() : [];
+    const perfFit = perf ? performance.now() : 0;
     loadModel(); loadEquipment(); loadGrip(); loadProduction();
     pool.forEach((p, i) => { if (i < list.length) p.set(list[i]); else { p.g.visible = false; if (p.model) p.model.visible = false; } });
+    const perfFitEnd = perf ? performance.now() : 0;
     blobs.forEach((b, i) => { b.visible = i < list.length; if (b.visible) b.position.set(list[i].at[0], 0.012, list[i].at[2]); });
 
     const bp = G.M ? ballPos() : null;
@@ -1517,7 +1537,22 @@ window.Cricket3D = function (G) {
       trailGeo.attributes.position.needsUpdate = true;
     }
     if (bp && G.ball && G.ball.play) { const t2 = G.ball.trail || (G.ball.trail = []); t2.push(bp.slice()); if (t2.length > 12) t2.shift(); }
+    if (perf) renderer.info.reset();
+    const perfSubmit = perf ? performance.now() : 0;
     if (composer) composer.render(); else renderer.render(scene, camera);
+    if (perf) {
+      const end = performance.now();
+      perf.record({
+        frameIntervalMs: perfLast === null || document.hidden ? null : perfStart - perfLast,
+        peopleMs: perfFit - perfPeople, fitMs: perfFitEnd - perfFit, submitMs: end - perfSubmit, viewMs: end - perfStart,
+        calls: renderer.info.render.calls, triangles: renderer.info.render.triangles,
+        textures: renderer.info.memory.textures, geometries: renderer.info.memory.geometries,
+        quality: qLevel, postfx: !!composer, width: view.width, height: view.height,
+        player: PRODUCTION?.enabled ? PRODUCTION.variant : 'default',
+        ready: !!window.CR_MODEL_READY && (!PRODUCTION?.enabled || PRODUCTION.ready), playing: !!G.M
+      });
+      perfLast = document.hidden ? null : perfStart;
+    }
   }
 
   // ---------------------------------------------------------------- switch
