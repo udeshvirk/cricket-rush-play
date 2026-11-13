@@ -1440,7 +1440,7 @@ function strokeKeys(sw) {
     case 'cut': {
       const bd = norm([-0.95, -0.3, 0.15]);
       C = { ...R, fr: [0.52, 0, 1.08], bk: [0.3, 0, 0.6], pel: [0.42, 0.88, 0.70], hy: -95, sy: -92, lean: 22, side: -4, h: at(bd), bd, kpL: [-1, 0, 0.3], kpR: [-1, 0, 0] };
-      F = { ...C, hy: -100, sy: -112, h: [0.12, 1.1, 0.68], bd: norm([-0.6, -0.1, -0.8]) };   // the blade carries on down and round toward point, out on the off side where it's seen
+      F = { ...C, hy: -105, sy: -125, lean: 18, h: [0.1, 1.22, 0.7], bd: norm([-0.7, 0.35, -0.6]) };   // the blade carries on down and round toward point, out on the off side where it's seen
       B.h = [0.28, 1.34, 0.72]; B.bd = norm([-0.5, 0.8, -0.3]); break; }   // backlift on the off side, not straight up behind the helmet
     case 'pull': {
       const bd = norm([-0.95, 0.05, 0.2]);
@@ -1459,9 +1459,9 @@ function strokeKeys(sw) {
       B.h = [0.3, 1.35, 0.66]; B.bd = norm([-0.4, 0.85, -0.35]); break; }
     case 'sweep': {
       const bd = norm([-0.9, -0.35, 0.25]);
-      C = { ...R, fr: [0.42, 0, 1.22], bk: [0.78, 0, 0.22], pel: [0.62, 0.54, 0.82], hy: -70, sy: -60, lean: 30, side: 8, h: at(bd), bd,
+      C = { ...R, fr: [0.42, 0, 1.22], bk: [0.78, 0, 0.22], pel: [0.62, 0.6, 0.82], hy: -70, sy: -60, lean: 30, side: 8, h: at(bd), bd,
             kpL: [-0.3, 0.6, 1], kpR: [-0.2, -1, 0.3] };
-      F = { ...C, sy: -20, h: [1.05, 0.85, 1.25], bd: norm([0.8, 0.45, 0.1]) };   // the sweep finishes round on the leg side, low and in front, not behind the head
+      F = { ...C, pel: [0.62, 0.52, 0.82], sy: -20, h: [1.05, 0.85, 1.25], bd: norm([0.8, 0.45, 0.1]) };   // most of the way down by the ball, the knee settles after   // the sweep finishes round on the leg side, low and in front, not behind the head
       B.h = [0.22, 1.2, 0.90]; B.bd = norm([-0.2, 0.8, -0.55]); break; }
   }
   // no two strokes quite alike: a little variety in the finish, and a held finish that settles instead of freezing
@@ -1473,6 +1473,7 @@ function strokeKeys(sw) {
   if(MOTION2 && ['drive','fdef','push','flick','slog'].includes(sw.fam)) B.fr=add(lerp3(R.fr,C.fr,.65),[0,.035,0]);
   const S = { ...F, lean: F.lean - 4, h: add(F.h, [0, -0.06 * firm, 0]) };
   // the bat accelerates into the ball and decelerates through the follow-through
+  if (MOTION2 && !PRESENTATION_SLICE && sw.defend) return straightSwing(R, C, F, S, tF, v.hold, [0, 0, 1], 'def');   // defence: a straight bat down from the backlift
   if (MOTION2 && !PRESENTATION_SLICE && SWING_PATHS[sw.fam]) return pathSwing(R, C, F, S, tF, v.hold, SWING_PATHS[sw.fam]);
   if (MOTION2 && !PRESENTATION_SLICE && STRAIGHT_FAMS.includes(sw.fam)) return straightSwing(R, C, F, S, tF, v.hold, dir, sw.fam);
   if (MOTION2 && !PRESENTATION_SLICE) return swingArc(R, C, F, S, tF, v.hold, sw.fam === 'cut' ? norm([0, -0.55, -0.85]) : dir);   // the cut comes down and across, behind square
@@ -1529,7 +1530,7 @@ function swingArc(R, C, F, S, tF, hold, dir) {
 // that plane: 0 = straight down, + = back toward the keeper (the backlift), - = forward along the shot and on up and over.
 // Hands lead and the wrists release late, so the bat speeds into the ball; anything outside the plane (the backlift's
 // angle, the finish's lean) fades in and out.
-const STRAIGHT_FAMS = ['drive', 'bdrive', 'flick'];
+const STRAIGHT_FAMS = ['drive', 'bdrive', 'flick'];   // and the defensive shots (fam 'def', called from strokeKeys)
 function straightSwing(R, C, F, S, tF, hold, dir, fam) {
   const L = SWING_LAG, dn = [0, -1, 0];
   let sd = norm([dir[0], 0, dir[2]]); if (sd[2] < 0.3) sd = norm([sd[0], 0, 0.3]);   // the swing plane faces up the pitch
@@ -1550,6 +1551,9 @@ function straightSwing(R, C, F, S, tF, hold, dir, fam) {
     keys.push([u * L, { ...mixPose(R, C, smooth(u)), h: bez(R.h, hm, C.h, Math.pow(u, 1.15)), bd: norm(add(plane(th, sdD), off)) }]);
   }
   keys.push([L, C]);
+  if (fam === 'def') {   // defence: soft hands give a little after the ball, then the pose is held (push: eased out along the shot)
+    keys.push([L + 0.07, { ...C, h: add(C.h, [0, -0.02, -0.04]) }], [tF, F], [tF + hold, S], [tF + hold + 0.7, STANCE]);
+    return keys; }
   // through the ball and up: hands go out along the shot first (extension), then up to the finish
   const hx = add(C.h, add(mul(sd, 0.42), [0, 0.12, 0]));
   for (const u of [0.15, 0.35, 0.6, 0.82]) {
@@ -1565,7 +1569,7 @@ function straightSwing(R, C, F, S, tF, hold, dir, fam) {
 const SWING_PATHS = {
   // a chop: the bat comes down from high over the off side, meets the ball beside the body, and the wrists roll it on
   // round toward third man
-  cut: { down: [[-0.55, 0.8, 0.1], [-0.9, 0.38, 0.2]], hDown: [0.35, 1.5, 0.95], through: [[-0.85, -0.5, -0.15], [-0.75, -0.3, -0.55]], hThrough: [0.25, 1.12, 0.85] },
+  cut: { down: [[-0.55, 0.8, 0.1], [-0.9, 0.38, 0.2]], hDown: [0.35, 1.5, 0.95], through: [[-0.85, -0.5, -0.15], [-0.8, -0.1, -0.6]], hThrough: [0.22, 1.15, 0.85] },
   // cocked high behind on the off side, round flat in front of the chest, and over the leg-side shoulder
   pull: { down: [[-0.6, 0.65, -0.45], [-0.95, 0.3, -0.1]], hDown: [0.45, 1.35, 0.8], through: [[-0.2, 0.1, 0.97], [0.75, 0.25, 0.6]], hThrough: [0.85, 1.3, 1.2] },
   // a big heave: high backlift, down and round through the line, up into a high finish
@@ -2106,6 +2110,9 @@ function swing(loft, pressT, aim, w) {
   ball.swing.push = !!(aim && aim.defend && aimed);
   ball.swing.fam = strokeFamily(ball.swing.intent, ball.swing.loft, ball.swing.defend, ball.swing.push, ball.short, !!(BOWL_TYPES[ball.type] || {}).turn, atBat);
   ball.swing.target = [atBat[0], clamp(atBat[1], 0.12, 1.9), 1.02];
+  if (kind !== 'hit') {   // beaten: the bat passes the ball (inside the line outside off, outside it at the pads, under a bouncer); an edge just shaves it
+    const side = atBat[0] < 0.1 ? 1 : -1, m = kind === 'miss' ? 1 : 0.35;
+    ball.swing.target = [atBat[0] + side * 0.16 * m, clamp(atBat[1] + (high ? -0.3 : 0.07) * m, 0.12, 1.9), 1.02]; }
   ball.decision = { kind, q, angle, loft: ball.swing.loft, defend: ball.swing.defend, push: !!(aim && aim.defend && aimed), dtTiming, power: ((aim && aim.power) || 1) * (ball.charge && !(aim && aim.defend) ? 1.1 : 1) };
   // the bat meets the ball in front of the batter (early) or beside the stumps (late), never behind them
   ball.contactT = kind === 'miss' ? Infinity : ball.Tstar + clamp(dtTiming, -0.05, 0.015);
@@ -3599,10 +3606,21 @@ function livePeople() {
     out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look: [Math.sin(face), 0, Math.cos(face)],
                bat: { carry: true, hands: hR, tip: add(hR, [-0.1 * u, 0.85 * u - 0.6 * (1 - u), 0]) } });
   } else if (sr) {
-    const j = runFig(figure(sr.pos, sr.face, { run: MOTION2?sr.runWeight:sr.moving?1:0, phase: clock * 11,gaitDistance:sr.distance }), sr.pos, sr.face, sr.distance, sr.runWeight);
-    const hand = j.handR;
-    out.push({ j, at: sr.pos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look: null,
-               bat: { carry: true, hands: hand, tip: add(hand, [0, -0.7, sr.face ? -0.3 : 0.3]) } });
+    let j = runFig(figure(sr.pos, sr.face, { run: MOTION2?sr.runWeight:sr.moving?1:0, phase: clock * 11,gaitDistance:sr.distance }), sr.pos, sr.face, sr.distance, sr.runWeight);
+    let hand = j.handR, tip = add(hand, [0, -0.7, sr.face ? -0.3 : 0.3]), look = null;
+    const sb = MOTION2 && ball.swing ? 1 - smooth(clamp(runT / 0.3, 0, 1)) : 0;
+    if (sb > 0) {   // out of the shot's finish into the run, not a snap: the bat comes down to his side as he sets off
+      const p = batterPose(ball.swing), o = [guard, 0, 0], pj = {};
+      for (const n in p.j) pj[n] = Array.isArray(p.j[n]) && !/^foot(Dir|Pitch)/.test(n) ? add(p.j[n], o) : p.j[n];
+      j = mixJ(j, pj, sb); hand = lerp3(hand, add(p.hands, o), sb); tip = lerp3(tip, add(p.tip, o), sb);
+    }
+    const bp = MOTION2 ? liveBallPos() : null;
+    if (bp && runs > 1 && sr.moving) {   // he glances toward the ball while he runs, to judge another run
+      const fw = [Math.sin(sr.face), 0, Math.cos(sr.face)], tb = norm([bp[0] - sr.pos[0], 0, bp[2] - sr.pos[2]]);
+      if (dot(fw, tb) > -0.3) look = norm(lerp3(fw, tb, 0.55));
+    }
+    out.push({ j, at: sr.pos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look,
+               bat: { carry: true, hands: hand, tip } });
   } else {
     let { j, hands, tip,look } = batterPose(ball && ball.swing ? ball.swing : null);
     let contact = ball && ball.swing && ball.swing.target ? ball.swing.target.slice() : null;
