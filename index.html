@@ -382,6 +382,18 @@
   #tvbar #batline[hidden] { display: none; }
   #tvbar #overchips { gap: 3px; padding: 3px 0 0; }
   #tvbar .chip { min-width: 18px; height: 18px; font-size: 11px; padding: 0 4px; border-radius: 9px; }
+  /* laptops and iPads: one broadcast-style panel (score, batters and bowler, this over), a little bigger */
+  @media (min-width: 721px) and (min-height: 461px) {
+    #tvbar { background: linear-gradient(180deg, rgba(14, 22, 48, 0.9), rgba(8, 13, 30, 0.86)); border-radius: 10px; overflow: hidden;
+             box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35); border: 1px solid rgba(243, 239, 228, 0.08); }
+    #tvbar #scorebar > div { background: transparent; padding: 4px 11px; }
+    #tvbar #scorebar .team { font-size: 14px; } #tvbar #scorebar .runs { font-size: 29px; }
+    #tvbar #scorebar .overs, #tvbar #scorebar .need { font-size: 15px; }
+    #tvbar #scorebar .overs { border-left: 1px solid rgba(243, 239, 228, 0.12); }
+    #tvbar #batline { font-size: 14px; padding: 4px 11px; background: rgba(243, 239, 228, 0.05); border-top: 1px solid rgba(243, 239, 228, 0.08); gap: 14px; }
+    #tvbar #overchips { padding: 5px 11px 7px; gap: 4px; }
+    #tvbar .chip { min-width: 22px; height: 22px; font-size: 12px; border-radius: 11px; }
+  }
   #mapwrap { top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); }
   #minimap { width: 76px; height: 76px; opacity: 0.85; margin-left: auto; }
   .tools { position: static; display: flex; gap: 4px; justify-content: flex-end; margin-bottom: 4px; }
@@ -1426,6 +1438,7 @@ function ik(a, c, l1, l2, pole) {
   pv = len(pv) > 1e-4 ? norm(pv) : [0, 1, 0];
   return add(add(a, mul(dn, x)), mul(pv, h));
 }
+let kHand = null;   // the keeper's raised glove while he appeals or celebrates (livePeople), so a ball he took stays in it
 // the wicketkeeper: s = how deep he squats (1 = down on his haunches while the bowler runs in, about 0.45 = up in the ready
 // crouch as the ball comes), gloves together in front; `glove` (a world point) moves both gloves to the ball for the take
 function keeperFig(pos, face, s, glove) {
@@ -1447,6 +1460,26 @@ function keeperFig(pos, face, s, glove) {
   j.kneeL = ik(j.hipL, add(j.footL, [0, 0.07, 0]), LEG, LEG, add(F, mul(L, 0.55)));   // knees forward and apart
   j.kneeR = ik(j.hipR, add(j.footR, [0, 0.07, 0]), LEG, LEG, add(F, mul(L, -0.55)));
   j.elL = ik(j.shL, j.handL, UPARM, FOREARM, add(mul(L, 1), [0, -0.6, 0])); j.elR = ik(j.shR, j.handR, UPARM, FOREARM, add(mul(L, -1), [0, -0.6, 0]));
+  return j;
+}
+// a fielder gathering a ground ball: u = how far down (0 standing, 1 right down), the front (left) foot forward toward the ball,
+// knees bent, body low over it, eyes on it, both hands together at `hands` (a world point; clamped to the arms' reach)
+function gatherFig(pos, face, u, hands) {
+  const F = [Math.sin(face), 0, Math.cos(face)], L = [Math.cos(face), 0, -Math.sin(face)];
+  const P = (a, b, h) => add(pos, add(add(mul(F, a), mul(L, b)), [0, h, 0]));
+  const h = 0.93 - 0.36 * u, j = {};
+  j.pelvis = P(-0.06 * u, 0, h); j.hipL = P(-0.06 * u, 0.11, h); j.hipR = P(-0.06 * u, -0.11, h);
+  j.footL = P(0.02 + 0.3 * u, 0.15 + 0.04 * u, 0); j.footR = P(0.02 - 0.26 * u, -0.15 - 0.08 * u, 0);
+  const lean = 0.06 + 0.4 * u, drop = 0.24 * u;
+  j.shL = P(lean, 0.19, h + 0.5 - drop); j.shR = P(lean, -0.19, h + 0.5 - drop);
+  j.neck = P(lean + 0.04, 0, h + 0.55 - drop - 0.02 * u); j.head = P(lean + 0.1 + 0.06 * u, 0, h + 0.72 - drop - 0.1 * u);   // head down over the ball
+  const sm = lerp3(j.shL, j.shR, 0.5), want = hands || P(0.5 * u + 0.15, 0, 0.95 - 0.8 * u), d = sub(want, sm), l = len(d);
+  const mid = add(sm, mul(d, Math.min(1, (UPARM + FOREARM) * 0.97 / Math.max(1e-4, l))));
+  j.handL = add(mid, mul(L, 0.06)); j.handR = add(mid, mul(L, -0.06));
+  j.footDirL = F.slice(); j.footDirR = norm(add(F, mul(L, -0.5))); j.footPitchL = [0, 0, 0]; j.footPitchR = [0, 0, 0];
+  j.kneeL = ik(j.hipL, add(j.footL, [0, 0.07, 0]), LEG, LEG, add(F, mul(L, 0.2)));
+  j.kneeR = ik(j.hipR, add(j.footR, [0, 0.07, 0]), LEG, LEG, add(F, mul(L, -0.3)));
+  j.elL = ik(j.shL, j.handL, UPARM, FOREARM, add(mul(L, 0.8), [0, -0.5, 0])); j.elR = ik(j.shR, j.handR, UPARM, FOREARM, add(mul(L, -0.8), [0, -0.5, 0]));
   return j;
 }
 function buildBody(k) {
@@ -2170,7 +2203,8 @@ function lawful(o) {
   const nb = !!(ball && ball.noBall), fh = !!inn.freeHit;
   if (!nb && !fh) return o;
   const r = { runs: o.runs || 0, freeHit: fh };
-  if (o.out) r.notOut = o.out.how;
+  if (o.out && o.out.how === 'run out') r.out = o.out;   // you can be run out off a free hit
+  else if (o.out) r.notOut = o.out.how;
   if (nb) r.noBall = true; else if (o.wide) r.wide = true;
   return r;
 }
@@ -2565,10 +2599,17 @@ function resolvePlay(fp, airborne) {
   const avail = back - 0.2;   // the batters set off almost at once
   let runs = 0;
   if (avail > RUN1) runs = 1 + Math.floor((avail - RUN1) / RUN_MORE);
+  // a tight extra run: when they very nearly have time for one more, now and then they go for it. Mostly they make it;
+  // sometimes the throw beats the batter running to the keeper's end (run out). Never off a no-ball.
+  const done = runs ? RUN1 + (runs - 1) * RUN_MORE : 0, q = (avail - done) / (runs ? RUN_MORE : RUN1);
+  if (runs < 3 && !res.dropped && !(ball && ball.noBall) && q > RUN_RISK.q && Math.random() < RUN_RISK.go) {
+    if (Math.random() < RUN_RISK.make + (q - RUN_RISK.q) / (1 - RUN_RISK.q) * 0.35) runs++; else res.runOut = true;
+  }
   res.runs = Math.min(3, runs);
   res.kind = 'runs';
   return res;
 }
+const RUN_RISK = { q: 0.85, go: 0.15, make: 0.65 };   // see resolvePlay: how close, how often they try, how often they make it
 function landingExtra(path, i) {
   for (let k = i; k < path.length; k++) if (!path[k].air) return Math.hypot(path[k].p[0], path[k].p[2]) - Math.hypot(path[i].p[0], path[i].p[2]);
   const last = path[path.length - 1].p;
@@ -2650,6 +2691,7 @@ function contact() {
 function dismissal(out) {
   const b = surname(bowlerP().name);
   if (out.how === 'bowled') return 'b ' + b;
+  if (out.how === 'run out') { const f = out.by; return 'run out (' + (f && f.keeper ? '†' : '') + (f && f.who !== null && f.who !== undefined && inn.bowl.players[f.who] ? surname(inn.bowl.players[f.who].name) : 'fielder') + ')'; }
   if (out.how === 'stumped') { const f = out.by; return 'st †' + (f && f.who !== null && f.who !== undefined ? surname(inn.bowl.players[f.who].name) : 'keeper') + ' b ' + b; }
   const f = out.by;
   if (!f || f.bowler) return 'c & b ' + b;
@@ -2683,10 +2725,14 @@ function recordBall(o) {
   if (o.runs === 0 && !o.out) i.dots++;
   i.over.push(o.out ? 'W' : String(o.runs));
   if (o.out) {
-    i.wkts++; bw.wkts++;
-    c.out = dismissal(o.out);
-    o.batter = i.striker;
-    i.fow.push({ w: i.wkts, r: i.runs, k: i.striker, b: i.balls });
+    // run out: the batter running to the keeper's end (the non-striker after an even number of completed runs); the bowler gets
+    // no wicket, and the new batter comes in at that end, on strike
+    const ro = o.out.how === 'run out', ok = ro && o.runs % 2 === 0 ? i.non : i.striker, stay = ok === i.striker ? i.non : i.striker;
+    i.wkts++; if (!ro) bw.wkts++;
+    i.cards[ok].out = dismissal(o.out);
+    o.batter = ok;
+    i.fow.push({ w: i.wkts, r: i.runs, k: ok, b: i.balls });
+    i.non = stay; i.striker = ok;
     if (i.wkts < i.maxWkts && i.next < i.cards.length) { i.striker = i.next++; i.cards[i.striker].in = true; }
   } else if (o.runs % 2) [i.striker, i.non] = [i.non, i.striker];
   if (i.balls % 6 === 0) {
@@ -2852,6 +2898,7 @@ function resolveBall(plan, w) {
     const h = strike();
     if (h.playedOn) o = { runs: 0, out: { how: 'bowled' } };
     else if (h.res.kind === 'caught') o = { runs: 0, out: { how: 'caught', by: h.res.fielder } };
+    else if (h.res.runOut) o = { runs: h.res.runs, out: { how: 'run out', by: h.res.fielder } };
     else o = { runs: h.res.runs };
   }
   return lawful(o);
@@ -3007,8 +3054,9 @@ function lockFeedback(e) {
 
 // ----------------------------------------------------------------------- result of a ball (animated)
 function finishBall(o, line) {
-  const i = inn, k = i.striker, chaseMode = M.mode === 'chase';
+  const i = inn, chaseMode = M.mode === 'chase';
   o = lawful(o);
+  const k = o.out && o.out.how === 'run out' && o.runs % 2 === 0 ? i.non : i.striker;   // (a run out can be the non-striker)
   if (o.notOut) line = { bowled: 'Bowled', caught: 'Caught', stumped: 'Stumped' }[o.notOut] + (o.noBall ? ', but not out' : ' off the free hit');
   else if (o.noBall) line = o.runs ? (o.runs >= 4 ? 'No-ball · ' : plural(o.runs, 'run') + ' and a no-ball · ') + line : 'One extra run';
   recMark(o, line);
@@ -3765,7 +3813,10 @@ function update(dt) {
         const kp = fielders.find(f => f.keeper);
         sndGlove(0.8);
         if (kp && Math.abs(p[0] - kp.pos[0]) < 1.25 && p[1] < 1.9) { ball.taken = p.slice(); ball.frozenAt = ball.taken; }   // in his gloves
-        if (ball.charge && missed && Math.random() < (keeperZ > -5 ? 0.9 : 0.4)) finishBall({ runs: 0, out: { how: 'stumped', by: kp } }, 'Stumped!');
+        if (ball.charge && missed && Math.random() < (keeperZ > -5 ? 0.9 : 0.4)) {
+          ball.bails = [{ p: [-0.055, 0.72, 0], v: [rand(-1.5, -0.3), rand(1.5, 2.8), rand(0.5, 1.5)] }, { p: [0.055, 0.72, 0], v: [rand(0.3, 1.5), rand(1.5, 2.8), rand(0.5, 1.5)] }];   // whipped off
+          finishBall({ runs: 0, out: { how: 'stumped', by: kp } }, 'Stumped!');
+        }
         else if (ball.charge && missed) finishBall({ runs: 0 }, 'Missed the stumping');
         else if (ball.wide && missed) finishBall({ runs: 0, wide: true }, 'Too wide · one extra run');
         else finishBall({ runs: 0 }, d && d.kind === 'miss' ? 'Beaten' : ball.left && ball.atBat[1] > 1.45 ? 'Ducked under it' : 'Left alone');
@@ -3794,7 +3845,10 @@ function update(dt) {
         sndGlove(0.45);
         const dir = regionName(pl.angle, Math.hypot(res.point[0], res.point[2]));
         const line = res.dropped ? 'Dropped at ' + res.fielder.name + '!' : (res.runs ? 'Worked to ' + dir : 'Straight to ' + res.fielder.name);
-        finishBall({ runs: res.runs }, line);
+        if (res.runOut) {   // the throw beats him to the keeper's end: bails off
+          ball.bails = [{ p: [-0.055, 0.72, 0], v: [rand(-1.5, -0.3), rand(1.5, 2.8), rand(0.5, 1.5)] }, { p: [0.055, 0.72, 0], v: [rand(0.3, 1.5), rand(1.5, 2.8), rand(0.5, 1.5)] }];
+          sndStumps(); finishBall({ runs: res.runs, out: { how: 'run out', by: res.fielder } }, 'Run out!');
+        } else finishBall({ runs: res.runs }, line);
       }
     }
   }
@@ -3879,7 +3933,7 @@ function update(dt) {
     tp = [UMP_AT[0] - 0.35 + off, 1.6, UMP_AT[2] - d]; tt = [UMP_AT[0] + off, W > H ? 1.3 : 2.3, UMP_AT[2]]; tf = 28; rate = 8;
   }
   if (!!cam.uc !== uc) { cam.uc = uc; cam.pos = tp.slice(); cam.tgt = tt.slice(); cam.fov = tf; }   // cut, don't swoop
-  const wk = phase === 'result' && celebrate && celebrate.out && phaseT > Math.max(0.7, sigEnd(celebrate)) && !RP && R3D && R3D.active();
+  const wk = phase === 'result' && celebrate && celebrate.out && celebrate.out.how !== 'run out' && phaseT > Math.max(0.7, sigEnd(celebrate)) && !RP && R3D && R3D.active();
   if (wk) {
     const u = phaseT - 0.7, f = -2.2, d = [Math.sin(f), 0, Math.cos(f)], at = [0.6 + guard + d[0] * u * 1.2, 0, 0.75 + d[2] * u * 1.2];
     const wide = W > H * 1.2, off = wide ? -1.0 : 0;   // on wide screens he stands right of centre, the banner to his left
@@ -3901,6 +3955,7 @@ function stumpsNow() {
 }
 function liveBallPos() {
   if (!ball) return null;
+  if (ball.taken && kHand && phase === 'result') return add(kHand, [0, 0.06, 0]);
   if (ball.frozenAt) return ball.frozenAt;
   if (ball.play) {
     const pl = ball.play, res = pl.res, path = pl.fp.path;
@@ -4108,6 +4163,10 @@ function fielderAct(f) {
     let v = sub(c, sh); const d = len(v); if (d > 0.72) v = mul(v, 0.72 / d);
     const m = add(sh, v), side = [Math.cos(face) * 0.07, 0, -Math.sin(face) * 0.07];
     const low = !air;
+    if (low) {   // a ball along the ground: down into the gather, hands together on its line
+      const J = gatherFig(pos, face, reachU, lerp3(at(face, 0.3, 0, 0.9), add(res.point, [0, 0.06, 0]), reachU));
+      return { face, crouch: 0, handL: J.handL, handR: J.handR, clipJ: J, w: smooth(clamp((t - look) / 0.25, 0, 1)), hold: lerp3(J.handL, J.handR, 0.5) };   // (blended in from his run)
+    }
     const rest = { handL: at(face, 0.15, 0.24, 0.95), handR: at(face, 0.15, -0.24, 0.95) };
     return { face, crouch: low ? reachU : 0.3 * reachU, bend: low ? 0.8 * reachU : (c[1] < 0.9 ? 0.5 * reachU : 0),
              handL: lerp3(rest.handL, add(m, side), reachU), handR: lerp3(rest.handR, sub(m, side), reachU), hold: lerp3(add(m, side), sub(m, side), 0.5) };
@@ -4124,7 +4183,12 @@ function fielderAct(f) {
   const back = at(face, -0.35, -0.32, 1.7), release = at(face, 0.38, -0.2, 1.9), follow = at(face, 0.5, 0.18, 0.85);
   const leftAim = at(face, 0.55, 0.12, 1.5), leftRest = at(face, 0.15, 0.24, 0.95);
   const rise = smooth(clamp((t - tc) / Math.max(0.2, ts - 0.32 - tc), 0, 1));
-  if (t < ts - 0.32) { const hr = lerp3(pick, chest, rise); return { face, crouch: 1 - rise, bend: 0.8 * (1 - rise), handR: hr, handL: lerp3(add(pick, [0, 0, 0]), leftRest, rise), hold: hr }; }
+  if (t < ts - 0.32) {   // up out of the gather, the ball coming to the chest in the throwing hand
+    const hr = lerp3(pick, chest, rise);
+    if (!air) { const J = gatherFig(pos, face, 1 - rise, hr); J.handL = lerp3(J.handL, leftRest, rise); J.elL = ik(J.shL, J.handL, UPARM, FOREARM, [0, -1, 0]);
+      return { face, crouch: 0, handR: J.handR, handL: J.handL, clipJ: J, w: 1, hold: J.handR }; }
+    return { face, crouch: 1 - rise, bend: 0.8 * (1 - rise), handR: hr, handL: lerp3(add(pick, [0, 0, 0]), leftRest, rise), hold: hr };
+  }
   if (CLIPS && CLIPS.throw) {   // the throw itself is motion capture, timed so the ball leaves his hand at throwStart
     const th = CLIPS.throw, lead = Math.min(th.release, Math.max(0.3, ts - tc - 0.25)), t0 = ts - lead, ct = th.release - lead + (t - t0);
     if (t >= t0) {
@@ -4206,6 +4270,18 @@ function cheerFig(pos, face, t, seed) {
   const hand = (s, hi) => add(p, add(add(mul(L, s * lerp(0.25, 0.32, up)), mul(F, 0.08)), [0, lerp(0.95, hi, up), 0]));
   return figure(p, face, { handL: hand(1, one ? 1.5 : 2.2), handR: hand(-1, 2.25), seed });
 }
+// an appeal to the umpire: turned to him, up on the toes, one arm thrust up and forward, the other out
+function appealFig(pos, face, t, seed) {
+  const L = [Math.cos(face), 0, -Math.sin(face)], F = [Math.sin(face), 0, Math.cos(face)], u = smooth(clamp(t / 0.18, 0, 1));
+  const p = [pos[0], 0.05 * u * Math.max(0, Math.sin(t * 9 + seed)), pos[2]], s = seed % 2 ? 1 : -1;
+  const up = add(p, add(add(mul(L, s * -0.22), mul(F, lerp(0.1, 0.35, u))), [0, lerp(0.95, 2.2, u), 0]));
+  const out = add(p, add(add(mul(L, s * lerp(0.25, 0.55, u)), mul(F, 0.15)), [0, lerp(0.95, 1.45, u), 0]));
+  const j = figure(p, face, { handL: s > 0 ? out : up, handR: s > 0 ? up : out, seed });
+  for (const k of ['neck', 'head', 'shL', 'shR']) j[k] = add(j[k], mul(F, -0.06 * u));   // leaning back a touch, shouting at him
+  return j;
+}
+// caught behind and stumpings are appealed for before the umpire gives them
+const appealed = c => !!(c && c.out && (c.out.how === 'stumped' || (c.out.how === 'caught' && c.out.by && c.out.by.keeper)));
 function headFig(pos, face, t, seed) {   // hands on the head
   const L = [Math.cos(face), 0, -Math.sin(face)], F = [Math.sin(face), 0, Math.cos(face)], u = smooth(clamp(t / 0.4, 0, 1));
   const hand = s => add(pos, add(add(mul(L, s * lerp(0.25, 0.1, u)), mul(F, lerp(0.05, -0.02, u))), [0, lerp(0.95, 1.78, u), 0]));
@@ -4222,7 +4298,7 @@ function walkIn() {
 function livePeople() {
   const out = [], helmet = helmetCol();
   const runT = ball && ball.play && ball.play.res.kind === 'runs' ? ball.play.t - 0.35 : -1;
-  const runs = ball && ball.play ? ball.play.res.runs : 0;
+  const runs = ball && ball.play ? ball.play.res.runs + (ball.play.res.runOut ? 1 : 0) : 0;   // (going for the one they don't make)
   const runner = (startZ, x) => !ball || ball.play?.res.kind !== 'runs' ? null : CricketLocomotion.runner({
     time: runT, runs, startZ, x, pitch: PITCH, firstDuration: RUN1, moreDuration: RUN_MORE
   });
@@ -4230,7 +4306,7 @@ function livePeople() {
   // the striker: in his stance and swing, or running
   const sr = runner(0.6, 0.55);
   const cel = phase === 'result' && celebrate ? celebrate : null;
-  if (cel && cel.out && phaseT > 0.7) {   // out: carry the blade down beside the leg
+  if (cel && cel.out && cel.out.how !== 'run out' && phaseT > 0.7) {   // out: carry the blade down beside the leg
     const u = phaseT - 0.7, turn=smooth(clamp(u/.45,0,1)),face=lerp(-Math.PI/2,-2.2,turn);
     const r=clamp(u/.45,0,1),distance=u<.45?1.2*.45*(r*r*r-.5*r*r*r*r):1.2*(u-.225);
     const charge=ball?.charge?STEP*smooth(clamp(ball.charge.t/.4,0,1)):0;
@@ -4317,6 +4393,8 @@ function livePeople() {
   const fid = w => inn && w !== null && w !== undefined && inn.bowl.players[w] ? inn.bowl.players[w].name : 'f' + w;
   const won = cel && cel.out, hurt = cel && !cel.out && cel.runs >= 4;
   const react = (f, pos, face) => !cel || phaseT < 0.15 ? null
+    : won && appealed(cel) && phaseT < sigStart(cel) + 0.1 && (f.bowler || f.keeper || Math.hypot(pos[0], pos[2] - 1) < 14)
+      ? appealFig(pos, angTo(pos, UMP_AT), phaseT - 0.15, (f.who || 0) + (f.keeper ? 1 : 0))
     : won && (f.bowler || f === cel.out.by || (f.keeper && cel.out.how !== 'caught')) ? cheerFig(pos, face, phaseT - 0.15, f.bowler ? 0.4 : 1.3)
     : hurt && f.bowler ? headFig(pos, face, phaseT - 0.15, 3) : null;
   if (!afterHit) {
@@ -4333,6 +4411,7 @@ function livePeople() {
     }
     const act = fielderAct(f), caughtCel = act && act.u !== undefined && act.u >= 1;
     const rj = f.run < 0.3 && (!act || caughtCel) ? react(f, pos, act ? act.face : f.face) : null;
+    if (f.keeper) kHand = rj ? (rj.handL[1] > rj.handR[1] ? rj.handL : rj.handR) : null;   // the ball he took goes up with his raised glove
     if (act && !rj) {
       let j = figure(pos, act.face, { run: f.run * clamp(1 - (act.crouch || 0) - (act.bend || 0), 0, 1), phase: ph, crouch: act.crouch || 0, bend: act.bend || 0,
         handL: act.handL, handR: act.handR, seed: fi + 1 });
@@ -4380,7 +4459,7 @@ function livePeople() {
 const UMP_SIG = 0.9;   // seconds per signal
 const UMP_AT = [-0.08, 0, PITCH + 2.4];   // the bowler's-end umpire: in the middle, behind the stumps (the bowler passes 0.5 m to his right)
 // when the signals run (phase 'result'): from S0 for UMP_SIG each; the camera cuts to the umpire for them (umpCam in update())
-const sigStart = c => c && c.out ? 0.35 : 0.6;
+const sigStart = c => appealed(c) ? 1.0 : c && c.out ? 0.35 : 0.6;   // (after the appeal)
 const sigEnd = c => c && c.signals && c.signals.length ? sigStart(c) + c.signals.length * UMP_SIG : 0;
 function umpires() {
   const list = [], sig = phase === 'result' && celebrate ? celebrate.signals || [] : [];
@@ -4405,6 +4484,8 @@ function umpires() {
         }[s];
         for (const [side, h] of [['L', hl], ['R', hr]]) if (h) {
           j['hand' + side] = lerp3(j['hand' + side], h, w);
+          const sh = j['sh' + side], d = sub(j['hand' + side], sh), l = len(d), A = (UPARM + FOREARM) * 0.98;
+          if (l > A) j['hand' + side] = add(sh, mul(d, A / l));   // never longer than his arm
           j['el' + side] = add(lerp3(j['sh' + side], j['hand' + side], 0.48), mul(L, side === 'L' ? 0.015 : -0.015));   // a straight arm
         }
       }

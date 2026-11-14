@@ -66,6 +66,8 @@
         else t=pick([`${b} hits it straight to ${f}. Caught!`,`Caught at ${f}! ${b} picked out the fielder.`,`Taken at ${f}. That's the end of ${b}.`,`Straight into the hands of ${f}. Out!`]);
       } else if(how==='stumped'){
         t=pick([`Down the pitch, missed it, and stumped! ${b} is out.`,`Lightning work from the keeper. Stumped!`,`${b} came down the track and was done in the flight. Stumped.`]);
+      } else if(how==='run out'){
+        t=pick([f?`Run out! A fine throw in from ${f}, and ${b} is short of his ground.`:`Run out! ${b} is short of his ground.`,`They went for one too many! ${b} is run out.`,`Brilliant work in the field! ${b} is run out.`,`Mix-up in the middle, and ${b} is run out.`]);
       } else t=`That's out! ${b} has to go.`;
       // how the batter's innings ended
       if(d.batRuns===0&&d.batBalls<=1)t+=' '+pick(['First ball, gone for a golden duck.','Out first ball!']);
