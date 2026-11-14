@@ -629,6 +629,9 @@ const DRIVE_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.
 const CUT_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('cut') !== 'old';
 const PULL_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('pull') !== 'old';
 const BDRIVE_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('bdrive') !== 'old';
+// back-foot strokes with staged key poses (player-production/motion.js); the upper cut and hook need the staged cut and pull
+const NEW_STROKES = CUT_MOTION && PULL_MOTION;   // reverse sweep, late cut, leg glance
+const stagedBack = f => (NEW_STROKES && (f==='rsweep'||f==='lcut'||f==='glance')) || (CUT_MOTION && (f==='cut'||f==='ucut')) || (PULL_MOTION && (f==='pull'||f==='hook')) || (BDRIVE_MOTION && f==='bdrive');
 document.body.classList.toggle('reference-view',REFERENCE_VIEW);
 
 // ======================================================================= setup
@@ -1404,11 +1407,21 @@ const DUCK = { ...LEAVE, pel: [0.66, 0.56, 0.7], lean: 48, h: [0.62, 1.0, 0.62],
 function strokeFamily(a, loft, defend, push, short, spin, at) {
   if (defend) return short ? 'bdef' : push ? 'push' : 'fdef';
   const h = at ? at[1] : 0.5, wide = at ? at[0] < -0.12 : false;
-  if (short) return a < -45 ? 'cut' : a > 25 ? 'pull' : 'bdrive';
-  if (h > 1.05) return a < -40 ? 'cut' : a > 20 ? 'pull' : 'bdrive';   // chest high off a good length: a back-foot shot
+  if (short || h > 1.05) {   // short, or chest high off a good length: a back-foot shot
+    const off = short ? -45 : -40, leg = short ? 25 : 20;
+    if (a < off) return CUT_MOTION && (loft || h > 1.4 || (a < -115 && h > 1.05)) ? 'ucut'   // lofted, shoulder high, or steered fine: the upper cut
+      : NEW_STROKES && a < -115 && a >= -155 ? 'lcut' : 'cut';
+    if (a > leg) return PULL_MOTION && h > 1.4 ? 'hook' : 'pull';   // shoulder high or above: the hook
+    return 'bdrive';
+  }
   if (a > 35) {
+    if (NEW_STROKES && !loft && a > 115 && a <= 155 && !(spin && h < 0.75)) return 'glance';   // fine on the leg side: the leg glance (spin, low: the fine sweep)
     if (loft) return a < 120 ? 'slog' : 'flick';
     return a >= 55 && h < 0.75 && (spin || a >= 80) ? 'sweep' : 'flick';   // square or fine on the leg side off a low ball: the sweep
+  }
+  if (NEW_STROKES && a < -115 && a >= -155) {   // fine on the off side: the reverse sweep to a low ball from a spinner, else the late cut
+    if (spin && h < 0.75) return 'rsweep';
+    if (!loft) return 'lcut';
   }
   if (a < -100 || (a < -65 && wide)) return 'cut';   // square on the off side to a wide ball: the cut
   return 'drive';
@@ -1417,7 +1430,7 @@ function strokeFamily(a, loft, defend, push, short, spin, at) {
 function strokeKeys(sw) {
   const T = sw.target, a = sw.intent * deg, dir = [Math.sin(a), 0, Math.cos(a)], loft = sw.loft;
   const R = MOTION2 ? (sw.visualStart || PREPARE) : READY;
-  if((DRIVE_MOTION && sw.fam==='drive') || (CUT_MOTION && sw.fam==='cut') || (PULL_MOTION && sw.fam==='pull') || (BDRIVE_MOTION && sw.fam==='bdrive')) {
+  if((DRIVE_MOTION && sw.fam==='drive') || stagedBack(sw.fam)) {
     // Preserve the existing random stream consumption without making the
     // staged strokes' support/contact poses wander on each delivery.
     if(!sw.vary)sw.vary={l:rand(-4,4),y:rand(-7,7),h:[rand(-.08,.08),rand(-.1,.1),rand(-.06,.06)],f:rand(-.03,.05),hold:rand(.8,1.3)};
@@ -1673,7 +1686,7 @@ function batterPose(sw) {
     if (!sw.keys) sw.keys = strokeKeys(sw);
     if(MOTION2) {
       if(!sw.curve)sw.curve=CricketMotion.prepare(sw.keys);
-      if((DRIVE_MOTION && sw.fam==='drive') || (CUT_MOTION && sw.fam==='cut') || (PULL_MOTION && sw.fam==='pull') || (BDRIVE_MOTION && sw.fam==='bdrive')) {
+      if((DRIVE_MOTION && sw.fam==='drive') || stagedBack(sw.fam)) {
         const sampled=CricketMotion[sw.fam==='drive'?'sampleDrive':'sampleCut'](sw.curve,sw.t,sw.contactAge,SWING_LAG);
         k=sampled.pose;motionTime=sampled.time;
       } else k=CricketMotion.sample(sw.curve,sw.t);
@@ -2128,6 +2141,7 @@ function swing(loft, pressT, aim, w) {
   ball.swing.intent = wrapA(aimed ? aim.angle : angle);
   ball.swing.push = !!(aim && aim.defend && aimed);
   ball.swing.fam = strokeFamily(ball.swing.intent, ball.swing.loft, ball.swing.defend, ball.swing.push, ball.short, !!(BOWL_TYPES[ball.type] || {}).turn, atBat);
+  if (ball.swing.fam === 'ucut') ball.swing.loft = true;   // an upper cut always goes in the air
   ball.swing.target = [atBat[0], clamp(atBat[1], 0.12, 1.9), 1.02];
   if (kind !== 'hit') {   // beaten: the bat passes the ball (inside the line outside off, outside it at the pads, under a bouncer); an edge just shaves it
     const side = atBat[0] < 0.1 ? 1 : -1, m = kind === 'miss' ? 1 : 0.35;
@@ -2138,6 +2152,9 @@ function swing(loft, pressT, aim, w) {
   ball.swing.contactAge = ball.contactT - pressT;
   let sn = kind === 'hit' ? shotName(angle, ball.swing.loft, ball.swing.defend, ball.decision.push) : kind === 'edge' ? 'Edged' : 'Missed';
   if (kind === 'hit' && ball.swing.fam === 'sweep') sn = Math.abs(angle) > 125 ? 'Fine sweep' : 'Sweep';
+  if (kind === 'hit' && ball.swing.fam === 'ucut') sn = 'Upper cut';
+  if (kind === 'hit') sn = { rsweep: 'Reverse sweep', lcut: 'Late cut', glance: 'Leg glance' }[ball.swing.fam] || sn;
+  if (kind === 'hit' && ball.swing.fam === 'hook') sn = ball.swing.loft ? 'Lofted hook' : 'Hook';
   ball.decision.shot = kind === 'hit' ? sn : '';
   if (swipeVis) swipeVis.label = sn;
   if (!quiet) showTiming(dtTiming, kind, kind === 'hit' ? sn : '', w);
@@ -3640,7 +3657,7 @@ function livePeople() {
       hands=lerp3(add(from.hands,offset),hands,turn);
       const direction=CricketMotion.blendDirection(norm(sub(from.tip,from.hands)),norm(sub(tip,hand)),turn);
       tip=add(hands,mul(direction,lerp(len(sub(from.tip,from.hands)),len(sub(tip,hand)),turn)));
-      const sourceWidth=(CUT_MOTION && sw?.fam==='cut') || (PULL_MOTION && sw?.fam==='pull') || (BDRIVE_MOTION && sw?.fam==='bdrive')
+      const sourceWidth=stagedBack(sw?.fam)
         ? CricketMotion.cutWidth(norm(sub(from.tip,from.hands)),sw.keys.find(k=>Math.abs(k[0]-SWING_LAG)<1e-8)[1].bd)
         : MOTION2 && sw && sw.fam!=='drive' && sw.keys ? norm(cross(mul(sw.keys[2][1].bd,-1),[0,0,1])) : [1,0,0];
       width=CricketMotion.blendDirection(sourceWidth,side,turn);
@@ -3688,7 +3705,7 @@ function livePeople() {
       if (ball.charge.t < 0.4) { const ph = Math.sin(ball.charge.t * 24) * 0.12; j.footL[2] += ph; j.footR[2] -= ph; j.kneeL[2] += ph / 2; j.kneeR[2] -= ph / 2; }
     }
     const stroke=ball && ball.swing;
-    const width=((CUT_MOTION && stroke?.fam==='cut') || (PULL_MOTION && stroke?.fam==='pull') || (BDRIVE_MOTION && stroke?.fam==='bdrive')) && stroke.keys
+    const width=stagedBack(stroke?.fam) && stroke.keys
       ? CricketMotion.cutWidth(norm(sub(tip,hands)),stroke.keys.find(k=>Math.abs(k[0]-SWING_LAG)<1e-8)[1].bd)
       : MOTION2 && stroke && stroke.fam!=='drive' && stroke.keys
       ? norm(cross(mul(stroke.keys[2][1].bd,-1),[0,0,1])) : [1,0,0];
