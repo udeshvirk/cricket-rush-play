@@ -676,9 +676,9 @@ const LEVELS = [
 ];
 
 const DIFFS = [
-  { id: 'easy', name: 'Easy', win: 1.3, catchAI: 0.74, userCatch: 0.92, aiBat: 0.78, aiBowl: 0.8 },
-  { id: 'medium', name: 'Medium', win: 1.0, catchAI: 0.85, userCatch: 0.86, aiBat: 1.0, aiBowl: 1.0 },
-  { id: 'hard', name: 'Hard', win: 0.85, catchAI: 0.92, userCatch: 0.8, aiBat: 1.15, aiBowl: 1.12 },
+  { id: 'easy', name: 'Easy', win: 1.3, catchAI: 0.74, userCatch: 0.92, aiBat: 0.78, aiBowl: 0.8, plan: 0 },
+  { id: 'medium', name: 'Medium', win: 1.0, catchAI: 0.85, userCatch: 0.86, aiBat: 1.0, aiBowl: 1.0, plan: 1 },
+  { id: 'hard', name: 'Hard', win: 0.85, catchAI: 0.92, userCatch: 0.8, aiBat: 1.15, aiBowl: 1.12, plan: 2 },
 ];
 
 // bowling styles. Turn: + moves the ball toward the leg side of a right-hander after it bounces.
@@ -2081,12 +2081,21 @@ function aiSpec(bp, mult) {
   const r = Math.random();
   let pz = spin ? (r < 0.07 ? rand(0.6, 1.6) : r < 0.35 ? rand(2.2, 3.9) : r < 0.92 ? rand(3.9, 5.8) : rand(6.5, 8.5))
                 : (r < 0.12 ? rand(0.6, 1.6) : r < 0.36 ? rand(1.8, 3.6) : r < 0.78 ? rand(4.2, 6.8) : rand(7.2, 9.8));
+  // how cleverly it bowls at you: 0 easy (the odd gift), 1 medium, 2 hard (yorkers at the death, an answer to a boundary)
+  const plan = inn && inn.userBats && !chase ? (M.diff.plan ?? 1) : 1;
+  let gift = 0, quicker = false;
+  if (plan === 2) {
+    const last = String(inn.over[inn.over.length - 1]), hit = last === '4' || last === '6';
+    if (!spin && inn.balls >= inn.maxBalls * 0.75 && Math.random() < 0.3) pz = rand(0.9, 1.7);
+    if (hit && Math.random() < 0.5) { if (spin) { pz = rand(4.2, 5.2); quicker = true; } else pz = Math.random() < 0.5 ? rand(1, 1.7) : rand(8, 9.8); }
+  } else if (plan === 0 && Math.random() < 0.05) { gift = Math.random() < 0.5 ? 1 : 2; pz = gift === 1 ? rand(2.4, 3.4) : rand(7.5, 9); }
   pz += rand(-1, 1) * (1 - s) * 2.2;
   let line = [-0.5, -0.32, -0.15, 0, 0.12][(Math.random() * 5) | 0] + rand(-0.04, 0.04) + rand(-1, 1) * (1 - s) * 0.35;
   if (!chase && Math.random() < (1 - s) * 0.07) line = Math.random() < 0.6 ? rand(-1.3, -1.05) : rand(0.85, 1.05);   // a wide
+  if (gift) line = gift === 1 ? rand(0.05, 0.2) : rand(-0.7, -0.5);   // a half-volley on the pads, or short and wide
   pz = clamp(pz, 0.3, 11);
   const kmh = M.diff.speed ? rand(M.diff.speed[0], M.diff.speed[1]) : rand(T.speed[0], T.speed[1]) * (0.95 + 0.05 * clamp(mult, 0, 1.2));
-  const vi = chase ? 0 : Math.random() < 0.25 ? 1 + ((Math.random() * (T.vars.length - 1)) | 0) : 0;
+  const vi = chase ? 0 : quicker ? 2 : Math.random() < [0.12, 0.25, 0.38][plan] ? 1 + ((Math.random() * (T.vars.length - 1)) | 0) : 0;
   return { type, kmh, pz, px: lineToPitch(line, pz), vi };
 }
 
@@ -2523,9 +2532,15 @@ function aiPickBowler() {
 }
 function aiField(k) {
   if (M.mode === 'chase') return 'balanced';
-  const total = inn.maxBalls / 6, overNo = Math.floor(inn.balls / 6);
+  const total = inn.maxBalls / 6, overNo = Math.floor(inn.balls / 6), death = overNo >= total - Math.max(1, total * 0.25);
+  const plan = inn.userBats ? (M.diff.plan ?? 1) : 1;   // how cleverly the computer captains against you: 0 easy, 1 medium, 2 hard
+  if (plan === 0) return overNo < total * 0.4 ? 'attacking' : 'balanced';   // easy: catchers in early (gaps in the deep), and never fully back
+  if (plan === 2 && inn.lastOver) {   // hard: reacts to the last over
+    if (inn.lastOver.runs >= 12) return 'defensive';
+    if (inn.lastOver.wkts && !death) return 'attacking';
+  }
   if (overNo < Math.max(1, total * 0.2) && !isSpin(inn.bowl.players[k])) return 'attacking';
-  if (overNo >= total - Math.max(1, total * 0.25)) return 'defensive';
+  if (death) return 'defensive';
   return 'balanced';
 }
 function startOver() {
