@@ -208,6 +208,10 @@
   .result.win { color: var(--teal); }
   .result.lose { color: var(--red); }
   .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; font-variant-numeric: tabular-nums; }
+  #endAwards { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  #endAwards b { font-size: 23px; margin: 6px 0; }
+  #endAwards span { letter-spacing: .04em; }
+  #endAwards .award-performance { display: block; color: var(--chalk); font-size: 16px; line-height: 1.5; letter-spacing: 0; text-transform: none; }
   .stats div { background: rgba(243, 239, 228, 0.06); padding: 8px 10px; min-width: 0; }
   .stats b { display: block; font-family: var(--display); font-size: 28px; font-weight: 900; line-height: 1.05;
              overflow-wrap: anywhere; }
@@ -594,6 +598,8 @@
         <button class="btn ghost" id="gfxToggle" type="button" hidden>Graphics: 2D</button>
         <button class="btn ghost" id="replayToggle" type="button" hidden>Replays: on</button>
         <button class="btn ghost" id="commentaryToggle" type="button" aria-pressed="false" title="Spoken commentary in the device's own voice.">Commentary: off</button>
+        <button class="btn ghost" id="crowdToggle" type="button" aria-pressed="true">Crowd sound: on</button>
+        <button class="btn ghost" id="restartMatch" type="button">Rematch</button>
         <button class="btn ghost" id="guideToggle" type="button">Timing guide: on</button>
         <button class="btn ghost" id="quit" type="button">Quit match</button>
       </div>
@@ -607,8 +613,12 @@
       <div class="result" id="endTitle">YOU WON</div>
       <div class="tag" id="endSub"></div>
       <div class="stats" id="endStats"></div>
+      <div class="stats" id="endAwards" aria-label="Player awards"></div>
+      <p class="how" id="seriesChoice" hidden></p>
       <div class="row">
         <button class="btn" id="again" type="button">Play again</button>
+        <button class="btn ghost" id="finishSeries" type="button" hidden>Finish series</button>
+        <button class="btn ghost" id="endRematch" type="button" hidden>Rematch (standalone)</button>
         <button class="btn ghost" id="toMenu" type="button">Main menu</button>
       </div>
       <div class="tabs" id="endTabs"></div>
@@ -1814,7 +1824,24 @@ function drawStumps(z, tilt, bails) {
 
 // ======================================================================= sound (all made here, no sound files; starts on the first tap)
 let actx = null, master = null, soundOn = true, crowdGain = null, roarGain = null, sfx = null, crowdBus = null, quiet = false;
-const commentary=window.CricketCommentary?.create({onSpeaking(speaking){if(crowdBus&&actx)crowdBus.gain.setTargetAtTime(speaking ? .45 : .9,actx.currentTime,.15);}})
+let crowdOn = true, commentarySpeaking = false;
+try { crowdOn = localStorage.getItem('cricket-rush-crowd') !== 'off'; } catch(e) {}
+function updateCrowdMix() {
+  if (crowdBus && actx) {
+    const g = crowdBus.gain, t = actx.currentTime;
+    g.cancelScheduledValues(t); g.setTargetAtTime(crowdOn ? (commentarySpeaking ? .22 : .5) : 0,t,.04);
+  }
+  $('crowdToggle').textContent = 'Crowd sound: ' + (crowdOn ? 'on' : 'off');
+  $('crowdToggle').setAttribute('aria-pressed',String(crowdOn));
+}
+function setCrowdEnabled(on) {
+  crowdOn = !!on;
+  try { localStorage.setItem('cricket-rush-crowd',crowdOn ? 'on' : 'off'); } catch(e) {}
+  updateCrowdMix();
+}
+updateCrowdMix();
+$('crowdToggle').addEventListener('click',()=>{audio();setCrowdEnabled(!crowdOn);});
+const commentary=window.CricketCommentary?.create({onSpeaking(speaking){commentarySpeaking=speaking;updateCrowdMix();}})
   || {supported:false,enabled:false,emit(){return false;},setEnabled(){},setMuted(){},setSuspended(){},reset(){},unlock(){}};
 let commentaryPreference=false;
 try{commentaryPreference=localStorage.getItem('cricket-rush-commentary-preview')==='on';}catch(e){}
@@ -1841,7 +1868,7 @@ function noiseLoop(sec, band, wobble) {   // stereo crowd noise: filtered, with 
       d[i] = (lo - lo2) * sw;
     }
     let ss = 0; for (let i = 0; i < n; i++) ss += d[i] * d[i];
-    const k = 0.3 / Math.sqrt(ss / n || 1); for (let i = 0; i < n; i++) d[i] *= k;   // the same loudness whatever the filter
+    const k = 0.3 / Math.sqrt(ss / n || 1); for (let i = 0; i < n; i++) d[i] *= k * Math.min(1, i / (actx.sampleRate*.04), (n-1-i) / (actx.sampleRate*.04));   // the same loudness whatever the filter
   }
   return buf;
 }
@@ -1876,13 +1903,15 @@ function audio() {
     rev.buffer = ir;
     const wet = actx.createGain(); wet.gain.value = 0.22; rev.connect(wet); wet.connect(master);
     sfx = actx.createGain(); sfx.connect(master); sfx.connect(rev);
-    crowdBus = actx.createGain(); crowdBus.gain.value = 0.9; crowdBus.connect(master);
+    crowdBus = actx.createGain(); crowdBus.gain.value = crowdOn ? .5 : 0;
+    const crowdTone = actx.createBiquadFilter(); crowdTone.type = 'lowpass'; crowdTone.frequency.value = 2200; crowdTone.Q.value = .5;
+    crowdBus.connect(crowdTone); crowdTone.connect(master); updateCrowdMix();
     NOISE = actx.createBuffer(1, sr, sr); { const d = NOISE.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
     CLAPS = clapBuffer(4);
     // the crowd: a murmur all the time, and a roar that rises for the big moments
     const loop = (buf, gain) => { const s = actx.createBufferSource(); s.buffer = buf; s.loop = true; const g = actx.createGain(); g.gain.value = gain; s.connect(g); g.connect(crowdBus); s.start(); return g; };
     crowdGain = loop(noiseLoop(6, [0.03, 0.12], 0.35), 0);   // no constant murmur: the owner found it irritating. The crowd is heard only for boundaries and wickets (and a fifty or hundred)
-    roarGain = loop(noiseLoop(5, [0.06, 0.3], 0.25), 0.0);
+    roarGain = loop(noiseLoop(9, [0.018, 0.09], 0.45), 0.0);
     document.addEventListener('visibilitychange', () => { if (!actx) return; if (document.hidden) actx.suspend(); else actx.resume(); });
   } catch (e) { actx = null; }
   return actx;
@@ -1926,24 +1955,24 @@ function sndStumps() {   // the stumps knocked back, then the bails
 }
 // the crowd
 function sndCrowd(level, dur) {   // the roar: up quickly, then down over `dur` seconds
-  if (!live() || !roarGain) return;
+  if (!live() || !crowdOn || !roarGain) return;
   const t = actx.currentTime, g = roarGain.gain;
   g.cancelScheduledValues(t); g.setValueAtTime(g.value, t);
-  g.linearRampToValueAtTime(level * 0.8, t + 0.18); g.setTargetAtTime(0, t + 0.6, dur / 3);
+  g.linearRampToValueAtTime(level * 0.5, t + 0.28); g.setTargetAtTime(0, t + 0.6, dur / 3);
 }
 function sndClap(level, dur = 4) {
-  if (!live() || !CLAPS) return;
+  if (!live() || !crowdOn || !CLAPS) return;
   const t = actx.currentTime, s = actx.createBufferSource(), g = actx.createGain();
   s.buffer = CLAPS; s.playbackRate.value = rand(0.95, 1.05);
   g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(level, t + 0.15); g.gain.setTargetAtTime(0, t + dur * 0.5, dur * 0.18);
   s.connect(g); g.connect(crowdBus); s.start(t);
 }
 function sndOoh(level = 1, groan = false) {   // "oooh!" (beaten, an edge, a drop) or a groan ("aww", your wicket)
-  if (!live()) return;
+  if (!live() || !crowdOn) return;
   const t = actx.currentTime, dur = groan ? 1.5 : 1.3;
   const s = actx.createBufferSource(); s.buffer = NOISE; s.loop = true;
   const g = actx.createGain(); g.gain.setValueAtTime(0.0001, t);
-  g.gain.linearRampToValueAtTime(3 * level, t + 0.22); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+  g.gain.linearRampToValueAtTime(1.2 * level, t + 0.3); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
   for (const [f0, f1, q, k] of groan ? [[700, 420, 5, 1], [1150, 800, 6, 0.6]] : [[320, 620, 5, 1], [800, 1050, 6, 0.6]]) {
     const f = actx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = q;
     f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur * 0.7);
@@ -1951,12 +1980,12 @@ function sndOoh(level = 1, groan = false) {   // "oooh!" (beaten, an edge, a dro
   }
   g.connect(crowdBus); s.start(t, Math.random() * 0.4); s.stop(t + dur + 0.05);
 }
-function sndHorn() {   // a fan's air horn for a six, after the roar starts
-  if (!live()) return;
+function sndHorn() {   // softer distant cheer accent after a six
+  if (!live() || !crowdOn) return;
   const t = actx.currentTime + 0.35, g = actx.createGain(), f = actx.createBiquadFilter();
   f.type = 'lowpass'; f.frequency.value = 1700;
-  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.09, t + 0.04); g.gain.setValueAtTime(0.09, t + 0.55); g.gain.exponentialRampToValueAtTime(0.0008, t + 0.8);
-  for (const fr of [233, 311, 466]) { const o = actx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = fr * rand(0.995, 1.005); o.connect(f); o.start(t); o.stop(t + 0.85); }
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.025, t + 0.09); g.gain.setValueAtTime(0.025, t + 0.4); g.gain.exponentialRampToValueAtTime(0.0008, t + 0.8);
+  for (const fr of [233, 311, 466]) { const o = actx.createOscillator(); o.type = 'triangle'; o.frequency.value = fr * rand(0.995, 1.005); o.connect(f); o.start(t); o.stop(t + 0.85); }
   f.connect(g); g.connect(crowdBus);
 }
 const sndTick = () => { if (live()) { ping(1900, 0.025, 0.05, 0, 'triangle'); } };
@@ -2929,8 +2958,8 @@ function endMatch() {
   if (sr) {
     sr.games.push(!winner ? 'T' : winner === you ? 'W' : 'L'); seriesAddStats(sr); saveSeries();
     const st = seriesState(sr);
-    $('endSub').textContent = text + ' ' + st.text + (st.done ? '!' : '.') + (st.done ? ' ' + seriesStar(sr) + '.' : '');
-    if (st.done) { t.textContent = st.won ? 'SERIES WON' : st.w === st.l ? 'SERIES DRAWN' : 'SERIES LOST'; t.className = 'result' + (st.won ? ' win' : st.w === st.l ? '' : ' lose'); }
+    $('endSub').textContent = text + ' ' + st.text + (st.done ? '!' : '.');
+    if (st.done || st.decided) { t.textContent = st.won ? 'SERIES WON' : st.w === st.l ? 'SERIES DRAWN' : 'SERIES LOST'; t.className = 'result' + (st.won ? ' win' : st.w === st.l ? '' : ' lose'); }
   }
   // stars of the match
   let top = null, bestB = null;
@@ -2944,7 +2973,7 @@ function endMatch() {
     [bestB ? bestB.w + '–' + bestB.r : '-', 'Best bowling · ' + (bestB ? surname(bestB.n) : '')]]
     .map(([v, l]) => '<div><b>' + esc(v) + '</b><span>' + esc(l) + '</span></div>').join('');
   renderTabs('endTabs', 'endCard', 1);
-  $('again').textContent = sr ? (seriesState(sr).done ? 'New series' : 'Next match (' + (sr.games.length + 1) + ' of ' + sr.n + ')') : 'Rematch';
+  renderEndOptions();
   const news = recordStats(winner);
   if (news.length) $('endSub').textContent += ' New record: ' + news.join(', ') + '.';
   saveRecord(winner === you);
@@ -3038,7 +3067,8 @@ function endChase() {
   $('endStats').innerHTML = [[i.runs + '/' + i.wkts, 'Score'], [i.fours, 'Fours'], [i.sixes, 'Sixes'], [sr, 'Strike rate']]
     .map(([v, l]) => '<div><b>' + v + '</b><span>' + l + '</span></div>').join('');
   $('endTabs').textContent = ''; $('endCard').textContent = '';
-  $('again').textContent = 'Play again';
+  $('again').textContent = 'Rematch';
+  $('endAwards').textContent = ''; $('seriesChoice').hidden = true; $('finishSeries').hidden = true; $('endRematch').hidden = true;
   if (res === 'won') saveBest(level.id, left);
   renderLevels();
   showScreen('end');
@@ -3136,13 +3166,14 @@ function newSeries() {
   saveSeries();
 }
 function seriesState(sr) {
-  const w = sr.games.filter(g => g === 'W').length, l = sr.games.filter(g => g === 'L').length, need = Math.floor(sr.n / 2) + 1;
-  const done = w >= need || l >= need || sr.games.length >= sr.n, A = TEAMS[sr.a].name, B = TEAMS[sr.b].name;
+  const w = sr.games.filter(g => g === 'W').length, l = sr.games.filter(g => g === 'L').length;
+  const remaining = Math.max(0, sr.n - sr.games.length);
+  const decided = Math.abs(w - l) > remaining, done = !!sr.closed || remaining === 0, A = TEAMS[sr.a].name, B = TEAMS[sr.b].name;
   const score = Math.max(w, l) + '–' + Math.min(w, l);
   let text;
-  if (done) text = w > l ? A + ' win the series ' + score : l > w ? B + ' win the series ' + score : 'The series is drawn ' + score;
+  if (done || decided) text = w > l ? A + ' win the series ' + score : l > w ? B + ' win the series ' + score : 'The series is drawn ' + score;
   else text = w > l ? A + ' lead the series ' + score : l > w ? B + ' lead the series ' + score : sr.games.length ? 'The series is level ' + score : 'First match';
-  return { w, l, done, text, won: done && w > l };
+  return { w, l, done, decided, remaining, text, won: (done || decided) && w > l };
 }
 // runs and wickets across the series, for the player of the series
 function seriesAddStats(sr) {
@@ -3151,13 +3182,58 @@ function seriesAddStats(sr) {
     for (const k of i.bowlOrder) { const p = i.bowl.players[k], e = sr.stats[p.name] || (sr.stats[p.name] = { t: i.bowl.short, r: 0, b: 0, w: 0 }); e.w += i.bowlers[k].wkts; }
   }
 }
-function seriesStar(sr) {
+function awardWinner(stats) {
   let best = null;
-  for (const [n, e] of Object.entries(sr.stats)) { const v = e.r + 22 * e.w; if (!best || v > best.v) best = { n, e, v }; }
+  // Same transparent all-round contribution rule for match and series awards.
+  for (const [n, e] of Object.entries(stats || {})) {
+    const v = e.r + 22 * e.w;
+    if (!best || v > best.v || (v === best.v && e.w > best.e.w)) best = { n, e, v };
+  }
+  return best;
+}
+function awardDetail(best) {
   if (!best) return '';
-  const e = best.e, bits = [];
-  if (e.r) bits.push(plural(e.r, 'run')); if (e.w) bits.push(plural(e.w, 'wicket'));
-  return 'Player of the series: ' + best.n + ' (' + e.t + ', ' + bits.join(', ') + ')';
+  const e = best.e;
+  const contributions = [];
+  if (e.r || e.b) contributions.push('Scored ' + plural(e.r, 'run') + (e.b ? ' off ' + plural(e.b, 'ball') : ''));
+  if (e.w) contributions.push('Took ' + plural(e.w, 'wicket'));
+  return e.t + ' · ' + (contributions.join('. ') || 'No runs or wickets') + '.';
+}
+function seriesStar(sr) {
+  const best = awardWinner(sr.stats);
+  return best ? 'Player of the series: ' + best.n + ' (' + awardDetail(best) + ')' : '';
+}
+function renderEndOptions() {
+  const sr = M?.series, st = sr && seriesState(sr), match = {stats:{}};
+  seriesAddStats(match);
+  const awards = [['Player of the Match', awardWinner(match.stats)]];
+  if (st?.done) awards.push(['Player of the Series', awardWinner(sr.stats)]);
+  $('endAwards').innerHTML = awards.filter(([,p])=>p).map(([title,p])=>
+    '<div><span>'+esc(title)+'</span><b>'+esc(p.n)+'</b><span class="award-performance">'+esc(awardDetail(p))+'</span></div>').join('');
+  const choice = st && st.decided && !st.done;
+  $('seriesChoice').hidden = !choice;
+  $('seriesChoice').textContent = choice ? st.text + '. Play the remaining '+plural(st.remaining,'match')+' or finish the series now? The series award is presented when you finish.' : '';
+  $('finishSeries').hidden = !choice;
+  $('endRematch').hidden = !sr;
+  $('again').textContent = !sr ? 'Rematch' : st.done ? 'New series' : choice ? 'Play remaining '+plural(st.remaining,'match') : 'Next match ('+(sr.games.length+1)+' of '+sr.n+')';
+}
+function finishSeriesNow() {
+  const sr = M?.series;
+  if (!sr || !seriesState(sr).decided) return;
+  sr.closed = true; saveSeries(); renderEndOptions(); renderSeriesLine();
+}
+// Restart an unfinished fixture without adding a result; a completed series fixture
+// can only be rematched outside the series, so its recorded result is never duplicated.
+function rematch(standalone = false) {
+  if (!M) return;
+  const previous = M, chase = M.mode === 'chase', sr = !standalone && phase !== 'over' ? M.series : null;
+  const cfg = !chase && {a:TEAMS.indexOf(M.teams[0]),b:TEAMS.indexOf(M.teams[1]),overs:M.overs,
+    diff:Math.max(0,DIFFS.indexOf(M.diff)),autoBowl:M.autoBowl,series:0};
+  RP = null; held.clear(); pending = null; clearMatch(); toMenu();
+  if (chase) return startChase(level);
+  Object.assign(setup,cfg);
+  const keep = series; series = sr || null; startToss(); series = keep;
+  M.autoBowl = previous.autoBowl;
 }
 function renderSeriesLine() {
   const el = $('seriesLine'); if (!el) return;
@@ -3258,6 +3334,7 @@ function pickGo() {
 function openPause() {
   if (!M || !ACTIVE.has(phase) || paused) return;
   paused = true;
+  restartArmed = false; $('restartMatch').textContent = 'Rematch';
   commentary.setSuspended(true);
   const i = inn;
   $('pauseText').textContent = i.bat.name + ' ' + i.runs + '/' + i.wkts + ' after ' + ovStr(i.balls) + ' overs' +
@@ -4389,11 +4466,18 @@ $('resume').addEventListener('click', resume);
 $('autoOver').addEventListener('click', () => requestAuto('over'));
 $('autoInn').addEventListener('click', () => requestAuto('innings'));
 $('quit').addEventListener('click', toMenu);
+let restartArmed = false;
+$('restartMatch').addEventListener('click', () => {
+  if (!restartArmed) { restartArmed = true; $('restartMatch').textContent = 'Restart this match? Tap to confirm'; return; }
+  audio(); rematch();
+});
+$('endRematch').addEventListener('click', () => { audio(); rematch(true); });
+$('finishSeries').addEventListener('click', finishSeriesNow);
 $('again').addEventListener('click', () => {
   audio();
   if (M && M.mode === 'match') {
     if (M.series && seriesState(M.series).done) { Object.assign(setup, { series: M.series.n, a: M.series.a, b: M.series.b, overs: M.series.overs, diff: M.series.diff }); newSeries(); }
-    if (M.series) startToss(); else startTossOne();
+    if (M.series) startToss(); else rematch(true);
   } else startChase(level);
 });
 $('toMenu').addEventListener('click', toMenu);
