@@ -279,7 +279,7 @@
   .sc { width: 100%; border-collapse: collapse; font-size: 15px; margin-bottom: 10px; }
   .sc th { text-align: right; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
            font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--line); }
-  .sc th:first-child { text-align: left; }
+  .sc th:first-child { text-align: left; white-space: nowrap; }
   .sc td { padding: 4px 6px; text-align: right; border-bottom: 1px solid rgba(243, 239, 228, 0.07); }
   .sc td.nm { text-align: left; white-space: nowrap; }
   .sc td.how { text-align: left; color: var(--muted); font-size: 14px; }
@@ -401,8 +401,9 @@
     #tvbar { max-width: calc(100% - 110px); }
     #delivery { top: auto; bottom: calc(118px + env(safe-area-inset-bottom, 0px)); font-size: 13px; padding: 2px 10px; }
     #timing { bottom: auto; top: calc(128px + env(safe-area-inset-top, 0px)); font-size: 16px; }   /* up under the score, clear of the OUT banner and the buttons */
-    #nextTag { top: calc(158px + env(safe-area-inset-top, 0px)); }
-    #tvcard { bottom: auto; top: calc(96px + env(safe-area-inset-top, 0px)); }
+    #nextTag { top: calc(166px + env(safe-area-inset-top, 0px)); }
+    #tvcard { bottom: auto; top: calc(96px + env(safe-area-inset-top, 0px)); max-width: calc(100% - 122px); }   /* clear of the buttons on the right */
+    #tvcard .s { white-space: normal; line-height: 1.2; }
     .shotsel { gap: 6px; } .shotsel button { width: 28vw; height: 44px; }
     .batside { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); }
     #swipeHint { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); right: 112px; font-size: 12px; }
@@ -1263,7 +1264,7 @@ function drawCricketer(pr, kit) {
         for (const u of [0.8, 0.72]) { const q = S2(u, 0); ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.beginPath(); ctx.arc(q[0], q[1], Math.max(0.6, 0.008 * TF.A.s), 0, 7); ctx.fill(); }
         const b = S2(0.72, 0.09 * cl), r = 0.032 * TF.B.s; ctx.fillStyle = hex(kit.trim);
         ctx.beginPath(); ctx.moveTo(b[0] - r, b[1] - r); ctx.lineTo(b[0] + r, b[1] - r); ctx.lineTo(b[0] + r, b[1] + r * 0.2); ctx.quadraticCurveTo(b[0] + r * 0.4, b[1] + r * 1.1, b[0], b[1] + r * 1.3); ctx.quadraticCurveTo(b[0] - r * 0.4, b[1] + r * 1.1, b[0] - r, b[1] + r * 0.2); ctx.fill();
-      } else if (facing < -0.35 && TF.A.s > 40) {   // back: the shirt number
+      } else if (facing < -0.35 && TF.A.s > 40 && !kit.plain) {   // back: the shirt number (umpires have none)
         const n = 1 + seed % 98, q = S2(0.6, 0);
         ctx.translate(q[0], q[1]); ctx.rotate(Math.atan2(TF.dx, -TF.dy));
         ctx.font = '800 ' + Math.round(0.19 * TF.B.s) + 'px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -1424,6 +1425,29 @@ function ik(a, c, l1, l2, pole) {
   let pv = sub(pole, mul(dn, dot(pole, dn)));
   pv = len(pv) > 1e-4 ? norm(pv) : [0, 1, 0];
   return add(add(a, mul(dn, x)), mul(pv, h));
+}
+// the wicketkeeper: s = how deep he squats (1 = down on his haunches while the bowler runs in, about 0.45 = up in the ready
+// crouch as the ball comes), gloves together in front; `glove` (a world point) moves both gloves to the ball for the take
+function keeperFig(pos, face, s, glove) {
+  const F = [Math.sin(face), 0, Math.cos(face)], L = [Math.cos(face), 0, -Math.sin(face)];
+  const P = (a, b, h) => add(pos, add(add(mul(F, a), mul(L, b)), [0, h, 0]));
+  const h = 0.93 - 0.47 * s, back = -0.1 * s, lean = 0.1 + 0.24 * s, j = {};   // hips low and a little behind the heels, chest over the knees
+  j.pelvis = P(back, 0, h); j.hipL = P(back, 0.11, h); j.hipR = P(back, -0.11, h);
+  j.footL = P(0.02, 0.19 + 0.1 * s, 0); j.footR = P(0.02, -0.19 - 0.1 * s, 0);
+  j.shL = P(back + lean, 0.19, h + 0.49 - 0.07 * s); j.shR = P(back + lean, -0.19, h + 0.49 - 0.07 * s);
+  j.neck = P(back + lean + 0.02, 0, h + 0.54 - 0.07 * s); j.head = P(back + lean + 0.07, 0, h + 0.72 - 0.09 * s);   // head up, eyes on the bowler
+  let mid = P(0.5 - 0.18 * s, 0, 0.64 - 0.42 * s);   // gloves together, fingers down: low between the knees, then up in front
+  if (glove) {   // reach for the ball, as far as the arms go
+    const sm = lerp3(j.shL, j.shR, 0.5), d = sub(glove, sm), l = len(d);
+    mid = add(sm, mul(d, Math.min(1, (UPARM + FOREARM) * 0.97 / Math.max(1e-4, l))));
+  }
+  j.handL = add(mid, mul(L, 0.075)); j.handR = add(mid, mul(L, -0.075));
+  j.footDirL = norm(add(F, mul(L, 0.35))); j.footDirR = norm(add(F, mul(L, -0.35)));   // toes turned out a little
+  j.footPitchL = [0, 0, 0]; j.footPitchR = [0, 0, 0];
+  j.kneeL = ik(j.hipL, add(j.footL, [0, 0.07, 0]), LEG, LEG, add(F, mul(L, 0.55)));   // knees forward and apart
+  j.kneeR = ik(j.hipR, add(j.footR, [0, 0.07, 0]), LEG, LEG, add(F, mul(L, -0.55)));
+  j.elL = ik(j.shL, j.handL, UPARM, FOREARM, add(mul(L, 1), [0, -0.6, 0])); j.elR = ik(j.shR, j.handR, UPARM, FOREARM, add(mul(L, -1), [0, -0.6, 0]));
+  return j;
 }
 function buildBody(k) {
   const j = {}, nH = facing(k.hy), sH = [nH[2], 0, -nH[0]], nS = facing(k.sy), s0 = [nS[2], 0, -nS[0]];
@@ -1840,6 +1864,23 @@ function deliveryKeys(spin) {
   });
 }
 const DELIVERY = { pace: deliveryKeys(false), spin: deliveryKeys(true) };
+// The bowling arm from the gather to just after release: a straight arm swinging in one circle about the shoulder (down
+// behind the hip, back and up, over the top, down in front) instead of the hand moving in a straight line between the key
+// poses, which folded the elbow and brought the hand past the ear. The circle is set so the hand passes exactly through the
+// release point at t = 0, where the ball leaves it.
+const ARM_T0 = -0.2, ARM_T1 = 0.12;
+function bowlArm(j, tr, keys, sample) {
+  if (tr <= ARM_T0 || tr >= ARM_T1) return j;
+  const A = (UPARM + FOREARM) * 0.985, thR = 188 * deg;
+  const dir = t => [0, -Math.cos(t), Math.sin(t)];   // from straight down, through behind (+z), up, then down the pitch (-z)
+  if (!keys.armPivot) { const k0 = buildBody(sample(0)); keys.armPivot = sub(sub(k0.handR, mul(dir(thR), A)), k0.shR); }   // shoulder to circle centre
+  const th = tr < 0 ? lerp(25 * deg, thR, Math.pow((tr - ARM_T0) / -ARM_T0, 1.6)) : lerp(thR, 255 * deg, tr / ARM_T1);
+  const hand = add(add(j.shR, keys.armPivot), mul(dir(th), A));
+  const w = tr < -0.13 ? smooth((tr - ARM_T0) / 0.07) : tr > 0.06 ? 1 - smooth((tr - 0.06) / 0.06) : 1;
+  j.handR = lerp3(j.handR, hand, w);
+  j.elR = ik(j.shR, j.handR, UPARM, FOREARM, [1, -0.2, 0]);
+  return j;
+}
 function bowlerState() {
   const T = inn && inn.bowler !== null ? BOWL_TYPES[btype(bowlerP())] : BOWL_TYPES.F, spin = !!T.turn;
   const keys = spin ? DELIVERY.spin : DELIVERY.pace;
@@ -1856,7 +1897,8 @@ function bowlerState() {
   }
   if (tr < 0.5) {
     if(MOTION2 && !keys.curve)keys.curve=CricketMotion.prepare(keys);
-    const j = buildBody(MOTION2?CricketMotion.sample(keys.curve,tr):keyed(keys,tr));
+    const sample = t => MOTION2 ? CricketMotion.sample(keys.curve, t) : keyed(keys, t);
+    const j = bowlArm(buildBody(sample(tr)), tr, keys, sample);
     if (tr < -0.26) {   // from the last running stride into the bound
       const r = runner([BOWLER_LANE_X, 0, bound - speed * (tr + 0.38)], Math.PI, 1, phaseT * (spin ? 9 : 12));
       return { pos: [j.pelvis[0], 0, j.pelvis[2]], j: mixJoints(r.j, j, smooth((tr + 0.38) / 0.12)) };
@@ -3110,7 +3152,7 @@ function endMatch() {
   recordTournamentMatch(winner);
   renderEndOptions();
   const news = recordStats(winner);
-  if (news.length) $('endSub').textContent += ' New record: ' + news.join(', ') + '.';
+  if (news.length) $('endSub').textContent += ' ' + (news.length > 1 ? 'New records' : 'New record') + ': ' + news.join(', ') + '.';
   saveRecord(winner === you);
   clearMatch();
   showScreen('end');
@@ -3126,25 +3168,29 @@ function recordStats(winner) {   // after a match; returns the records it broke,
   const F = s.f[M.overs] || (s.f[M.overs] = { p: 0, w: 0, l: 0, t: 0, hi: null, bat: null, bowl: null, pl: {} });
   const P = (n) => F.pl[n] || (F.pl[n] = { t: you.short, i: 0, o: 0, r: 0, b: 0, hs: 0, f4: 0, s6: 0, w: 0, rc: 0, bb: 0, bw: null });
   F.p++; if (!winner) F.t++; else if (winner === you) F.w++; else F.l++;
+  const before = { hi: F.hi, bat: F.bat, bowl: F.bowl };   // a record is only news if it beats one from an earlier match
   for (const i of M.innings) {
     if (i.bat === you) {
       const vs = i.bowl.short;
-      if (!F.hi || i.runs > F.hi.r) { if (F.hi) news.push('highest total ' + i.runs + '/' + i.wkts); F.hi = { r: i.runs, k: i.wkts, vs }; }
+      if (!F.hi || i.runs > F.hi.r) F.hi = { r: i.runs, k: i.wkts, vs };
       i.cards.forEach((c, k) => {
         if (!c.in) return;
         const n = you.players[k].name, e = P(n);
         e.i++; if (c.out) e.o++; e.r += c.runs; e.b += c.balls; e.f4 += c.fours; e.s6 += c.sixes; e.hs = Math.max(e.hs, c.runs);
-        if (!F.bat || c.runs > F.bat.r) { if (F.bat) news.push('top score ' + c.runs + ' by ' + surname(n)); F.bat = { n, r: c.runs, b: c.balls, vs }; }
+        if (!F.bat || c.runs > F.bat.r) F.bat = { n, r: c.runs, b: c.balls, vs };
       });
     } else {
       const vs = i.bat.short;
       for (const k of i.bowlOrder) {
         const w = i.bowlers[k], n = you.players[k].name, e = P(n);
         e.w += w.wkts; e.rc += w.runs; e.bb += w.balls; if (betterBowl(w.wkts, w.runs, e.bw)) e.bw = [w.wkts, w.runs];
-        if (w.wkts && betterBowl(w.wkts, w.runs, F.bowl && [F.bowl.w, F.bowl.r])) { if (F.bowl) news.push('best bowling ' + w.wkts + '–' + w.runs + ' by ' + surname(n)); F.bowl = { n, w: w.wkts, r: w.runs, vs }; }
+        if (w.wkts && betterBowl(w.wkts, w.runs, F.bowl && [F.bowl.w, F.bowl.r])) F.bowl = { n, w: w.wkts, r: w.runs, vs };
       }
     }
   }
+  if (before.hi && F.hi !== before.hi) news.push('highest total ' + F.hi.r + '/' + F.hi.k);
+  if (before.bat && F.bat !== before.bat) news.push('top score ' + F.bat.r + ' by ' + surname(F.bat.n));
+  if (before.bowl && F.bowl !== before.bowl) news.push('best bowling ' + F.bowl.w + '–' + F.bowl.r + ' by ' + surname(F.bowl.n));
   try { localStorage.setItem(STATS_KEY, JSON.stringify(s)); } catch (e) {}
   return news;
 }
@@ -3211,7 +3257,7 @@ function endChase() {
 
 // ----------------------------------------------------------------------- scorecards
 function scorecardHTML(i) {
-  let h = '<table class="sc"><thead><tr><th colspan="2">' + esc(i.bat.name) + '</th><th>R</th><th>B</th><th>4s</th><th>6s</th></tr></thead><tbody>';
+  let h = '<table class="sc"><thead><tr><th>' + esc(i.bat.name) + '</th><th class="how"></th><th>R</th><th>B</th><th>4s</th><th>6s</th></tr></thead><tbody>';
   const live = i === inn && phase !== 'over' && phase !== 'break';
   i.cards.forEach((c, k) => {
     if (!c.in) return;
@@ -3225,7 +3271,7 @@ function scorecardHTML(i) {
   if (dnb.length) h += '<p class="note">Yet to bat: ' + esc(dnb.join(', ')) + '</p>';
   if (i.fow.length) h += '<p class="note">Wickets fell at: ' + i.fow.map(f => f.r + '-' + f.w + ' (' + esc(surname(i.bat.players[f.k].name)) + ', ' + ovStr(f.b) + ' ov)').join(', ') + '</p>';
   if (i.bowlOrder.length) {
-    h += '<table class="sc"><thead><tr><th colspan="2">' + esc(i.bowl.name) + ' bowling</th><th>O</th><th>R</th><th>W</th><th>Econ</th></tr></thead><tbody>';
+    h += '<table class="sc"><thead><tr><th>' + esc(i.bowl.name) + ' bowling</th><th class="how"></th><th>O</th><th>R</th><th>W</th><th>Econ</th></tr></thead><tbody>';
     for (const k of i.bowlOrder) {
       const b = i.bowlers[k], p = i.bowl.players[k];
       h += '<tr><td class="nm">' + esc(p.name) + '</td><td class="how">' + BOWL_TYPES[btype(p)].name + '</td><td>' + ovStr(b.balls) + '</td><td>' + b.runs +
@@ -3718,6 +3764,7 @@ function update(dt) {
         // through to the keeper
         const kp = fielders.find(f => f.keeper);
         sndGlove(0.8);
+        if (kp && Math.abs(p[0] - kp.pos[0]) < 1.25 && p[1] < 1.9) { ball.taken = p.slice(); ball.frozenAt = ball.taken; }   // in his gloves
         if (ball.charge && missed && Math.random() < (keeperZ > -5 ? 0.9 : 0.4)) finishBall({ runs: 0, out: { how: 'stumped', by: kp } }, 'Stumped!');
         else if (ball.charge && missed) finishBall({ runs: 0 }, 'Missed the stumping');
         else if (ball.wide && missed) finishBall({ runs: 0, wide: true }, 'Too wide · one extra run');
@@ -3906,7 +3953,7 @@ function renderMirrored() {
     if (pr.team === 'bat') {
       const t = inn ? inn.bat : null;
       drawCricketer(pr, { shirt: t ? t.col : '#3d7dff', pants: t ? t.dark : '#173f99', trim: t ? t.dark : '#173f99', pads: true, gloves: true, helmet: pr.helmet || '#18245a' });
-    } else if (pr.umpire) drawCricketer(pr, { shirt: '#efece3', pants: '#23262d', trim: '#23262d', cap: '#1b1d22' });
+    } else if (pr.umpire) drawCricketer(pr, { shirt: '#efece3', pants: '#23262d', trim: '#23262d', cap: '#1b1d22', plain: true });
     else if (pr.bowler) drawCricketer(pr, { shirt: fc, pants: fd, trim: fd });
     else if (pr.keeper) drawCricketer(pr, { shirt: fc, pants: fd, trim: fd, pads: true, gloves: true, helmet: fd });
     else drawCricketer(pr, { shirt: fc, pants: fd, trim: fd, cap: fd });
@@ -4293,6 +4340,25 @@ function livePeople() {
       out.push({ j, at: pos, team: 'bowl', keeper: !!f.keeper, bowler: !!f.bowler, pid: fid(f.who), look: null });
       continue;
     }
+    if (f.keeper && !rj && !afterHit && inn && ['runup', 'flight', 'result'].includes(phase)) {   // the keeper's squat, rise and take
+      const sp = keeperZ > -5, bp = liveBallPos();
+      const down = phase === 'runup' ? smooth(clamp(phaseT / 0.6, 0, 1)) : 1, up = phase === 'runup' ? 0 : smooth(clamp((phase === 'flight' ? phaseT : 9) / (sp ? 0.5 : 0.3), 0, 1));
+      let g = null, sq = lerp(0.35, 1, down) - up * (sp ? 0.4 : 0.55), kp = pos;
+      // he shuffles across to the ball's line and stands taller for a high one
+      const across = (x, y, w) => { const dx = x - pos[0]; kp = [pos[0] + Math.sign(dx) * clamp(Math.abs(dx) - 0.15, 0, 0.75) * w, 0, pos[2]]; sq -= clamp(y - 0.9, 0, 0.8) * 0.5 * w; };
+      if (ball && ball.taken) {   // the take: hold it in the gloves a moment, then stand up with it
+        if (ball.takenT === undefined) ball.takenT = clock;
+        const k = 1 - smooth(clamp((clock - ball.takenT - 0.6) / 0.5, 0, 1));
+        across(ball.taken[0], ball.taken[1], 1);
+        g = lerp3(add(ball.taken, [0, 0.03, -0.02]), add(kp, [0.15, 1.0, 0.35]), 1 - k); sq = lerp(0.15, Math.max(0.1, sq), k);
+      } else if (phase === 'result' && !(bp && bp[2] > pos[2] && bp[2] < 0)) sq = 0.3;   // the ball is dead before it reaches him
+      else if (bp) {   // (a hit ball makes him a fielder, above)
+        const w = smooth(clamp(1 - (bp[2] - pos[2]) / 9, 0, 1));
+        if (w > 0) { across(bp[0], bp[1], w); sq = Math.max(0.1, sq); const kj = keeperFig(kp, f.face, sq); g = lerp3(lerp3(kj.handL, kj.handR, 0.5), [bp[0], clamp(bp[1], 0.2, 1.7), pos[2] + 0.45], w); }
+      }
+      out.push({ j: keeperFig(kp, f.face, sq, g), at: kp, team: 'bowl', keeper: true, bowler: false, pid: fid(f.who), look: null });
+      continue;
+    }
     const startBlend=MOTION2 && f.target && ball?.play?smooth(clamp((ball.play.t-(f.keeper ? .12 : .32))/.18,0,1)):1;
     let j = rj || figure(pos, f.face, { run:MOTION2?run*startBlend:run, phase: ph,
       gaitDistance:MOTION2 && f.run>.9?f.phase*f.speed/11:undefined,crouch: CLIPS ? f.crouch * (1 - (wi.walk || 0)) : wi.moving ? 0 : f.crouch, seed: fi + 1 });
@@ -4348,38 +4414,17 @@ function umpires() {
   return list;
 }
 
-// what you swiped: an arrow under your finger and the shot's name (no arrow on the field: the owner found it distracting)
-function arrow(x0, y0, x1, y1, col, w) {
-  const a = Math.atan2(y1 - y0, x1 - x0), h = Math.max(10, w * 3.2);
-  ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = w; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1 - Math.cos(a) * h * 0.6, y1 - Math.sin(a) * h * 0.6); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x1, y1);
-  ctx.lineTo(x1 - Math.cos(a - 0.45) * h, y1 - Math.sin(a - 0.45) * h); ctx.lineTo(x1 - Math.cos(a + 0.45) * h, y1 - Math.sin(a + 0.45) * h);
-  ctx.closePath(); ctx.fill();
-}
+// what you swiped: just the shot's name near your finger (no arrows at all: the owner found them distracting)
 function drawSwipe() {
   const v = swipeVis;
-  if (!v || !inn || !inn.userBats) return;
-  const age = clock - v.t0, fade = clamp(1.6 - age, 0, 1);
+  if (!v || !inn || !inn.userBats || v.keys || !v.label) return;
+  const fade = clamp(1.6 - (clock - v.t0), 0, 1);
   if (fade <= 0) return;
-  const kind = v.kind || shotType, col = kind === 'loft' ? '#ffb02e' : kind === 'defend' ? '#f3efe4' : '#2ed3c6';
   ctx.globalAlpha = fade;
-  // under the finger
-  if (!v.keys) {
-    let x1 = v.x1, y1 = v.y1;
-    const dl = Math.hypot(x1 - v.x0, y1 - v.y0);
-    if (v.dir !== undefined && v.dir !== null && dl < 60) {   // a quick flick: show it at a readable length
-      const k = 60 / Math.max(1, dl); x1 = v.x0 + (x1 - v.x0) * k; y1 = v.y0 + (y1 - v.y0) * k;
-    }
-    if (Math.hypot(x1 - v.x0, y1 - v.y0) > 6) arrow(v.x0, v.y0, x1, y1, col, 6);
-    else { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(v.x0, v.y0, 10, 0, Math.PI * 2); ctx.fill(); }
-    if (v.label) {
-      ctx.font = '700 18px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-      const tx = clamp(x1, 60, W - 60), ty = clamp(Math.min(v.y0, y1) - 16, 24, H - 20), tw = ctx.measureText(v.label).width + 16;
-      ctx.fillStyle = 'rgba(10,16,36,0.85)'; ctx.fillRect(tx - tw / 2, ty - 24, tw, 26);
-      ctx.fillStyle = '#f3efe4'; ctx.fillText(v.label, tx, ty);
-    }
-  }
+  ctx.font = '700 18px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  const tx = clamp(v.x1, 60, W - 60), ty = clamp(Math.min(v.y0, v.y1) - 16, 24, H - 20), tw = ctx.measureText(v.label).width + 16;
+  ctx.fillStyle = 'rgba(10,16,36,0.85)'; ctx.fillRect(tx - tw / 2, ty - 24, tw, 26);
+  ctx.fillStyle = '#f3efe4'; ctx.fillText(v.label, tx, ty);
   ctx.globalAlpha = 1;
 }
 

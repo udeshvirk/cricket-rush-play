@@ -539,6 +539,22 @@ window.Cricket3D = function (G) {
     return { helmet: [[helmetShell, two(M3.helmet)], [merge(bars), steel], [merge(strap), strapM]], cap: [[capGeo, two(M3.cap)], [merge(band), seamM]],
              hat: [[crown, hatM], [hband, two(hatBand)], [brim, two(hatM)]] };
   })();
+  // the wicketkeeper's gloves: big padded mitts built in code, in the batting glove's frame (origin = palm centre, fingers -Y,
+  // palm -X for the left hand; the right is mirrored): white leather, padded finger rolls on the back, a thumb, a tan rubber palm
+  // and a cuff in the fielding side's colour (M3.cap)
+  const KEEPGLOVE = (() => {
+    const g = new T.Group(), leather = new T.MeshStandardMaterial({ color: 0xf1efe8, roughness: 0.62 }),
+      rubber = new T.MeshStandardMaterial({ color: 0xa8784a, roughness: 0.85 });
+    const add = (geo, m) => { const x = new T.Mesh(geo, m); x.castShadow = true; x.frustumCulled = false; g.add(x); return x; };
+    const body = new T.CapsuleGeometry(0.072, 0.13, 6, 16); body.scale(0.5, 1, 1.05); body.translate(0.006, -0.055, 0); add(body, leather);
+    for (const z of [-0.048, -0.016, 0.016, 0.048]) {   // finger rolls on the back
+      const r = new T.CapsuleGeometry(0.017, 0.15, 4, 8); r.translate(0.03, -0.075, z); add(r, leather);
+    }
+    const th = new T.CapsuleGeometry(0.03, 0.07, 4, 10); th.rotateX(-0.55); th.translate(-0.006, -0.005, 0.085); add(th, leather);   // the thumb
+    const palm = new T.SphereGeometry(0.07, 16, 10); palm.scale(0.16, 1.45, 0.95); palm.translate(-0.03, -0.06, 0); add(palm, rubber);
+    const cuff = new T.CylinderGeometry(0.06, 0.056, 0.06, 18, 1, false); cuff.scale(0.72, 1, 1); cuff.translate(0, 0.095, 0); add(cuff, M3.cap);
+    return g;
+  })();
 
   function part(geo, m, parent) { const x = new T.Mesh(geo, m); x.castShadow = true; x.matrixAutoUpdate = true; parent.add(x); return x; }
   function seg(mesh, a, b, r) {
@@ -1005,7 +1021,7 @@ window.Cricket3D = function (G) {
       this.eqBat = K(BATGEAR); this.eqPadL = K(PADGEAR); this.eqPadR = K(PADGEAR); this.g.add(this.eqBat, this.eqPadL, this.eqPadR);   // the bat and pads are built in code
       this.eqHelmet = EQ.helmet.clone(); this.eqCap = EQ.cap.clone(); this.headG.add(this.eqHelmet, this.eqCap);
       if (EQ.glove_left) { this.eqGl = EQ.glove_left.clone(); this.eqGr = EQ.glove_left.clone(); }
-      if (EQ.keeper_glove_left) { this.eqKl = EQ.keeper_glove_left.clone(); this.eqKr = EQ.keeper_glove_left.clone(); }
+      this.eqKl = KEEPGLOVE.clone(); this.eqKr = KEEPGLOVE.clone();   // (built in code; the old model was a batting glove)
       for (const o of [this.eqGl, this.eqGr, this.eqKl, this.eqKr]) if (o) { o.visible = false; this.g.add(o); }
       this.eqHelmet.scale.setScalar(1.0); this.eqCap.scale.setScalar(1.0);
     }
@@ -1267,11 +1283,11 @@ window.Cricket3D = function (G) {
         if (other) other.visible = false;
         if (gl) {
           if (gl.parent !== B['hand_' + s]) { B['hand_' + s].add(gl); const f = rig.glove[s]; gl.position.copy(f.pos); gl.quaternion.copy(f.quat); gl.scale.set(f.sx, 1, 1); }
-          gl.visible = !!gloved && !gloved3 && (EQUIP_OPT.gloves === 'model' || !this.kit);   // (the textured player has no painted-on gloves)
+          gl.visible = !!gloved && !gloved3 && (EQUIP_OPT.gloves === 'model' || !this.kit || !!pr.keeper);   // the keeper always wears the keeping-glove model   // (the textured player has no painted-on gloves)
         }
         for (const f of ['index', 'middle', 'ring', 'pinky', 'thumb']) { const bn = B[f + '_01_' + s]; if (bn) bn.scale.setScalar(gloved3 ? 1 : gloved && gl && gl.visible ? 0.7 : 1); }
       }
-      if (this.kit) this.kit.userData.u.uGlove.value = gloved && !gloved3 && EQUIP_OPT.gloves === 'built' ? 1 : 0;   // the grip gloves replace the painted gloves
+      if (this.kit) this.kit.userData.u.uGlove.value = gloved && !gloved3 && !pr.keeper && EQUIP_OPT.gloves === 'built' ? 1 : 0;   // the grip gloves replace the painted gloves
     }
     set(pr) {
       const j = pr.j, bat = pr.team === 'bat', keeper = !!pr.keeper;
@@ -1327,6 +1343,7 @@ window.Cricket3D = function (G) {
       this.gear.position.set(0, -0.105, 0.0);   // without the model, the head joint is the middle of the head
       for (const m of [this.skull, this.jaw, this.nose, this.earL, this.earR]) m.material = skin;
       const helm = (bat || keeper) && !pr.bare;
+      if (M3.keepHelmet) this.helmet.children[0].material = keeper ? M3.keepHelmet : M3.helmet;
       this.helmet.visible = helm; this.cap.visible = !helm && !ump && !pr.bare; this.hat.visible = ump; this.hair.visible = !helm && !ump;
       this.shades.visible = !helm && hs % 3 === 0;
       // the bat: handle, a flat blade and the ridge down its back
@@ -1528,6 +1545,8 @@ window.Cricket3D = function (G) {
     if(PRODUCTION?.reference)M3.helmet.color.multiplyScalar(.30);
     M3.bowlShirt.color.set(bowl ? bowl.col : '#ffd23c'); M3.bowlPants.color.set(bowl ? bowl.dark : '#0e6b40');
     M3.cap.color.set(bowl ? bowl.dark : '#0e6b40');
+    if (!M3.keepHelmet) M3.keepHelmet = M3.helmet.clone();   // the keeper wears his own side's helmet
+    M3.keepHelmet.color.set(bowl ? (bowl.helmet || bowl.dark) : '#0e6b40');
     // the trim (collar, cuffs, side panels): the team's second colour, made lighter or darker so it stands out on the shirt
     for (const [trim, shirt, pants] of [[M3.batTrim, M3.batShirt, M3.batPants], [M3.bowlTrim, M3.bowlShirt, M3.bowlPants]])
       trim.color.copy(pants.color).lerp(shirt.color, 0.0).multiplyScalar(1.0);
