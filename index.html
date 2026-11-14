@@ -401,6 +401,8 @@
   body.reference-view #tvbar #overchips { grid-column: 1; grid-row: 2; padding: 0 12px; align-items: center; }
   body.reference-view #tvbar .chip { min-width: 15px; height: 15px; font-size: 10px; }
   body.reference-view #delivery { top: auto; bottom: calc(76px + env(safe-area-inset-bottom,0px)); left: auto; right: 16px; transform: none; background: rgba(5,15,22,.7); font-size: 14px; }
+  @media (max-width: 720px) and (orientation: portrait) { #game:has(#bowlpad:not([hidden])) #delivery { bottom: calc(146px + env(safe-area-inset-bottom, 0px)); } }   /* clear of the three rows of bowling buttons */
+  @media (min-height: 461px) and (min-width: 721px) { #game:has(#bowlpad:not([hidden])) #tvcard { bottom: calc(146px + env(safe-area-inset-bottom, 0px)); } }
   body.reference-view #swipeHint { bottom: calc(74px + env(safe-area-inset-bottom,0px)); }
   body.reference-view #tvcard { bottom: calc(78px + env(safe-area-inset-bottom,0px)); }
   body.reference-view.reference-touch #tvbar { bottom: calc(100px + env(safe-area-inset-bottom,0px)); }
@@ -681,10 +683,10 @@ const DIFFS = [
 
 // bowling styles. Turn: + moves the ball toward the leg side of a right-hander after it bounces.
 const BOWL_TYPES = {
-  F: { name: 'Fast', speed: [136, 148], start: 36, vars: ['Stock', 'Slower', 'Cutter', 'Swing'] },
-  M: { name: 'Medium', speed: [119, 131], start: 32, vars: ['Stock', 'Slower', 'Cutter', 'Swing'] },
-  O: { name: 'Off-spin', speed: [78, 90], start: 27, turn: 1, vars: ['Stock', 'Flighted', 'Quicker', 'Doosra'] },
-  L: { name: 'Leg-spin', speed: [75, 87], start: 27, turn: -1, vars: ['Stock', 'Flighted', 'Quicker', 'Googly'] },
+  F: { name: 'Fast', speed: [136, 148], start: 36, vars: ['Stock', 'Slower', 'Cutter', 'Outswing', 'Inswing'] },
+  M: { name: 'Medium', speed: [119, 131], start: 32, vars: ['Stock', 'Slower', 'Cutter', 'Outswing', 'Inswing'] },
+  O: { name: 'Off-spin', speed: [78, 90], start: 27, turn: 1, vars: ['Stock', 'Flighted', 'Quicker', 'Doosra', 'Arm ball'] },
+  L: { name: 'Leg-spin', speed: [75, 87], start: 27, turn: -1, vars: ['Stock', 'Flighted', 'Quicker', 'Googly', 'Top-spinner'] },
 };
 
 // Country sides in our own kit colours (no official badges or logos). Player names are made up, styled on today's squads.
@@ -1958,7 +1960,7 @@ const SLOWMO = 0.75;
 let keeperZ = -13;
 // your bowling: where the ball should land, the variation, the accuracy meter
 const marker = { x: -0.04, z: 5.2 };
-let varIdx = 0, meter = null, varStreak = { vi: 0, n: 0 };
+let varIdx = 0, effort = 0, meter = null, varStreak = { vi: 0, n: 0 };
 
 const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
 document.body.classList.toggle('reference-touch',REFERENCE_VIEW && touch);
@@ -2017,11 +2019,17 @@ function buildDelivery(spec) {
   switch (vname) {
     case 'Slower': kmh *= 0.8; trick.mu = -0.045; trick.sig = 1.1; break;
     case 'Cutter': kmh *= 0.9; turn = rand(0.8, 1.3); grip = 0.8; trick.mu = -0.02; trick.sig = 1.15; break;
-    case 'Swing': ax = -rand(2.0, 3.2); trick.sig = 1.18; break;   // moves away from the bat in the air
+    case 'Outswing': ax = -rand(2.0, 3.2); trick.sig = 1.18; break;   // moves away from the bat in the air
+    case 'Inswing': ax = rand(2.0, 3.2); trick.sig = 1.18; break;     // moves in toward the pads
+    case 'Arm ball': kmh *= 1.08; turn *= 0.1; trick.mu = 0.02; trick.sig = 1.2; break;      // looks like the off-break, goes straight on
+    case 'Top-spinner': kmh *= 1.04; turn *= 0.3; grip = 0.9; trick.sig = 1.2; break;        // little turn, hurries on off the pitch
     case 'Flighted': kmh *= 0.88; turn *= 1.35; trick.sig = 1.1; trick.loft = 0.25; break;
     case 'Quicker': kmh *= 1.13; turn *= 0.4; trick.mu = 0.03; break;
     case 'Doosra': case 'Googly': turn = -turn; trick.sig = 1.3; break;
   }
+  // your effort (-1 held back, 0, +1 flat out): pace for the quicks, revs for the spinners; harder or easier for the batter to time
+  const eff = spec.effort || 0;
+  if (eff) { kmh *= 1 + (spin ? 0.03 : 0.06) * eff; if (spin) turn *= 1 + 0.25 * eff; trick.sig *= 1 + 0.07 * eff; }
   const v = kmh / 3.6, rel = [REL_X, spin ? 2.15 : 2.25, PITCH - 0.6], pz = spec.pz;
   const t1 = (rel[2] - pz) / v;   // forward speed is constant until the bounce
   const vx = (spec.px - rel[0] - 0.5 * ax * t1 * t1) / t1;
@@ -2078,13 +2086,13 @@ function aiSpec(bp, mult) {
   if (!chase && Math.random() < (1 - s) * 0.07) line = Math.random() < 0.6 ? rand(-1.3, -1.05) : rand(0.85, 1.05);   // a wide
   pz = clamp(pz, 0.3, 11);
   const kmh = M.diff.speed ? rand(M.diff.speed[0], M.diff.speed[1]) : rand(T.speed[0], T.speed[1]) * (0.95 + 0.05 * clamp(mult, 0, 1.2));
-  const vi = chase ? 0 : Math.random() < 0.25 ? 1 + ((Math.random() * 3) | 0) : 0;
+  const vi = chase ? 0 : Math.random() < 0.25 ? 1 + ((Math.random() * (T.vars.length - 1)) | 0) : 0;
   return { type, kmh, pz, px: lineToPitch(line, pz), vi };
 }
 
 // your ball: the marker, moved by how far the needle was from the middle of the meter
 // the green part of the meter: wider for better bowlers, narrower when aiming a yorker
-const meterZone = bp => (0.1 + 0.16 * clamp(bp.bowl / 100, 0, 1)) * (marker.z < 1.7 ? 0.6 : 1);
+const meterZone = bp => (0.1 + 0.16 * clamp(bp.bowl / 100, 0, 1)) * (marker.z < 1.7 ? 0.6 : 1) * (effort > 0 ? 0.7 : effort < 0 ? 1.25 : 1);   // flat out is harder to land, holding back easier
 function userSpec(bp, e) {
   const type = btype(bp), T = BOWL_TYPES[type], zone = meterZone(bp), a = Math.abs(e);
   let scatter = a <= zone ? 0.12 * a / zone : 0.12 + Math.pow((a - zone) / (1 - zone), 1.3) * 2.1;
@@ -2092,7 +2100,7 @@ function userSpec(bp, e) {
   const pz = clamp(marker.z + (e < 0 ? -1 : 1) * scatter * 1.9 * rand(0.7, 1.1), -0.6, 12);
   const px = marker.x + rand(-1, 1) * scatter * 0.45 + rand(-0.03, 0.03);
   const kmh = rand(T.speed[0], T.speed[1]) * (0.94 + 0.08 * bp.bowl / 100);
-  return { type, kmh, pz, px, vi: varIdx };
+  return { type, kmh, pz, px, vi: varIdx, effort };
 }
 
 // ----------------------------------------------------------------------- the shot
@@ -2725,8 +2733,15 @@ function renderVars() {
     b.addEventListener('pointerdown', e => { e.preventDefault(); setVar(k); });
     box.appendChild(b);
   });
+  // effort: pace for the quicks, spin for the spinners (more = harder to land on the spot)
+  const b = document.createElement('button'), word = effort > 0 ? 'more' : effort < 0 ? 'less' : 'normal';
+  b.type = 'button'; b.className = 'var eff' + (effort ? ' on' : '');
+  b.innerHTML = (T.turn ? 'Spin: ' : 'Pace: ') + word + '<small>' + (T.vars.length + 1) + '</small>';
+  b.addEventListener('pointerdown', e => { e.preventDefault(); cycleEffort(); });
+  box.appendChild(b);
 }
-function setVar(k) { varIdx = k; renderVars(); }
+function setVar(k) { if (k < BOWL_TYPES[btype(bowlerP())].vars.length) varIdx = k; renderVars(); }
+function cycleEffort() { if (meter) return; effort = effort === 0 ? 1 : effort > 0 ? -1 : 0; renderVars(); }   // not once the meter is running: its green zone is already set
 function setFF(on) { ff = on; $('ffTag').hidden = !on; }
 
 // ----------------------------------------------------------------------- your bowling: meter
@@ -4163,8 +4178,8 @@ window.addEventListener('keydown', e => {
   if (e.repeat) return;
   if (e.code === 'KeyF' && (phase === 'play' || phase === 'result')) { setFF(true); return; }
   if (userBowling()) {
-    const n = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(e.code);
-    if (n >= 0 && (phase === 'aim' || phase === 'runup')) { setVar(n); return; }
+    const n = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'].indexOf(e.code);
+    if (n >= 0 && (phase === 'aim' || phase === 'runup')) { if (n < BOWL_TYPES[btype(bowlerP())].vars.length) setVar(n); else cycleEffort(); return; }
     if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); if (phase === 'play' || phase === 'result') setFF(true); else bowlPress(); }
     return;
   }
