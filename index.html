@@ -500,7 +500,16 @@
         <button class="level" type="button" id="goChase"><span class="n">Quick chase</span><span class="d">Chase a target</span>
           <span class="s">Gully · Club · Super Over</span><span class="best"></span></button>
       </div>
-      <div class="row"><button class="btn ghost" id="fsMenu" type="button" hidden>Play full screen</button></div>
+      <div class="row"><button class="btn ghost" id="goStats" type="button">Stats &amp; records</button><button class="btn ghost" id="fsMenu" type="button" hidden>Play full screen</button></div>
+    </div>
+  </div>
+  <div id="stats" class="screen" hidden>
+    <div class="card">
+      <div class="title sm">STATS <span>&amp; RECORDS</span></div>
+      <div class="opts" id="statsFmt"></div>
+      <div class="stats" id="statsTop"></div>
+      <div id="statsBody"></div>
+      <div class="row"><button class="btn" id="statsBack" type="button">Back</button><button class="btn ghost" id="statsReset" type="button">Clear stats</button></div>
     </div>
   </div>
 
@@ -636,7 +645,8 @@ const PULL_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.s
 const BDRIVE_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('bdrive') !== 'old';
 // back-foot strokes with staged key poses (player-production/motion.js); the upper cut and hook need the staged cut and pull
 const NEW_STROKES = CUT_MOTION && PULL_MOTION;   // reverse sweep, late cut, leg glance
-const stagedBack = f => (NEW_STROKES && (f==='rsweep'||f==='lcut'||f==='glance')) || (CUT_MOTION && (f==='cut'||f==='ucut')) || (PULL_MOTION && (f==='pull'||f==='hook')) || (BDRIVE_MOTION && f==='bdrive');
+const SWEEP_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('sweep') !== 'old';
+const stagedBack = f => (SWEEP_MOTION && f==='sweep') || (NEW_STROKES && (f==='rsweep'||f==='lcut'||f==='glance')) || (CUT_MOTION && (f==='cut'||f==='ucut')) || (PULL_MOTION && (f==='pull'||f==='hook')) || (BDRIVE_MOTION && f==='bdrive');
 document.body.classList.toggle('reference-view',REFERENCE_VIEW);
 
 // ======================================================================= setup
@@ -1419,13 +1429,15 @@ function strokeFamily(a, loft, defend, push, short, spin, at) {
     if (a > leg) return PULL_MOTION && h > 1.4 ? 'hook' : 'pull';   // shoulder high or above: the hook
     return 'bdrive';
   }
+  const sweepableSpin = spin && h <= 1.05; // full/good-length spin through waist height; short/high handled above
   if (a > 35) {
+    if (!loft && a >= 55 && a <= 155 && sweepableSpin) return 'sweep';
     if (NEW_STROKES && !loft && a > 115 && a <= 155 && !(spin && h < 0.75)) return 'glance';   // fine on the leg side: the leg glance (spin, low: the fine sweep)
     if (loft) return a < 120 ? 'slog' : 'flick';
     return a >= 55 && h < 0.75 && (spin || a >= 80) ? 'sweep' : 'flick';   // square or fine on the leg side off a low ball: the sweep
   }
   if (NEW_STROKES && a < -115 && a >= -155) {   // fine on the off side: the reverse sweep to a low ball from a spinner, else the late cut
-    if (spin && h < 0.75) return 'rsweep';
+    if (!loft && sweepableSpin) return 'rsweep';
     if (!loft) return 'lcut';
   }
   if (a < -100 || (a < -65 && wide)) return 'cut';   // square on the off side to a wide ball: the cut
@@ -1677,6 +1689,10 @@ function waitMove(k) {
         ? { ...P, bk: [0.42, 0, 0.3], fr: [0.5, 0, 0.96], pel: [0.5, 0.92, 0.62], lean: 8, h: [0.3, 1.38, 0.74] }
         : { ...P, fr: [clamp(tx + 0.32, 0.1, 0.72), 0, lerp(1.08, 1.32, front)], pel: [lerp(0.6, 0.55, front), 0.85 - 0.04 * front, lerp(0.78, 0.94, front)],
             lean: 20 + 8 * front, rearFootPitch: 0.25 * front, kpL: [-0.4, 0, 1] };
+      if (SWEEP_MOTION && !back && ball.atBat[1]<=1.05 && (BOWL_TYPES[ball.type]||{}).turn) {
+        to.pel=[to.pel[0],.72,to.pel[2]-.06];
+        to.lean=30; to.h=[.25,1.12,.85];
+      }
       P = mixPose(P, to, w);
       const step = 0.08 * Math.sin(Math.PI * w);   // the moving foot comes off the ground
       if (back) P.bk = add(P.bk, [0, step, 0]); else P.fr = add(P.fr, [0, step, 0]);
@@ -1719,7 +1735,10 @@ function batterPose(sw) {
   const follow=MOTION2 && sw?smooth(clamp((motionTime-SWING_LAG-.04)/.32,0,1)):0;
   const gaze=facing(MOTION2 && sw?clamp(sw.intent||0,-70,70)*follow:0);
   if(MOTION2 && sw?.loft)j.head[2]-=.035*follow;
-  return { j, hands: k.h.slice(), tip: add(k.h, mul(bd, 0.85)), pose:k,look:gaze,motionTime };
+  const framed=sw && ((SWEEP_MOTION && /^(r?sweep)$/.test(sw.fam))
+    || (CUT_MOTION && ['cut','ucut'].includes(sw.fam)) || (NEW_STROKES && sw.fam==='lcut'));
+  const width=framed ? CricketMotion.pathWidth(sw.curve,motionTime,bd,k.batRoll||0) : null;
+  return { j, hands: k.h.slice(), tip: add(k.h, mul(bd, 0.85)), pose:k,look:gaze,motionTime,width };
 }
 
 // --- the bowler: run in, bound, deliver from just behind the crease (the ball leaves the hand at REL), follow through
@@ -2177,11 +2196,9 @@ function swing(loft, pressT, aim, w) {
   // the bat meets the ball in front of the batter (early) or beside the stumps (late), never behind them
   ball.contactT = kind === 'miss' ? Infinity : ball.Tstar + clamp(dtTiming, -0.05, 0.015);
   ball.swing.contactAge = ball.contactT - pressT;
-  let sn = kind === 'hit' ? shotName(angle, ball.swing.loft, ball.swing.defend, ball.decision.push) : kind === 'edge' ? 'Edged' : 'Missed';
-  if (kind === 'hit' && ball.swing.fam === 'sweep') sn = Math.abs(angle) > 125 ? 'Fine sweep' : 'Sweep';
-  if (kind === 'hit' && ball.swing.fam === 'ucut') sn = 'Upper cut';
-  if (kind === 'hit') sn = { rsweep: 'Reverse sweep', lcut: 'Late cut', glance: 'Leg glance' }[ball.swing.fam] || sn;
-  if (kind === 'hit' && ball.swing.fam === 'hook') sn = ball.swing.loft ? 'Lofted hook' : 'Hook';
+  const sn = kind === 'hit'
+    ? shotName(ball.swing.intent,ball.swing.loft,ball.swing.defend,ball.decision.push,ball.swing.fam)
+    : kind === 'edge' ? 'Edged' : 'Missed';
   ball.decision.shot = kind === 'hit' ? sn : '';
   if (swipeVis) swipeVis.label = sn;
   if (!quiet) showTiming(dtTiming, kind, kind === 'hit' ? sn : '', w);
@@ -2204,22 +2221,19 @@ function applyCharge() {
 
 // what a commentator would call it
 const wrapA = a => ((a + 540) % 360) - 180;   // keep an angle within -180..180
-function shotName(a, loft, defend, push) {
-  if (defend && !push) return ball && ball.short ? 'Back-foot defence' : 'Forward defence';
-  if (defend) return Math.abs(a) > 110 ? 'Dab' : 'Push';
-  let n;
-  if (Math.abs(a) > 155) n = 'Scoop';
-  else if (a < -115) n = 'Late cut';
-  else if (a < -75) n = ball.short ? 'Cut' : 'Square drive';
-  else if (a < -35) n = 'Cover drive';
-  else if (a < -10) n = 'Off drive';
-  else if (a <= 10) n = 'Straight drive';
-  else if (a <= 35) n = 'On drive';
-  else if (a <= 80) n = ball.short ? 'Pull' : 'Flick';
-  else if (a <= 120) n = ball.short ? 'Hook' : 'Clip';
-  else n = 'Glance';
-  if (n === 'Scoop') return loft ? 'Scoop over the keeper' : 'Scoop';
-  return loft && !/cut|Glance|Clip/.test(n) ? 'Lofted ' + n.toLowerCase() : n;
+function shotName(a, loft, defend, push, family) {
+  // Name the action actually selected, not the timing-deflected exit direction.
+  // The old angle-only labels called fine-leg pulls (and lofted flicks) "Glance".
+  if (family === 'sweep') return Math.abs(a)>125 ? 'Fine sweep' : 'Sweep';
+  const names={rsweep:'Reverse sweep',glance:'Leg glance',lcut:'Late cut',ucut:'Upper cut',
+    cut:'Square cut',pull:'Pull',hook:'Hook',bdrive:'Back-foot drive',flick:'Flick',slog:'Slog',
+    fdef:'Forward defence',bdef:'Back-foot defence',push:'Push'};
+  if(names[family]) return loft && ['pull','hook','bdrive','flick'].includes(family)
+    ? 'Lofted '+names[family].toLowerCase() : names[family];
+  if(family!=='drive')return 'Shot';
+  const name=a < -75 ? 'Square drive' : a < -35 ? 'Cover drive' : a < -10 ? 'Off drive'
+    : a<=10 ? 'Straight drive' : 'On drive';
+  return loft ? 'Lofted '+name.toLowerCase() : name;
 }
 
 function showTiming(dtT, kind, shot, w) {
@@ -2931,9 +2945,83 @@ function endMatch() {
     .map(([v, l]) => '<div><b>' + esc(v) + '</b><span>' + esc(l) + '</span></div>').join('');
   renderTabs('endTabs', 'endCard', 1);
   $('again').textContent = sr ? (seriesState(sr).done ? 'New series' : 'Next match (' + (sr.games.length + 1) + ' of ' + sr.n + ')') : 'Rematch';
+  const news = recordStats(winner);
+  if (news.length) $('endSub').textContent += ' New record: ' + news.join(', ') + '.';
   saveRecord(winner === you);
   clearMatch();
   showScreen('end');
+}
+
+// ---- saved stats and records: your team's results and your players' runs and wickets, kept on this device for each format
+const STATS_KEY = 'cricket-rush-stats';
+function loadStats() { try { const s = JSON.parse(localStorage.getItem(STATS_KEY)); if (s && s.v === 1 && s.f) return s; } catch (e) {} return { v: 1, f: {} }; }
+const betterBowl = (w, r, old) => !old || w > old[0] || (w === old[0] && r < old[1]);
+function recordStats(winner) {   // after a match; returns the records it broke, to show on the end screen
+  if (quiet || !M || M.mode !== 'match') return [];
+  const you = M.teams[0], s = loadStats(), news = [];
+  const F = s.f[M.overs] || (s.f[M.overs] = { p: 0, w: 0, l: 0, t: 0, hi: null, bat: null, bowl: null, pl: {} });
+  const P = (n) => F.pl[n] || (F.pl[n] = { t: you.short, i: 0, o: 0, r: 0, b: 0, hs: 0, f4: 0, s6: 0, w: 0, rc: 0, bb: 0, bw: null });
+  F.p++; if (!winner) F.t++; else if (winner === you) F.w++; else F.l++;
+  for (const i of M.innings) {
+    if (i.bat === you) {
+      const vs = i.bowl.short;
+      if (!F.hi || i.runs > F.hi.r) { if (F.hi) news.push('highest total ' + i.runs + '/' + i.wkts); F.hi = { r: i.runs, k: i.wkts, vs }; }
+      i.cards.forEach((c, k) => {
+        if (!c.in) return;
+        const n = you.players[k].name, e = P(n);
+        e.i++; if (c.out) e.o++; e.r += c.runs; e.b += c.balls; e.f4 += c.fours; e.s6 += c.sixes; e.hs = Math.max(e.hs, c.runs);
+        if (!F.bat || c.runs > F.bat.r) { if (F.bat) news.push('top score ' + c.runs + ' by ' + surname(n)); F.bat = { n, r: c.runs, b: c.balls, vs }; }
+      });
+    } else {
+      const vs = i.bat.short;
+      for (const k of i.bowlOrder) {
+        const w = i.bowlers[k], n = you.players[k].name, e = P(n);
+        e.w += w.wkts; e.rc += w.runs; e.bb += w.balls; if (betterBowl(w.wkts, w.runs, e.bw)) e.bw = [w.wkts, w.runs];
+        if (w.wkts && betterBowl(w.wkts, w.runs, F.bowl && [F.bowl.w, F.bowl.r])) { if (F.bowl) news.push('best bowling ' + w.wkts + '–' + w.runs + ' by ' + surname(n)); F.bowl = { n, w: w.wkts, r: w.runs, vs }; }
+      }
+    }
+  }
+  try { localStorage.setItem(STATS_KEY, JSON.stringify(s)); } catch (e) {}
+  return news;
+}
+let statsFmt = 'all', statsArm = false;
+function renderStats() {
+  const s = loadStats(), keys = Object.keys(s.f).sort((a, b) => a - b), fname = k => k === '20' ? 'T20' : k === '50' ? 'ODI' : k + ' overs';
+  if (statsFmt !== 'all' && !s.f[statsFmt]) statsFmt = 'all';
+  optButtons('statsFmt', [{ k: 'all', html: 'All formats' }, ...keys.map(k => ({ k, html: fname(k) }))], it => it.k === statsFmt, it => { statsFmt = it.k; renderStats(); });
+  const T = { p: 0, w: 0, hi: null, bat: null, bowl: null, pl: {} };
+  for (const k of statsFmt === 'all' ? keys : [statsFmt]) {
+    const F = s.f[k];
+    T.p += F.p; T.w += F.w;
+    if (F.hi && (!T.hi || F.hi.r > T.hi.r)) T.hi = F.hi;
+    if (F.bat && (!T.bat || F.bat.r > T.bat.r)) T.bat = F.bat;
+    if (F.bowl && betterBowl(F.bowl.w, F.bowl.r, T.bowl && [T.bowl.w, T.bowl.r])) T.bowl = F.bowl;
+    for (const [n, e] of Object.entries(F.pl)) {
+      const a = T.pl[n] || (T.pl[n] = { t: e.t, i: 0, o: 0, r: 0, b: 0, hs: 0, f4: 0, s6: 0, w: 0, rc: 0, bb: 0, bw: null });
+      for (const f of ['i', 'o', 'r', 'b', 'f4', 's6', 'w', 'rc', 'bb']) a[f] += e[f];
+      a.hs = Math.max(a.hs, e.hs); if (e.bw && betterBowl(e.bw[0], e.bw[1], a.bw)) a.bw = e.bw;
+    }
+  }
+  $('statsTop').innerHTML = [[T.w + ' / ' + T.p, 'Won / played'],
+    [T.hi ? T.hi.r + '/' + T.hi.k : '-', 'Highest total' + (T.hi ? ' · v ' + T.hi.vs : '')],
+    [T.bat ? T.bat.r + ' (' + T.bat.b + ')' : '-', 'Top score' + (T.bat ? ' · ' + surname(T.bat.n) : '')],
+    [T.bowl ? T.bowl.w + '–' + T.bowl.r : '-', 'Best bowling' + (T.bowl ? ' · ' + surname(T.bowl.n) : '')]]
+    .map(([v, l]) => '<div><b>' + esc(v) + '</b><span>' + esc(l) + '</span></div>').join('');
+  const all = Object.entries(T.pl), one = x => (Math.round(x * 10) / 10).toFixed(1);
+  let h = '';
+  if (!T.p) h = '<p class="how">Play a match and your players\' runs and wickets are kept here.</p>';
+  else {
+    const bat = all.filter(([, e]) => e.i).sort((a, b) => b[1].r - a[1].r).slice(0, 8);
+    h += '<table class="sc"><thead><tr><th>Batting</th><th>Inns</th><th>Runs</th><th>Best</th><th>Avg</th><th>SR</th></tr></thead><tbody>' +
+      bat.map(([n, e]) => '<tr><td class="nm">' + esc(n) + ' <span class="ty">' + esc(e.t) + '</span></td><td>' + e.i + '</td><td><b>' + e.r + '</b></td><td>' + e.hs +
+        '</td><td>' + (e.o ? one(e.r / e.o) : '-') + '</td><td>' + (e.b ? Math.round(e.r / e.b * 100) : '-') + '</td></tr>').join('') + '</tbody></table>';
+    const bowl = all.filter(([, e]) => e.bb).sort((a, b) => b[1].w - a[1].w || a[1].rc - b[1].rc).slice(0, 8);
+    if (bowl.length) h += '<table class="sc"><thead><tr><th>Bowling</th><th>Overs</th><th>Wkts</th><th>Runs</th><th>Best</th><th>Econ</th></tr></thead><tbody>' +
+      bowl.map(([n, e]) => '<tr><td class="nm">' + esc(n) + ' <span class="ty">' + esc(e.t) + '</span></td><td>' + ovStr(e.bb) + '</td><td><b>' + e.w + '</b></td><td>' + e.rc +
+        '</td><td>' + (e.bw ? e.bw[0] + '–' + e.bw[1] : '-') + '</td><td>' + one(e.rc / e.bb * 6) + '</td></tr>').join('') + '</tbody></table>';
+  }
+  $('statsBody').innerHTML = h;
+  $('statsReset').textContent = statsArm ? 'Tap again to clear everything' : 'Clear stats'; $('statsReset').hidden = !T.p;
 }
 
 function endChase() {
@@ -2997,7 +3085,7 @@ function renderTabs(tabsId, cardId, sel) {
 }
 
 // ----------------------------------------------------------------------- screens
-const SCREENS = ['menu', 'setup', 'chaseMenu', 'toss', 'break', 'pause', 'end'];
+const SCREENS = ['menu', 'setup', 'chaseMenu', 'toss', 'break', 'pause', 'end', 'stats'];
 function showScreen(id) { for (const s of SCREENS) $(s).hidden = s !== id; }
 function toMenu() {
   M = null; inn = null; ball = null; phase = 'menu'; paused = false; setFF(false);
@@ -3741,9 +3829,9 @@ function livePeople() {
       hands=lerp3(add(from.hands,offset),hands,turn);
       const direction=CricketMotion.blendDirection(norm(sub(from.tip,from.hands)),norm(sub(tip,hand)),turn);
       tip=add(hands,mul(direction,lerp(len(sub(from.tip,from.hands)),len(sub(tip,hand)),turn)));
-      const sourceWidth=stagedBack(sw?.fam)
+      const sourceWidth=from.width || (stagedBack(sw?.fam)
         ? CricketMotion.cutWidth(norm(sub(from.tip,from.hands)),sw.keys.find(k=>Math.abs(k[0]-SWING_LAG)<1e-8)[1].bd)
-        : MOTION2 && sw && sw.fam!=='drive' && sw.keys ? norm(cross(mul(sw.keys[2][1].bd,-1),[0,0,1])) : [1,0,0];
+        : MOTION2 && sw && sw.fam!=='drive' && sw.keys ? norm(cross(mul(sw.keys[2][1].bd,-1),[0,0,1])) : [1,0,0]);
       width=CricketMotion.blendDirection(sourceWidth,side,turn);
       look=norm(lerp3(from.look||[0,0,1],look,turn));
     }
@@ -3778,7 +3866,7 @@ function livePeople() {
     out.push({ j, at: sr.pos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look,
                bat: { carry: true, carryHand: 'r', hands: hand, tip } });
   } else {
-    let { j, hands, tip,look } = batterPose(ball && ball.swing ? ball.swing : null);
+    let { j, hands, tip,look,width:authoredWidth } = batterPose(ball && ball.swing ? ball.swing : null);
     let contact = ball && ball.swing && ball.swing.target ? ball.swing.target.slice() : null;
     let at = [0.6 + guard, 0, 0.75];
     if (guard) { const o = [guard, 0, 0]; for (const n in j) if(!/^foot(Dir|Pitch)/.test(n))j[n] = add(j[n], o); hands = add(hands, o); tip = add(tip, o); if(contact)contact=add(contact,o); }
@@ -3789,10 +3877,10 @@ function livePeople() {
       if (ball.charge.t < 0.4) { const ph = Math.sin(ball.charge.t * 24) * 0.12; j.footL[2] += ph; j.footR[2] -= ph; j.kneeL[2] += ph / 2; j.kneeR[2] -= ph / 2; }
     }
     const stroke=ball && ball.swing;
-    const width=stagedBack(stroke?.fam) && stroke.keys
+    const width=authoredWidth || (stagedBack(stroke?.fam) && stroke.keys
       ? CricketMotion.cutWidth(norm(sub(tip,hands)),stroke.keys.find(k=>Math.abs(k[0]-SWING_LAG)<1e-8)[1].bd)
       : MOTION2 && stroke && stroke.fam!=='drive' && stroke.keys
-      ? norm(cross(mul(stroke.keys[2][1].bd,-1),[0,0,1])) : [1,0,0];
+      ? norm(cross(mul(stroke.keys[2][1].bd,-1),[0,0,1])) : [1,0,0]);
     out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look, bat: { carry: false, hands, tip, contact,...(MOTION2?{width}:{}) } });
   }
   // the non-striker
@@ -4281,6 +4369,9 @@ $('chaseBack').addEventListener('click', toMenu);
 $('toToss').addEventListener('click', () => { audio(); if (setup.series) newSeries(); startTossOne(); });
 // a single match from the setup screen doesn't touch a series in progress
 function startTossOne() { if (setup.series) return startToss(); const keep = series; series = null; startToss(); series = keep; }
+$('goStats').addEventListener('click', () => { audio(); statsArm = false; renderStats(); showScreen('stats'); });
+$('statsBack').addEventListener('click', () => showScreen('menu'));
+$('statsReset').addEventListener('click', () => { if (statsArm) { try { localStorage.removeItem(STATS_KEY); } catch (e) {} } statsArm = !statsArm; renderStats(); });
 $('goResume').addEventListener('click', () => { audio(); resumeMatch(); });
 renderMatchLine();
 $('goSeries').addEventListener('click', () => {
