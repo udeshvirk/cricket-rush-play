@@ -228,6 +228,8 @@
     .level .n { font-size: 24px; }
     .levels:has(#goSeries) { grid-template-columns: repeat(3, 1fr); }   /* the three main-menu choices side by side */
     .levels:has(#goSeries) .level .s { display: none; }
+    .levels:has(#goResume:not([hidden])) { grid-template-columns: repeat(4, 1fr); }   /* four when a match can be continued */
+    .levels:has(#goResume:not([hidden])) .level .n { font-size: 18px; }
     .btn { padding: 9px 18px; font-size: 16px; }
   }
 
@@ -491,7 +493,8 @@
       <div class="tag">Night cricket under the lights.</div>
       <div class="levels">
         <button class="level" type="button" id="goMatch"><span class="n">Play a match</span><span class="d">Bat and bowl, two innings</span>
-          <span class="s">Pick your team · 2 to 20 overs</span><span class="best" id="recordLine"></span></button>
+          <span class="s">Pick your team · 2 overs up to T20 and ODI</span><span class="best" id="recordLine"></span></button>
+        <button class="level" type="button" id="goResume" hidden><span class="n">Continue match</span><span class="d" id="resumeLine"></span></button>
         <button class="level" type="button" id="goSeries"><span class="n">Mini series</span><span class="d">Best of 3 or 5 matches</span>
           <span class="s">One opponent · series trophy · player of the series</span><span class="best" id="seriesLine"></span></button>
         <button class="level" type="button" id="goChase"><span class="n">Quick chase</span><span class="d">Chase a target</span>
@@ -2003,6 +2006,9 @@ function newInnings(bat, bowl, maxBalls, maxWkts, target, userBats) {
 }
 const inningsOver = () => inn.wkts >= inn.maxWkts || inn.balls >= inn.maxBalls || (inn.target && inn.runs >= inn.target);
 const overLimit = () => M.mode === 'chase' ? 99 : Math.max(1, Math.ceil(M.overs / 5));
+// powerplay: the first overs of a longer match, when the fielding side must keep the field up (the attacking field)
+const ppOvers = () => M && M.mode === 'match' && M.overs >= 10 ? (M.overs >= 50 ? 10 : Math.round(M.overs * 0.3)) : 0;
+const inPP = () => !!inn && Math.floor(inn.balls / 6) < ppOvers();
 const oversBy = k => inn.bowlers[k] ? Math.floor(inn.bowlers[k].balls / 6) : 0;
 
 // ----------------------------------------------------------------------- deliveries
@@ -2532,6 +2538,7 @@ function aiPickBowler() {
 }
 function aiField(k) {
   if (M.mode === 'chase') return 'balanced';
+  if (inPP()) return 'attacking';
   const total = inn.maxBalls / 6, overNo = Math.floor(inn.balls / 6), death = overNo >= total - Math.max(1, total * 0.25);
   const plan = inn.userBats ? (M.diff.plan ?? 1) : 1;   // how cleverly the computer captains against you: 0 easy, 1 medium, 2 hard
   if (plan === 0) return overNo < total * 0.4 ? 'attacking' : 'balanced';   // easy: catchers in early (gaps in the deep), and never fully back
@@ -2543,8 +2550,38 @@ function aiField(k) {
   if (death) return 'defensive';
   return 'balanced';
 }
+// an unfinished match is kept at the start of every over, so a long one can be carried on later (menu: Continue match)
+const MATCH_KEY = 'cricket-rush-match';
+function saveMatch() {
+  if (!M || M.mode !== 'match' || quiet) return;
+  try {
+    const t = x => TEAMS.indexOf(x);
+    localStorage.setItem(MATCH_KEY, JSON.stringify({ a: t(M.teams[0]), b: t(M.teams[1]), overs: M.overs, diff: DIFFS.indexOf(M.diff), cur: M.cur, series: !!M.series,
+      innings: M.innings.map(i => ({ ...i, bat: t(i.bat), bowl: t(i.bowl) })) }));
+  } catch (e) {}
+  renderMatchLine();
+}
+function loadMatch() {
+  try { const d = JSON.parse(localStorage.getItem(MATCH_KEY)); return d && d.innings && d.innings[d.cur] && TEAMS[d.a] && TEAMS[d.b] ? d : null; } catch (e) { return null; }
+}
+function clearMatch() { try { localStorage.removeItem(MATCH_KEY); } catch (e) {} renderMatchLine(); }
+function renderMatchLine() {
+  const el = $('goResume'); if (!el) return;
+  const d = loadMatch(); el.hidden = !d;
+  if (d) { const i = d.innings[d.cur];
+    $('resumeLine').textContent = TEAMS[d.a].short + ' v ' + TEAMS[d.b].short + ' · ' + (d.overs === 20 ? 'T20' : d.overs === 50 ? 'ODI' : d.overs + ' overs') +
+      ' · ' + TEAMS[i.bat].short + ' ' + i.runs + '/' + i.wkts + ' after ' + Math.floor(i.balls / 6) + ' overs' + (d.cur ? ', chasing ' + i.target : ''); }
+}
+function resumeMatch() {
+  const d = loadMatch(); if (!d) return;
+  M = { mode: 'match', overs: d.overs, diff: DIFFS[d.diff] || DIFFS[1], teams: [TEAMS[d.a], TEAMS[d.b]], cur: d.cur, autoplay: null,
+        autoBowl: setup.autoBowl !== false, watchFast: false, series: d.series && series && !seriesState(series).done ? series : null,
+        innings: d.innings.map(i => ({ ...i, bat: TEAMS[i.bat], bowl: TEAMS[i.bowl] })) };
+  startInnings(M.cur);
+}
 function startOver() {
   inn.over = []; inn.overDone = false; inn.bowler = null;
+  saveMatch();
   if (userBowling()) return openPick();
   inn.bowler = aiPickBowler(); inn.field = aiField(inn.bowler);
   beginBall(inn.balls === 0 ? 1.0 : 1.6, true);
@@ -2662,7 +2699,7 @@ function updateScore() {
   const tag = $('teamTag');
   tag.textContent = i.bat.short; tag.style.background = i.bat.col; tag.style.color = onCol(i.bat.col);
   $('scoreText').textContent = i.runs + '/' + i.wkts;
-  $('oversText').textContent = ovStr(i.balls) + (match ? ' / ' + M.overs : '') + ' ov';
+  $('oversText').textContent = ovStr(i.balls) + (match ? ' / ' + M.overs : '') + ' ov' + (match && inPP() ? ' · PP' : '');
   const left = i.maxBalls - i.balls, crr = i.balls ? (i.runs / i.balls * 6).toFixed(2) : '0.00';
   if (i.target) {
     const need = Math.max(0, i.target - i.runs);
@@ -2895,6 +2932,7 @@ function endMatch() {
   renderTabs('endTabs', 'endCard', 1);
   $('again').textContent = sr ? (seriesState(sr).done ? 'New series' : 'Next match (' + (sr.games.length + 1) + ' of ' + sr.n + ')') : 'Rematch';
   saveRecord(winner === you);
+  clearMatch();
   showScreen('end');
 }
 
@@ -2995,7 +3033,7 @@ function renderSetup() {
   $('setupTitle').innerHTML = (setup.series ? 'SERIES' : 'MATCH') + ' <span>SETUP</span>';
   optButtons('teamA', teamItems, (it, k) => k === setup.a, (it, k) => { if (k === setup.b) setup.b = setup.a; setup.a = k; saveSetup(); renderSetup(); });
   optButtons('teamB', teamItems, (it, k) => k === setup.b, (it, k) => { if (k === setup.a) setup.a = setup.b; setup.b = k; saveSetup(); renderSetup(); });
-  optButtons('oversPick', [2, 5, 10, 20].map(v => ({ v, html: v + ' overs' })), it => it.v === setup.overs, it => { setup.overs = it.v; saveSetup(); renderSetup(); });
+  optButtons('oversPick', [2, 5, 10, 20, 50].map(v => ({ v, html: v === 20 ? 'T20' : v === 50 ? 'ODI (50)' : v + ' overs' })), it => it.v === setup.overs, it => { setup.overs = it.v; saveSetup(); renderSetup(); });
   optButtons('diffPick', DIFFS.map(d => ({ html: d.name })), (it, k) => k === setup.diff, (it, k) => { setup.diff = k; saveSetup(); renderSetup(); });
   optButtons('bowlPick', [{ v: true, html: 'Computer bowls for me' }, { v: false, html: 'I\'ll bowl' }], it => it.v === setup.autoBowl,
     it => { setup.autoBowl = it.v; saveSetup(); renderSetup(); });
@@ -3111,9 +3149,10 @@ function renderPick() {
     el.addEventListener('click', () => { pickSel = k; renderPick(); });
     box.appendChild(el);
   });
-  optButtons('fieldPick', Object.keys(FIELDS).map(f => ({ f, html: FIELD_INFO[f][0] })), it => it.f === fieldSel,
+  const pp = inPP(); if (pp) fieldSel = 'attacking';
+  optButtons('fieldPick', Object.keys(FIELDS).map(f => ({ f, html: FIELD_INFO[f][0], disabled: pp && f !== 'attacking' })), it => it.f === fieldSel,
     it => { fieldSel = it.f; renderPick(); });
-  $('fieldDesc').textContent = FIELD_INFO[fieldSel][1];
+  $('fieldDesc').textContent = (pp ? 'Powerplay (first ' + ppOvers() + ' overs): the field must stay up. ' : '') + FIELD_INFO[fieldSel][1];
 }
 function pickGo() {
   if (phase !== 'pick') return;
@@ -4242,6 +4281,8 @@ $('chaseBack').addEventListener('click', toMenu);
 $('toToss').addEventListener('click', () => { audio(); if (setup.series) newSeries(); startTossOne(); });
 // a single match from the setup screen doesn't touch a series in progress
 function startTossOne() { if (setup.series) return startToss(); const keep = series; series = null; startToss(); series = keep; }
+$('goResume').addEventListener('click', () => { audio(); resumeMatch(); });
+renderMatchLine();
 $('goSeries').addEventListener('click', () => {
   audio();
   if (series && !seriesState(series).done) return startToss();   // carry on where you left off
