@@ -225,6 +225,8 @@
   .result.win { color: var(--teal); }
   .result.lose { color: var(--red); }
   .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; font-variant-numeric: tabular-nums; }
+  #tournamentAward b { font-size: 23px; margin: 6px 0; } #tournamentAward .award-performance { display: block; color: var(--chalk); font-size: 16px; text-transform: none; letter-spacing: 0; }
+  #tournamentStats td:first-child, #tournamentStats th:first-child { text-align: left; }
   #endAwards { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
   #endAwards b { font-size: 23px; margin: 6px 0; }
   #endAwards span { letter-spacing: .04em; }
@@ -309,6 +311,22 @@
   #wipe.go { animation: wipe 0.35s ease-out; }
   @keyframes wipe { 0% { opacity: 0.55; } 100% { opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { #banner { transition: opacity 0.18s; } #wipe.go { animation: none; } }
+  /* the toss: a coin flipped in the air, landing heads (the star) or tails (the stumps) */
+  #toss.scene { background: linear-gradient(0deg, rgba(10,16,36,0.9), rgba(10,16,36,0.55) 22%, transparent 34%); place-items: end start; }
+  #toss.scene .tossarea { display: none; }
+  #toss.scene .card { gap: 10px; }
+  #toss.scene .title.sm { font-size: clamp(30px, 5vw, 44px); }
+  @media (max-height: 460px) { #toss.scene .card { gap: 4px; } #toss.scene .title.sm { font-size: 22px; } #toss.scene { padding-top: 0; padding-bottom: 8px; } }
+  .tossarea { display: flex; flex-direction: column; align-items: flex-start; padding: 26px 0 4px 10px; perspective: 600px; }
+  .coin { position: relative; width: 92px; height: 92px; transform-style: preserve-3d; }
+  .coin .face { position: absolute; inset: 0; border-radius: 50%; backface-visibility: hidden; display: grid; place-items: center;
+    background: radial-gradient(circle at 35% 30%, #ffe39a, #f0b43c 55%, #b8801f); box-shadow: inset 0 0 0 5px #d99a2b, inset 0 0 0 7px #ffe08a;
+    color: #7a4f0e; font: 900 13px var(--display); letter-spacing: 0.12em; text-align: center; }
+  .coin .face svg { display: block; width: 40px; height: 40px; margin: 0 auto -2px; }
+  .coinshadow { margin-left: 11px; }
+  .coin .face.t { transform: rotateX(180deg); }
+  .coinshadow { width: 70px; height: 10px; margin-top: 8px; border-radius: 50%; background: rgba(0, 0, 0, 0.45); filter: blur(3px); }
+  @media (max-height: 460px) { .tossarea { padding: 6px 0 0 4px; } .coin { width: 54px; height: 54px; } .coin .face { font-size: 8px; } .coin .face svg { width: 22px; height: 22px; } .coinshadow { width: 42px; height: 6px; margin: 4px 0 0 6px; } }
   @media (max-width: 720px) and (orientation: portrait) { #tvcard { top: calc(118px + env(safe-area-inset-top, 0px)); } }
 
   /* short screens (a phone held sideways): smaller scoreboard and map, shot buttons in a column on the right,
@@ -575,6 +593,7 @@
     <div class="row"><button class="btn" id="tournamentPlay" type="button">Play next match</button><button class="btn ghost" id="tournamentNew" type="button">New tournament</button><button class="btn ghost" id="tournamentBack" type="button">Main menu</button></div>
     <p class="how" id="tournamentRules"></p>
     <div id="tournamentTable"></div>
+    <details id="tournamentStatsBox" hidden><summary>Players in your matches</summary><div class="stats" id="tournamentAward"></div><div class="setup-grid" id="tournamentStats"></div></details>
     <details><summary>Fixtures &amp; results</summary><div class="fixture-list" id="tournamentFixtures"></div></details>
   </div></div>
   <div id="chaseMenu" class="screen" hidden>
@@ -594,13 +613,17 @@
     <div class="card">
       <div class="title sm" id="tossTitle">THE <span>TOSS</span></div>
       <div class="tag" id="tossText"></div>
+      <div class="tossarea" aria-hidden="true"><div class="coin" id="coin">
+        <div class="face h"><div><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7L12 17.3 5.8 21l1.6-7L2 9.2l7.1-.6z"/></svg><div>HEADS</div></div></div>
+        <div class="face t"><div><svg viewBox="0 0 24 24"><path fill="currentColor" d="M5 5h14v2H5zM6 8h2.4v13H6zm4.8 0h2.4v13h-2.4zm4.8 0H18v13h-2.4z"/></svg><div>TAILS</div></div></div>
+      </div><div class="coinshadow" id="coinShadow"></div></div>
       <div class="row" id="tossBtns"></div>
     </div>
   </div>
 
   <div id="break" class="screen" hidden>
     <div class="card">
-      <div class="title sm">INNINGS <span>BREAK</span></div>
+      <div class="title sm" id="breakTitle">INNINGS <span>BREAK</span></div>
       <div class="tag" id="breakText"></div>
       <div class="row"><button class="btn" id="breakGo" type="button">Start</button></div>
       <div class="scard" id="breakCard"></div>
@@ -2054,7 +2077,7 @@ const bowlerP = () => inn.bowl.players[inn.bowler];
 const batterP = k => inn.bat.players[k];
 const userBowling = () => !!(M && M.mode === 'match' && inn && !inn.userBats && !M.autoBowl);
 const autoBowling = () => !!(M && M.mode === 'match' && inn && !inn.userBats && M.autoBowl);
-let shotType = 'shot', swipeVis = null;
+let shotType = touch ? 'loft' : 'shot', swipeVis = null;   // on phones and tablets LOFT is the starting choice (the owner asked)
 const isSpin = p => !!BOWL_TYPES[btype(p)].turn;
 
 function newFielders() {
@@ -2089,7 +2112,7 @@ const inningsOver = () => inn.wkts >= inn.maxWkts || inn.balls >= inn.maxBalls |
 const overLimit = () => M.mode === 'chase' ? 99 : Math.max(1, Math.ceil(M.overs / 5));
 // powerplay: the first overs of a longer match, when the fielding side must keep the field up (the attacking field)
 const ppOvers = () => M && M.mode === 'match' && M.overs >= 10 ? (M.overs >= 50 ? 10 : Math.round(M.overs * 0.3)) : 0;
-const inPP = () => !!inn && Math.floor(inn.balls / 6) < ppOvers();
+const inPP = () => !!inn && !inn.superOver && Math.floor(inn.balls / 6) < ppOvers();
 const oversBy = k => inn.bowlers[k] ? Math.floor(inn.bowlers[k].balls / 6) : 0;
 // no-balls (match setup): 0 = off, 1 = no-balls, 2 = no-balls and the next ball is a free hit
 const nbRule = () => (M && M.mode === 'match' && M.noBall) || 0;
@@ -2350,6 +2373,7 @@ function aggression() {
   if (wl <= 3 && prog < 0.85) a -= 0.12;
   a += inn.maxBalls <= 30 ? 0.18 : inn.maxBalls <= 60 ? 0.08 : 0;
   if (inn.freeHit) a += 0.35;   // nothing to lose
+  if (inn.superOver) a = Math.max(a, 0.7);   // six balls: go for it
   return clamp(a, 0.08, 1);
 }
 const batSkill = k => clamp(batterP(k).bat / 100 * (inn.userBats ? 1 : M.diff.aiBat), 0.05, 1);
@@ -2648,6 +2672,7 @@ function aiPickBowler() {
 }
 function aiField(k) {
   if (M.mode === 'chase') return 'balanced';
+  if (inn.superOver) return 'defensive';
   if (inPP()) return 'attacking';
   const total = inn.maxBalls / 6, overNo = Math.floor(inn.balls / 6), death = overNo >= total - Math.max(1, total * 0.25);
   const plan = inn.userBats ? (M.diff.plan ?? 1) : 1;   // how cleverly the computer captains against you: 0 easy, 1 medium, 2 hard
@@ -2667,7 +2692,7 @@ function saveMatch() {
   try {
     const t = x => TEAMS.indexOf(x);
     localStorage.setItem(MATCH_KEY, JSON.stringify({ a: t(M.teams[0]), b: t(M.teams[1]), overs: M.overs, diff: DIFFS.indexOf(M.diff), cur: M.cur, series: !!M.series, tournamentId: M.tournamentId, fixtureId: M.fixtureId, noBall: nbRule(),
-      innings: M.innings.map(i => ({ ...i, bat: t(i.bat), bowl: t(i.bowl) })) }));
+      innings: allInnings().map(i => ({ ...i, bat: t(i.bat), bowl: t(i.bowl) })) }));
   } catch (e) {}
   renderMatchLine();
 }
@@ -2680,13 +2705,14 @@ function renderMatchLine() {
   const d = loadMatch(); el.hidden = !d;
   if (d) { const i = d.innings[d.cur];
     $('resumeLine').textContent = TEAMS[d.a].short + ' v ' + TEAMS[d.b].short + ' · ' + (d.overs === 20 ? 'T20' : d.overs === 50 ? 'ODI' : d.overs + ' overs') +
-      ' · ' + TEAMS[i.bat].short + ' ' + i.runs + '/' + i.wkts + ' after ' + Math.floor(i.balls / 6) + ' overs' + (d.cur ? ', chasing ' + i.target : ''); }
+      ' · ' + TEAMS[i.bat].short + ' ' + i.runs + '/' + i.wkts + (i.superOver ? ' in the Super Over' : ' after ' + Math.floor(i.balls / 6) + ' overs') + (i.target ? ', chasing ' + i.target : ''); }
 }
 function resumeMatch() {
   const d = loadMatch(); if (!d) return;
+  const all = d.innings.map(i => ({ ...i, bat: TEAMS[i.bat], bowl: TEAMS[i.bowl] }));
   M = { mode: 'match', overs: d.overs, diff: DIFFS[d.diff] || DIFFS[1], teams: [TEAMS[d.a], TEAMS[d.b]], cur: d.cur, autoplay: null,
         autoBowl: setup.autoBowl !== false, watchFast: false, series: d.series && series && !seriesState(series).done ? series : null,
-        innings: d.innings.map(i => ({ ...i, bat: TEAMS[i.bat], bowl: TEAMS[i.bowl] })),
+        innings: all.slice(0, 2), so: all.slice(2),
         tournamentId: d.tournamentId===tournament?.id?d.tournamentId:undefined, fixtureId:d.fixtureId, noBall: d.noBall || 0 };
   startInnings(M.cur);
 }
@@ -2812,7 +2838,7 @@ function updateScore() {
   const tag = $('teamTag');
   tag.textContent = i.bat.short; tag.style.background = i.bat.col; tag.style.color = onCol(i.bat.col);
   $('scoreText').textContent = i.runs + '/' + i.wkts;
-  $('oversText').textContent = ovStr(i.balls) + (match ? ' / ' + M.overs : '') + ' ov' + (match && inPP() ? ' · PP' : '');
+  $('oversText').textContent = ovStr(i.balls) + (match ? ' / ' + (i.superOver ? 1 : M.overs) : '') + ' ov' + (match && inPP() ? ' · PP' : i.superOver ? ' · Super Over' : '');
   const left = i.maxBalls - i.balls, crr = i.balls ? (i.runs / i.balls * 6).toFixed(2) : '0.00';
   if (i.target) {
     const need = Math.max(0, i.target - i.runs);
@@ -2822,11 +2848,11 @@ function updateScore() {
     $('levelName').textContent = M.teams[0].short + ' v ' + M.teams[1].short + ' · ' + M.diff.name;
     if (i.target) {
       const need = Math.max(0, i.target - i.runs);
-      $('targetText').textContent = 'Target ' + i.target;
+      $('targetText').textContent = (i.superOver ? 'Super Over · ' : '') + 'Target ' + i.target;
       $('targetSub').textContent = (left ? 'Needs ' + (need / left * 6).toFixed(2) + ' an over · ' : '') + (i.userBats ? 'you bat' : 'you bowl');
     } else {
-      $('targetText').textContent = '1st innings';
-      $('targetSub').textContent = (i.userBats ? 'You bat' : 'You bowl') + ' · ' + M.overs + ' overs';
+      $('targetText').textContent = i.superOver ? 'Super Over' : '1st innings';
+      $('targetSub').textContent = (i.userBats ? 'You bat' : 'You bowl') + ' · ' + (i.superOver ? '1 over, 2 wickets' : M.overs + ' overs');
     }
     // batters and bowler
     const card = k => { const c = i.cards[k]; return esc(surname(batterP(k).name)) + ' ' + c.runs + (c.out ? '' : '*') + ' (' + c.balls + ')'; };
@@ -2966,7 +2992,10 @@ function finishBall(o, line) {
   }
   const ours = i.userBats;   // the crowd is on your side
   if (!quiet && !ff) shake = o.out ? 0.9 : o.runs === 6 ? 0.6 : 0;
-  celebrate = { out: o.out || null, runs: o.runs || 0, milestone: !!milestone };
+  // the umpire's signals, one after another: out (not for bowled), no-ball, wide, four, six, then a free hit to come
+  const signals = [o.out && o.out.how !== 'bowled' && 'out', o.noBall && 'nb', o.wide && 'wide', o.runs === 6 && 'six', o.runs === 4 && 'four',
+    (o.noBall || o.wide) && i.freeHit && 'fh'].filter(s => s && !ff && !M.autoplay && !quiet);
+  celebrate = { out: o.out || null, runs: o.runs || 0, milestone: !!milestone, signals };
   if (o.out) {
     showBanner('OUT!', chaseMode ? line : line + ' · ' + who + c.runs + ' (' + c.balls + ')', 'bw');
     if (ours) { sndOoh(1, true); sndClap(0.25, 3); } else { sndCrowd(0.9, 3); sndClap(0.7); cheer = 0.8; }
@@ -2989,7 +3018,7 @@ function setPace() {
 }
 function startInnings(k) {
   commentary.reset();
-  M.cur = k; inn = M.innings[k];
+  M.cur = k; inn = allInnings()[k];
   setPace();
   showScreen(null);
   paused = false;
@@ -3009,12 +3038,34 @@ function endInnings() {
     $('breakText').textContent = a.bat.name + ' made ' + a.runs + (allOut ? ' all out' : ' for ' + a.wkts) + ' in ' + ovStr(a.balls) +
       ' overs. ' + (a.userBats ? 'Now bowl them out: ' + a.bowl.name + ' need ' : 'Your chase: you need ') + (a.runs + 1) +
       ' from ' + a.maxBalls + ' balls (' + ((a.runs + 1) / a.maxBalls * 6).toFixed(2) + ' an over).';
+    $('breakTitle').innerHTML = 'INNINGS <span>BREAK</span>';
     $('breakGo').textContent = a.userBats ? 'Start bowling' : 'Start the chase';
     $('breakCard').innerHTML = scorecardHTML(a);
     showScreen('break');
     return;
   }
+  // level after both innings: a Super Over, and another if that is level too
+  if (!inn.superOver) { if (inn.runs === inn.target - 1) return superOver(inn.bat, inn.bowl, null, inn.userBats); }
+  else if (!inn.target) return superOver(inn.bowl, inn.bat, inn.runs + 1, !inn.userBats);
+  else if (inn.runs === inn.target - 1) return superOver(inn.bat, inn.bowl, null, inn.userBats);
   endMatch();
+}
+// every innings of the match in order: the two real ones, then any Super Overs (M.so)
+const allInnings = () => M.innings.concat(M.so || []);
+function nextInnings() { startInnings(allInnings().length - 1); }   // the one waiting behind the break screen
+// one over each with two wickets; the side that batted second goes first. Its runs and wickets stay out of stats, awards and run rates.
+function superOver(bat, bowl, target, userBats) {
+  const prev = inn, i = newInnings(bat, bowl, 6, 2, target, userBats);
+  i.superOver = true; (M.so || (M.so = [])).push(i);
+  const again = !target && prev.superOver;
+  $('breakText').textContent = target
+    ? prev.bat.name + ' made ' + prev.runs + '/' + prev.wkts + ' in the Super Over. ' + (userBats ? 'You need ' : bat.name + ' need ') + target + ' from 6 balls.'
+    : (again ? 'Level again! Another Super Over. ' : 'Scores level! It goes to a Super Over: one over each, two wickets. ') + (userBats ? 'You bat first.' : bat.name + ' bat first.');
+  $('breakTitle').innerHTML = 'SUPER <span>OVER</span>';
+  $('breakGo').textContent = userBats ? 'Bat the Super Over' : 'Bowl the Super Over';
+  $('breakCard').innerHTML = scorecardHTML(prev);
+  commentaryCall('match', { text: target ? plural(target, 'run') + ' needed to win the Super Over.' : again ? 'Still level! We go again. Another Super Over.' : 'Scores level! We are going to a Super Over.' });
+  showScreen('break');
 }
 
 function endMatch() {
@@ -3025,6 +3076,10 @@ function endMatch() {
     winner = b.bat;
     const left = b.maxBalls - b.balls;
     text = b.bat.name + ' won by ' + plural(b.maxWkts - b.wkts, 'wicket') + (left ? ', with ' + plural(left, 'ball') + ' to spare.' : ', off the last ball.');
+  } else if (b.runs === b.target - 1 && M.so && M.so.length > 1) {
+    const [x, y] = M.so.slice(-2), sc = i => i.bat.short + ' ' + i.runs + '/' + i.wkts;
+    winner = y.runs >= y.target ? y.bat : x.bat;
+    text = 'Scores level. ' + winner.name + ' won the Super Over (' + sc(x) + ', ' + sc(y) + ').';
   } else if (b.runs === b.target - 1) text = 'Scores level. The match is tied.';
   else { winner = a.bat; text = a.bat.name + ' won by ' + plural(b.target - 1 - b.runs, 'run') + '.'; }
   commentaryCall('match',{text});
@@ -3181,13 +3236,13 @@ function scorecardHTML(i) {
   return h;
 }
 function renderTabs(tabsId, cardId, sel) {
-  const tabs = $(tabsId), list = M.innings.filter(Boolean);
+  const tabs = $(tabsId), list = allInnings().filter(Boolean);
   tabs.textContent = '';
   sel = Math.min(sel, list.length - 1);
   list.forEach((i, k) => {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'opt' + (k === sel ? ' on' : '');
-    b.innerHTML = '<span class="sw" style="background:' + i.bat.col + '"></span>' + esc(i.bat.short) + ' ' + i.runs + '/' + i.wkts;
+    b.innerHTML = '<span class="sw" style="background:' + i.bat.col + '"></span>' + (i.superOver ? 'SO · ' : '') + esc(i.bat.short) + ' ' + i.runs + '/' + i.wkts;
     b.addEventListener('click', () => renderTabs(tabsId, cardId, k));
     tabs.appendChild(b);
   });
@@ -3277,13 +3332,23 @@ function showTournament(){
     'You: '+TEAMS[tournament.userId].name+' · Next: '+TEAMS[f.a].short+' v '+TEAMS[f.b].short+' · '+fixtureLabel(f);
   $('tournamentPlay').hidden=!f;
   const saved=loadMatch();$('tournamentPlay').textContent=f&&saved?.tournamentId===tournament.id&&saved?.fixtureId===f.id?'Resume match':'Play next match';
-  $('tournamentRules').textContent='Each team plays every opponent once. '+(tournament.kind==='ipl'?'Top four: Qualifier 1, Eliminator, Qualifier 2 and final.':'Top four: semifinals and final.')+' Win: 2 points; tie: 1. Tied knockout: higher league position advances. Other fixtures are simulated. Progress saves on this device.';
+  $('tournamentRules').textContent='Each team plays every opponent once. '+(tournament.kind==='ipl'?'Top four: Qualifier 1, Eliminator, Qualifier 2 and final.':'Top four: semifinals and final.')+' Win: 2 points. Your tied matches go to a Super Over. Other fixtures are simulated (a tie there: 1 point each; in a knockout the higher league position advances). Progress saves on this device.';
   const rows=CricketTournament.standings(tournament);
   $('tournamentTable').innerHTML='<table class="sc"><thead><tr><th>Team</th><th>P</th><th>W</th><th>L</th><th>Pts</th><th>NRR</th></tr></thead><tbody>'+rows.map((r,i)=>'<tr'+(r.id===tournament.userId?' style="color:var(--teal)"':'')+'><td>'+(i+1)+'. '+esc(TEAMS[r.id].short)+'</td><td>'+r.p+'</td><td>'+r.w+'</td><td>'+r.l+'</td><td><b>'+r.pts+'</b></td><td>'+r.nrr.toFixed(2)+'</td></tr>').join('')+'</tbody></table>';
   $('tournamentFixtures').innerHTML=tournament.fixtures.map(x=>{
     const r=x.result;return '<div class="fixture">'+esc(fixtureLabel(x))+' · '+esc(TEAMS[x.a].short)+' v '+esc(TEAMS[x.b].short)+'<br><small>'+
-      (r?esc(TEAMS[x.a].short)+' '+r.a.runs+'/'+r.a.wkts+' · '+esc(TEAMS[x.b].short)+' '+r.b.runs+'/'+r.b.wkts+(r.winner!==null?' · '+esc(TEAMS[r.winner].short)+' won':' · Tied'+(r.advance!==undefined?' · '+esc(TEAMS[r.advance].short)+' advance':'')):'Upcoming')+'</small></div>';
-  }).join('');showScreen('tournament');
+      (r?esc(TEAMS[x.a].short)+' '+r.a.runs+'/'+r.a.wkts+' · '+esc(TEAMS[x.b].short)+' '+r.b.runs+'/'+r.b.wkts+(r.winner!==null?' · '+esc(TEAMS[r.winner].short)+' won'+(r.superOver?' the Super Over':''):' · Tied'+(r.advance!==undefined?' · '+esc(TEAMS[r.advance].short)+' advance':'')):'Upcoming')+'</small></div>';
+  }).join('');
+  // runs and wickets from the matches you played (both sides); your own best player once it is over
+  const st=Object.entries(tournament.stats||{}).map(([n,e])=>({n,...e})),you=TEAMS[tournament.userId].short;
+  const top=(key,head)=>{const rows=st.filter(e=>e[key]>0).sort((a,b)=>b[key]-a[key]||a.b-b.b).slice(0,5);
+    return '<table class="sc"><thead><tr><th>'+head+'</th><th></th><th>'+(key==='r'?'Runs':'Wkts')+'</th></tr></thead><tbody>'+rows.map(e=>'<tr'+(e.t===you?' style="color:var(--teal)"':'')+'><td class="nm">'+esc(e.n)+'</td><td class="how">'+esc(e.t)+'</td><td><b>'+e[key]+'</b></td></tr>').join('')+'</tbody></table>';};
+  $('tournamentStatsBox').hidden=!st.length;
+  $('tournamentStats').innerHTML=st.length?'<div>'+top('r','Most runs')+'</div><div>'+top('w','Most wickets')+'</div>':'';
+  const best=tournament.finished&&awardWinner(Object.fromEntries(st.filter(e=>e.t===you).map(e=>[e.n,e])));
+  $('tournamentAward').innerHTML=best?'<div><span>Your player of the tournament</span><b>'+esc(best.n)+'</b><span class="award-performance">'+esc(awardDetail(best))+'</span></div>':'';
+  $('tournamentStatsBox').open=!!best;
+  showScreen('tournament');
 }
 function playTournament(){
   const f=tournamentNext();if(!f)return showTournament();
@@ -3297,7 +3362,9 @@ function recordTournamentMatch(winner){
   const f=tournament.fixtures.find(x=>x.id===M.fixtureId);if(!f||f.result)return;
   const score=id=>{const i=M.innings.find(x=>TEAMS.indexOf(x.bat)===id);return {runs:i.runs,wkts:i.wkts,balls:i.balls};};
   const tied=!winner&&f.stage!=='league';
-  CricketTournament.record(tournament,f.id,{a:score(f.a),b:score(f.b),winner:winner?TEAMS.indexOf(winner):null});
+  const A=score(f.a),B=score(f.b);
+  CricketTournament.record(tournament,f.id,{a:A,b:B,winner:winner?TEAMS.indexOf(winner):null,...(winner&&A.runs===B.runs?{superOver:true}:{})});
+  addMatchStats(tournament.stats||(tournament.stats={}));   // only the matches you play have players: the rest are simulated
   CricketTournament.next(tournament);saveTournament();
   if(tied){const advanced=f.result.advance??f.result.winner;if(advanced!==null&&advanced!==undefined)$('endSub').textContent+=' '+TEAMS[advanced].name+' advance on league position.';}
 }
@@ -3322,7 +3389,9 @@ function seriesState(sr) {
   return { w, l, done, decided, remaining, text, won: (done || decided) && w > l };
 }
 // runs and wickets across the series, for the player of the series
-function seriesAddStats(sr) {
+const seriesAddStats = sr => addMatchStats(sr.stats);
+function addMatchStats(stats) {   // this match's runs, balls and wickets by player name, added to a running table
+  const sr = { stats };
   for (const i of M.innings) {
     i.cards.forEach((c, k) => { if (!c.in) return; const p = i.bat.players[k], e = sr.stats[p.name] || (sr.stats[p.name] = { t: i.bat.short, r: 0, b: 0, w: 0 }); e.r += c.runs; e.b += c.balls; });
     for (const k of i.bowlOrder) { const p = i.bowl.players[k], e = sr.stats[p.name] || (sr.stats[p.name] = { t: i.bowl.short, r: 0, b: 0, w: 0 }); e.w += i.bowlers[k].wkts; }
@@ -3392,7 +3461,9 @@ function startToss() {
     M.teams[0].name + ' v ' + M.teams[1].name + ', ' + M.overs + ' overs a side. Call it:';
   $('tossTitle').innerHTML = sr ? 'MATCH <span>' + (sr.games.length + 1) + ' OF ' + sr.n + '</span>' : 'THE <span>TOSS</span>';
   tossButtons([['Heads', () => callToss('heads')], ['Tails', () => callToss('tails')]]);
-  showScreen('toss');
+  ball = null; RP = null; MIR = 1; resetCoin(); showScreen('toss');
+  $('toss').classList.toggle('scene', !!R3D && R3D.active());   // in 3D the card moves down and the pitch shows above it
+  if (tossOn()) { cam.pos = [0.55, 1.45, TOSS_Z - 4.6]; cam.tgt = [0, 0.9, TOSS_Z]; cam.fov = 38; }
 }
 function tossButtons(list) {
   const box = $('tossBtns');
@@ -3404,8 +3475,81 @@ function tossButtons(list) {
     box.appendChild(b);
   });
 }
+// ---- the toss in 3D: both captains and an umpire in the middle of the pitch; your captain flips the coin, it lands on the pitch
+// and the camera looks down at it. Without 3D the card's own coin (CSS) is flipped instead.
+const TOSS_Z = PITCH / 2, TOSS_T = 1.25;   // where they stand; seconds the coin is in the air
+const COIN_HAND = [-0.34, 1.12, TOSS_Z - 0.04], COIN_LAND = [0.02, 0.006, TOSS_Z - 0.18];
+let tossFx = null;   // { t0, end } once the coin is flipped (end: its final turn, radians; tails = a half turn more)
+const tossOn = () => !!M && M.mode === 'match' && !$('toss').hidden && !!R3D && R3D.active();
+function tossCoin() {   // the coin in game space: { pos, ang } (ang: its turn about the x axis; 0 = heads up)
+  if (!tossOn()) return null;
+  if (!tossFx) return { pos: COIN_HAND.slice(), ang: 0 };
+  const t = Math.min(clock - tossFx.t0, TOSS_T), u = t / TOSS_T, vy = (G * TOSS_T * TOSS_T / 2 + COIN_LAND[1] - COIN_HAND[1]) / TOSS_T;
+  return { pos: [lerp(COIN_HAND[0], COIN_LAND[0], u), Math.max(COIN_LAND[1], COIN_HAND[1] + vy * t - G * t * t / 2), lerp(COIN_HAND[2], COIN_LAND[2], u)], ang: tossFx.end * u };
+}
+function tossPeople() {
+  const coin = tossCoin(), t = tossFx ? clock - tossFx.t0 : -1, list = [];
+  const lookAt = (head, p) => p ? norm(sub(p, head)) : null;
+  for (const [k, pos, face] of [[0, [-0.75, 0, TOSS_Z], 3 * Math.PI / 4], [1, [0.75, 0, TOSS_Z], -3 * Math.PI / 4]]) {
+    let handR;
+    if (k === 0) {   // the coin in his hand, a flick of the thumb, then the hand drops
+      const flick = t < 0 ? 0 : t < 0.12 ? t / 0.12 : Math.max(0, 1 - (t - 0.12) / 0.35);
+      handR = t < 0.5 ? add(COIN_HAND, [0, -0.04 + 0.16 * flick, 0]) : undefined;
+    }
+    let j = figure(pos, face, { seed: 60 + k, handR });
+    if (CLIPS && t < 0) j.handL = mixJ(j, placeClip(clipAt('idle', clock * 0.8 + k), pos, face), 0.6).handL;
+    // two different builds: yours a little taller, theirs shorter and broader
+    const [sy, sw] = k ? [0.95, 1.07] : [1.03, 0.98];
+    for (const n in j) if (!/^foot(Dir|Pitch)/.test(n)) { const d = sub(j[n], pos); j[n] = add(pos, [d[0] * sw, d[1] * sy, d[2] * sw]); }
+    if (k === 0 && handR) j.handR = handR;   // the coin stays in his fingers whatever his build
+    const p = M.teams[k].players[0];
+    list.push({ j, at: pos, team: k ? 'bowl' : 'bat', bare: true, faceKey: k, pid: p ? p.name : 'captain' + k, look: lookAt(j.head, t >= 0 && coin ? coin.pos : null) });
+  }
+  const up = [0, 0, TOSS_Z + 0.8], uj = figure(up, Math.PI, { seed: 41 });
+  list.push({ j: uj, at: up, team: 'ump', umpire: true, faceKey: 2, pid: 'umpire0', look: lookAt(uj.head, t >= 0 && coin ? coin.pos : null) });
+  return list;
+}
+function tossCam(dt) {   // update0 while the toss is on: close on the three of them, up with the coin, then down onto it
+  const c = tossCoin(), t = tossFx ? clock - tossFx.t0 : -1, down = smooth(clamp((t - TOSS_T - 0.05) / 0.5, 0, 1));
+  let tp = [0.55, 1.45, TOSS_Z - 4.6], tt = [0, 0.9 + (c && t >= 0 ? clamp(c.pos[1] - 1.1, 0, 1.6) * 0.5 : 0), TOSS_Z], tf = 38;
+  if (down > 0) { tp = lerp3(tp, [COIN_LAND[0] + 0.12, 0.72, COIN_LAND[2] - 0.75], down); tt = lerp3(tt, COIN_LAND, down); tf = lerp(tf, 30, down); }
+  const k = 1 - Math.exp(-6 * dt);
+  cam.pos = lerp3(cam.pos, tp, k); cam.tgt = lerp3(cam.tgt, tt, k); cam.fov = lerp(cam.fov, tf, k);
+}
+// the coin goes up spinning and lands showing the side that came up; buttons come back once it has landed
+let tossToken = 0;
+function flipCoin(side, done) {
+  const el = $('coin'), sh = $('coinShadow'), token = ++tossToken;
+  if (tossOn()) {   // in 3D, on the pitch
+    tossFx = { t0: clock, end: Math.PI * 2 * 7 + (side === 'tails' ? Math.PI : 0) };
+    sndCoin(TOSS_T);
+    setTimeout(() => { if (token === tossToken && !$('toss').hidden) done(); }, (TOSS_T + 1.0) * 1000);
+    return;
+  }
+  const calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches, short = innerHeight <= 460;
+  const dur = calm ? 350 : 1350, up = calm ? 0 : short ? -38 : -120, turns = calm ? 1 : 6, end = turns * 360 + (side === 'tails' ? 180 : 0);
+  if (el.animate) {
+    el.animate([{ transform: 'translateY(0) rotateX(0deg)', easing: 'cubic-bezier(.2,.7,.4,1)' },
+      { transform: 'translateY(' + up + 'px) rotateX(' + end * 0.55 + 'deg)', offset: 0.5, easing: 'cubic-bezier(.6,0,.8,.3)' },
+      { transform: 'translateY(0) rotateX(' + end + 'deg)' }], { duration: dur, fill: 'forwards' });
+    sh.animate([{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(.45)', opacity: 0.35, offset: 0.5 }, { transform: 'scale(1)', opacity: 1 }], { duration: dur });
+  } else el.style.transform = 'rotateX(' + end + 'deg)';
+  sndCoin(dur / 1000);
+  setTimeout(() => { if (token === tossToken && !$('toss').hidden) done(); }, dur + 150);
+}
+function sndCoin(land) {   // a metallic flick, then the ring of it landing
+  ping(3300, 0.18, 0.03, 0, 'sine', 2900); ping(4900, 0.12, 0.015, 0.01);
+  ping(2500, 0.22, 0.035, land); ping(3700, 0.16, 0.015, land + 0.01);
+}
+function resetCoin() { const el = $('coin'); tossFx = null; if (!el) return; tossToken++; for (const a of el.getAnimations ? el.getAnimations() : []) a.cancel(); el.style.transform = ''; }
 function callToss(call) {
-  const coin = Math.random() < 0.5 ? 'heads' : 'tails', opp = M.teams[1];
+  const coin = Math.random() < 0.5 ? 'heads' : 'tails';
+  $('tossBtns').textContent = '';
+  $('tossText').textContent = 'You called ' + call + '…';
+  flipCoin(coin, () => tossResult(call, coin));
+}
+function tossResult(call, coin) {
+  const opp = M.teams[1];
   if (coin === call) {
     $('tossText').textContent = 'It\'s ' + coin + '. You won the toss. Bat or bowl first?';
     tossButtons([['Bat first', () => beginMatch(true)], ['Bowl first', () => beginMatch(false)]]);
@@ -3435,7 +3579,7 @@ function openPick() {
   showControls();
   pickSel = aiPickBowler(); fieldSel = aiField(pickSel);
   const overNo = Math.floor(inn.balls / 6) + 1;
-  $('pickTitle').textContent = 'Over ' + overNo + ' of ' + M.overs;
+  $('pickTitle').textContent = inn.superOver ? 'Super Over' : 'Over ' + overNo + ' of ' + M.overs;
   $('pickSit').textContent = inn.bat.name + ' ' + inn.runs + '/' + inn.wkts +
     (inn.target ? ', need ' + Math.max(0, inn.target - inn.runs) + ' off ' + (inn.maxBalls - inn.balls) : '') +
     '. Each bowler can bowl ' + plural(overLimit(), 'over') + ', not two in a row.';
@@ -3641,7 +3785,7 @@ function update(dt) {
   hint.hidden = !showHint;
 
   // between balls
-  if (phase === 'result' && phaseT > (celebrate && (celebrate.out || celebrate.milestone) ? 3.0 : 2.1)) afterBall();
+  if (phase === 'result' && phaseT > Math.max(celebrate && (celebrate.out || celebrate.milestone) ? 3.0 : 2.1, sigEnd(celebrate) + (celebrate && celebrate.out ? 2.3 : 0.5))) afterBall();
 
   // camera
   const HC = homeCam(); let tp = HC.pos, tt = HC.tgt, tf = HC.fov, rate = 2.5;
@@ -3681,7 +3825,14 @@ function update(dt) {
     if (cam.end !== end) { cam.end = end; cam.pos = tp.slice(); cam.tgt = tt.slice(); cam.fov = tf; }
   } else cam.end = 0;
   // a wicket (3D): cut to a close-up of the batter walking off, the stumps behind him
-  const wk = phase === 'result' && celebrate && celebrate.out && phaseT > 0.7 && !RP && R3D && R3D.active();
+  // the umpire signalling: a cut to him from in front, full length so raised arms fit
+  const uc = phase === 'result' && !RP && phaseT > sigStart(celebrate) - 0.05 && phaseT < sigEnd(celebrate);
+  if (uc) {   // he stands right of centre, clear of the result banner in the middle (on an upright phone there is no room: centred, a little lower)
+    const d = 6.2, half = Math.tan(14 * deg) * d * W / H, off = Math.min(1.1, half * 0.5) * (W > H ? 1 : 0);
+    tp = [UMP_AT[0] - 0.35 + off, 1.6, UMP_AT[2] - d]; tt = [UMP_AT[0] + off, W > H ? 1.3 : 2.3, UMP_AT[2]]; tf = 28; rate = 8;
+  }
+  if (!!cam.uc !== uc) { cam.uc = uc; cam.pos = tp.slice(); cam.tgt = tt.slice(); cam.fov = tf; }   // cut, don't swoop
+  const wk = phase === 'result' && celebrate && celebrate.out && phaseT > Math.max(0.7, sigEnd(celebrate)) && !RP && R3D && R3D.active();
   if (wk) {
     const u = phaseT - 0.7, f = -2.2, d = [Math.sin(f), 0, Math.cos(f)], at = [0.6 + guard + d[0] * u * 1.2, 0, 0.75 + d[2] * u * 1.2];
     const wide = W > H * 1.2, off = wide ? -1.0 : 0;   // on wide screens he stands right of centre, the banner to his left
@@ -3693,7 +3844,7 @@ function update(dt) {
 }
 
 // where the ball is now
-function ballPos() { const b = RP ? RP.ball : liveBallPos(); return MIR < 0 ? mx(b) : b; }
+function ballPos() { if (tossOn()) return null; const b = RP ? RP.ball : liveBallPos(); return MIR < 0 ? mx(b) : b; }
 // The striker's stumps as drawn: lean of each stump and the flying bails, mirrored for a left-hander
 function stumpsNow() {
   const b = RP ? RP.snap : ball;
@@ -3755,7 +3906,8 @@ function renderMirrored() {
     if (pr.team === 'bat') {
       const t = inn ? inn.bat : null;
       drawCricketer(pr, { shirt: t ? t.col : '#3d7dff', pants: t ? t.dark : '#173f99', trim: t ? t.dark : '#173f99', pads: true, gloves: true, helmet: pr.helmet || '#18245a' });
-    } else if (pr.bowler) drawCricketer(pr, { shirt: fc, pants: fd, trim: fd });
+    } else if (pr.umpire) drawCricketer(pr, { shirt: '#efece3', pants: '#23262d', trim: '#23262d', cap: '#1b1d22' });
+    else if (pr.bowler) drawCricketer(pr, { shirt: fc, pants: fd, trim: fd });
     else if (pr.keeper) drawCricketer(pr, { shirt: fc, pants: fd, trim: fd, pads: true, gloves: true, helmet: fd });
     else drawCricketer(pr, { shirt: fc, pants: fd, trim: fd, cap: fd });
   });
@@ -3795,7 +3947,7 @@ function renderMirrored() {
 }
 
 // everyone on the field this frame: joints (world metres), team ('bat' | 'bowl'), bat, keeper; `at` = where they stand
-function people() { const p = RP ? RP.people : livePeople(); return MIR < 0 ? p.map(mirrorPerson) : p; }
+function people() { const p = RP ? RP.people : tossOn() ? tossPeople() : livePeople(); return MIR < 0 ? p.map(mirrorPerson) : p; }
 // --- left-handers. The rules, physics and computer players all work for a right-hander. When a left-hander is on strike,
 // the picture is mirrored instead: everything that moves (players, ball, camera, marks on the pitch, the mini-map) has its x
 // negated, and each body's left and right are swapped so it isn't drawn inside out. The controls are mirrored too, so left
@@ -4154,7 +4306,46 @@ function livePeople() {
     }
     out.push({ j, at: pos, team: 'bowl', keeper: !!f.keeper, bowler: !!f.bowler, pid: fid(f.who), look: null });
   }
+  out.push(...umpires());
   return out;
+}
+// the two umpires: one behind the stumps at the bowler's end (off the bowler's line), one at square leg. The bowler's-end umpire
+// gives the signals after a ball (celebrate.signals); the one at square leg watches the ball once it is hit.
+const UMP_SIG = 0.9;   // seconds per signal
+const UMP_AT = [-0.08, 0, PITCH + 2.4];   // the bowler's-end umpire: in the middle, behind the stumps (the bowler passes 0.5 m to his right)
+// when the signals run (phase 'result'): from S0 for UMP_SIG each; the camera cuts to the umpire for them (umpCam in update())
+const sigStart = c => c && c.out ? 0.35 : 0.6;
+const sigEnd = c => c && c.signals && c.signals.length ? sigStart(c) + c.signals.length * UMP_SIG : 0;
+function umpires() {
+  const list = [], sig = phase === 'result' && celebrate ? celebrate.signals || [] : [];
+  for (const [k, pos, face] of [[0, UMP_AT, Math.PI], [1, [19, 0, 0.9], -Math.PI / 2]]) {
+    let j = figure(pos, face, { seed: 40 + k });
+    if (CLIPS) j = mixJ(j, placeClip(clipAt('idle', clock * 0.8 + k * 1.3), pos, face), 0.7);
+    let look = null;
+    if (k === 0 && sig.length) {
+      const t = phaseT - sigStart(celebrate), n = Math.floor(t / UMP_SIG), u = t - n * UMP_SIG, s = sig[n];
+      const w = s && t >= 0 ? smooth(clamp(u / 0.22, 0, 1)) * (n === sig.length - 1 ? 1 : 1 - smooth(clamp((u - UMP_SIG + 0.18) / 0.18, 0, 1))) : 0;
+      if (w > 0) {
+        const F = [Math.sin(face), 0, Math.cos(face)], L = [Math.cos(face), 0, -Math.sin(face)];
+        const P = (a, b, h) => add(pos, add(add(mul(F, a), mul(L, b)), [0, h, 0]));
+        const wave = Math.sin(t * 9), spin = t * 8;
+        const [hl, hr] = {
+          out: [null, P(0.12, -0.22, 2.3)],                                        // the finger raised
+          nb: [null, P(0.05, -0.85, 1.62)],                                         // one arm out level
+          wide: [P(0.05, 0.85, 1.62), P(0.05, -0.85, 1.62)],                        // both arms out level
+          six: [P(0.04, 0.2, 2.4), P(0.04, -0.2, 2.4)],                         // both arms straight up
+          four: [null, P(0.5, -0.17 + 0.33 * wave, 1.38)],                          // the arm swept to and fro across the chest
+          fh: [null, P(0.12 + 0.13 * Math.cos(spin), -0.2 + 0.13 * Math.sin(spin), 1.98)],   // a circle above the head: free hit
+        }[s];
+        for (const [side, h] of [['L', hl], ['R', hr]]) if (h) {
+          j['hand' + side] = lerp3(j['hand' + side], h, w);
+          j['el' + side] = add(lerp3(j['sh' + side], j['hand' + side], 0.48), mul(L, side === 'L' ? 0.015 : -0.015));   // a straight arm
+        }
+      }
+    } else if (k === 1 && ball && ball.play) { const bp = liveBallPos(); if (bp) look = norm([bp[0] - pos[0], 0, bp[2] - pos[2]]); }
+    list.push({ j, at: pos, team: 'ump', umpire: true, faceKey: 2 + k, pid: 'umpire' + k, look });
+  }
+  return list;
 }
 
 // what you swiped: an arrow under your finger and the shot's name (no arrow on the field: the owner found it distracting)
@@ -4405,11 +4596,12 @@ function tick(dt) {
   else if (ACTIVE.has(phase)) {
     const n = ff ? 4 : 1; for (let s = 0; s < n && ACTIVE.has(phase); s++) update(dt);
     if (R3D && R3D.active()) recFrame(dt * n);
-    if (phase === 'result' && rec.kind && !rec.shown && phaseT > (celebrate && celebrate.out ? 2.0 : 1.0)) { rec.shown = true; if (canReplay()) startReplay(); }
+    if (phase === 'result' && rec.kind && !rec.shown && phaseT > Math.max(celebrate && celebrate.out ? 2.0 : 1.0, sigEnd(celebrate) + (celebrate && celebrate.out ? 1.3 : 0.2))) { rec.shown = true; if (canReplay()) startReplay(); }
   }
   else { clock += dt; update0(dt); }
 }
-function update0(dt) {   // behind the menus: slow drift of the camera
+function update0(dt) {   // behind the menus: slow drift of the camera (the toss has its own)
+  if (tossOn()) return tossCam(dt);
   const a = clock * 0.05;
   cam.pos = [Math.sin(a) * 40, 16, Math.cos(a) * 40 + 8]; cam.tgt = [0, 0, 8]; cam.fov = 42;
   cheer = Math.max(0, cheer - dt * 0.4);
@@ -4496,6 +4688,7 @@ for (const b of $('shotSel').querySelectorAll('button')) {
   b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); audio(); setShot(b.dataset.k); });
 }
 if (!touch) { $('shotSel').style.display = 'none'; $('batSide').style.display = 'none'; }
+else setShot(shotType);   // light the starting choice (LOFT)
 for (const [id, fn] of [['moveL', () => moveGuard(-1)], ['moveR', () => moveGuard(1)], ['btnStep', () => {
   if (!canBat() || (ball && (ball.swing || ball.left || ball.charge))) return;
   if (phase === 'flight' && ball) applyCharge(); else if (phase === 'wait' || phase === 'runup') wantCharge = true;
@@ -4607,7 +4800,7 @@ $('tournamentPlay').addEventListener('click',()=>{audio();playTournament();});
 $('tournamentBack').addEventListener('click',toMenu);
 $('tournamentNew').addEventListener('click',()=>{setup.tournament=true;setup.series=0;cupReplaceArmed=false;renderSetup();showScreen('setup');});
 renderTournamentLine();
-$('breakGo').addEventListener('click', () => { audio(); startInnings(1); });
+$('breakGo').addEventListener('click', () => { audio(); nextInnings(); });
 $('pickGo').addEventListener('click', pickGo);
 $('pickPause').addEventListener('click', () => { $('pick').hidden = true; openPause(); });
 $('pickAuto').addEventListener('click', () => { audio(); setAutoBowl(true); });
@@ -4638,7 +4831,7 @@ let R3D = null;
 try {
   R3D = window.Cricket3D ? window.Cricket3D({
     touch, LIGHTS, BOARDS, STAND_IN, STAND_OUT, STAND_H, PITCH, CREASE, ROPE, lerp, people, ballPos, cam, deg, $,
-    get cheer() { return cheer; }, get clock() { return clock; }, get inn() { return inn; }, get M() { return M; },
+    get cheer() { return cheer; }, get clock() { return clock; }, get inn() { return inn || (tossOn() ? { bat: M.teams[0], bowl: M.teams[1] } : null); }, get M() { return M; }, get coin() { return tossCoin(); },
     get ball() { return RP ? RP.snap : ball; }, get stumps() { return stumpsNow(); }, get W() { return W; }, get H() { return H; }, get camShift() { return camShift; }, viewZoom, get projectionFocal() { return focal; },
   }) : null;
 } catch (e) { R3D = null; }

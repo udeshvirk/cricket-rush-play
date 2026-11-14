@@ -303,6 +303,18 @@ window.Cricket3D = function (G) {
   const stumpsNear = makeStumps(0), stumpsFar = makeStumps(PITCH);
 
   // ---------------------------------------------------------------- the ball
+  // the toss coin (G.coin): gold, a star on the heads side and stumps on the tails side; drawn larger than life so it reads on screen
+  const coinFace = draw => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+    const gr = g.createRadialGradient(48, 44, 6, 64, 64, 64); gr.addColorStop(0, '#ffe7a3'); gr.addColorStop(0.6, '#f0b43c'); gr.addColorStop(1, '#b8801f');
+    g.fillStyle = gr; g.beginPath(); g.arc(64, 64, 64, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#ffe08a'; g.lineWidth = 4; g.beginPath(); g.arc(64, 64, 54, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = '#7a4f0e'; draw(g); const t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; return t; };
+  const coinHeads = coinFace(g => { g.beginPath(); for (let i = 0; i < 10; i++) { const r = i % 2 ? 15 : 34, a = i * Math.PI / 5 - Math.PI / 2; g.lineTo(64 + r * Math.cos(a), 64 + r * Math.sin(a)); } g.fill(); });
+  const coinTails = coinFace(g => { g.fillRect(38, 36, 52, 8); for (const x of [41, 59, 77]) g.fillRect(x, 48, 10, 48); });
+  const coinGold = new T.MeshStandardMaterial({ color: 0xe0a83a, metalness: 0.8, roughness: 0.35 });
+  const coinMesh = new T.Mesh(new T.CylinderGeometry(0.075, 0.075, 0.012, 40), [coinGold,
+    new T.MeshStandardMaterial({ map: coinHeads, metalness: 0.55, roughness: 0.4 }), new T.MeshStandardMaterial({ map: coinTails, metalness: 0.55, roughness: 0.4 })]);
+  coinMesh.castShadow = true; coinMesh.visible = false; scene.add(coinMesh);
   const ballMesh = new T.Mesh(new T.SphereGeometry(window.CR_PLAYER_PRODUCTION?.reference ? .036 : .045, 14, 10), new T.MeshBasicMaterial({ color: 0xffffff }));
   scene.add(ballMesh);
   // A compact highlight keeps the ball readable without washing out the
@@ -324,6 +336,7 @@ window.Cricket3D = function (G) {
   const mat = c => new T.MeshStandardMaterial({ color: c, roughness: 0.7 });
   const M3 = {
     batShirt: mat('#3d7dff'), batPants: mat('#173f99'), bowlShirt: mat('#ffd23c'), bowlPants: mat('#0e6b40'), batTrim: mat('#ffffff'), bowlTrim: mat('#ffffff'),
+    umpShirt: mat('#efece3'), umpPants: mat('#23262d'),   // the umpires: cream shirt, dark trousers, no team colours
     helmet: new T.MeshStandardMaterial({ color: 0x173f99, roughness: LOOK_REFINED || LOOK_PLAYER ? 0.7 : 0.62, metalness: 0.05 }),
     grille: new T.MeshStandardMaterial({ color: window.CR_PLAYER_PRODUCTION?.reference ? 0x434a4c : 0x9aa0aa,
       metalness: LOOK_REFINED ? .72 : .8, roughness: window.CR_PLAYER_PRODUCTION?.reference ? .48 : LOOK_REFINED ? .42 : .3 }),
@@ -515,7 +528,16 @@ window.Cricket3D = function (G) {
     const two = m => { m.side = T.DoubleSide; return m; };
     const steel = new T.MeshStandardMaterial({ color: 0x3a3f47, metalness: 0.75, roughness: 0.42 }), strapM = new T.MeshStandardMaterial({ color: 0x15171c, roughness: 0.9 });
     const seamM = new T.MeshStandardMaterial({ color: 0x000000, roughness: 0.9, transparent: true, opacity: 0.25 });
-    return { helmet: [[helmetShell, two(M3.helmet)], [merge(bars), steel], [merge(strap), strapM]], cap: [[capGeo, two(M3.cap)], [merge(band), seamM]] };
+    // ---- the umpire's hat: a tapered crown that sits down over the head, a dark band and a wide brim that dips a little
+    // it sits on the head just above the brow, so the face shows under the brim (Person tips it back a little too)
+    const crown = new T.CylinderGeometry(0.094, 0.108, 0.088, 40, 1, false); crown.translate(0, 0.212, 0); crown.scale(1, 1, 1.2);
+    const hband = new T.CylinderGeometry(0.1095, 0.1102, 0.022, 40, 1, true); hband.translate(0, 0.18, 0); hband.scale(1, 1, 1.2);
+    const brim = new T.LatheGeometry([[0.104, 0.17], [0.13, 0.169], [0.17, 0.162], [0.21, 0.148], [0.215, 0.144]].map(([x, y]) => new T.Vector2(x, y)), 40);
+    brim.scale(1, 1, 1.12);
+    for (const g of [crown, hband, brim]) g.translate(0, -0.035, 0);   // down onto the head so it doesn't float
+    const hatM = new T.MeshStandardMaterial({ color: 0x1b1d22, roughness: 0.8 }), hatBand = new T.MeshStandardMaterial({ color: 0xefece3, roughness: 0.8 });   // black, a light band
+    return { helmet: [[helmetShell, two(M3.helmet)], [merge(bars), steel], [merge(strap), strapM]], cap: [[capGeo, two(M3.cap)], [merge(band), seamM]],
+             hat: [[crown, hatM], [hband, two(hatBand)], [brim, two(hatM)]] };
   })();
 
   function part(geo, m, parent) { const x = new T.Mesh(geo, m); x.castShadow = true; x.matrixAutoUpdate = true; parent.add(x); return x; }
@@ -546,6 +568,7 @@ window.Cricket3D = function (G) {
   function drawBack(b, name, ink) {
     if (b.who === name + ink) return; b.who = name + ink;
     const g = b.c.getContext('2d'); g.clearRect(0, 0, 256, 256);
+    if (!name) { b.t.needsUpdate = true; return; }   // a plain shirt (the umpires)
     const sur = (name.split(' ').pop() || '').toUpperCase().slice(0, 10), num = 1 + (hash(name) % 98);
     g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = ink;
     g.font = '800 30px "Big Shoulders Display", Impact, sans-serif'; g.fillText(sur, 128, 62);
@@ -971,8 +994,8 @@ window.Cricket3D = function (G) {
       this.shades = H(box, SHADE); this.shades.scale.set(0.15, 0.028, 0.02); this.shades.position.set(0, 0.022, 0.1);
       // helmet and cap (HEADGEAR, built once): measured for the player's head, origin at the head bone
       this.gear = new T.Group(); h.add(this.gear);
-      this.helmet = new T.Group(); this.cap = new T.Group(); this.gear.add(this.helmet, this.cap);
-      for (const [grp, list] of [[this.helmet, HEADGEAR.helmet], [this.cap, HEADGEAR.cap]])
+      this.helmet = new T.Group(); this.cap = new T.Group(); this.hat = new T.Group(); this.hat.rotation.x = -0.12; this.gear.add(this.helmet, this.cap, this.hat);
+      for (const [grp, list] of [[this.helmet, HEADGEAR.helmet], [this.cap, HEADGEAR.cap], [this.hat, HEADGEAR.hat]])
         for (const [geo, m] of list) { const x = new T.Mesh(geo, m); x.castShadow = true; x.frustumCulled = false; grp.add(x); }
       this.handle = P(cyl, M3.grip); this.blade = P(box, M3.blade); this.spine = P(box, M3.blade);
     }
@@ -1214,18 +1237,18 @@ window.Cricket3D = function (G) {
       if (P.KIT_Trousers) P.KIT_Trousers.material.color.copy(pants.color);
       if (P.KIT_Trim) P.KIT_Trim.material.color.copy(pants.color).multiplyScalar(0.8);
       if (P.RB_Body) {
-        const team = G.inn ? G.inn[pr.team === 'bat' ? 'bat' : 'bowl'] : null, ub = P.RB_Body.material.userData.u, uh = P.RB_Head.material.userData.u;
-        ub.uShirt.value.copy(shirt.color); ub.uPants.value.copy(pants.color); ub.uTrim.value.copy(shirt === M3.batShirt ? M3.batTrim.color : M3.bowlTrim.color);
-        const pool = (team && FACE_POOL[team.id]) || MIX, [fi, shade] = pool[skinIdx % pool.length], face = RIG.faces[fi % RIG.faces.length];
+        const team = G.inn && !pr.umpire ? G.inn[pr.team === 'bat' ? 'bat' : 'bowl'] : null, ub = P.RB_Body.material.userData.u, uh = P.RB_Head.material.userData.u;
+        ub.uShirt.value.copy(shirt.color); ub.uPants.value.copy(pants.color); ub.uTrim.value.copy(shirt === M3.batShirt ? M3.batTrim.color : shirt === M3.umpShirt ? M3.umpPants.color : M3.bowlTrim.color);
+        const pool = (team && FACE_POOL[team.id]) || MIX, [fi, shade] = pool[(pr.faceKey ?? skinIdx) % pool.length], face = RIG.faces[fi % RIG.faces.length];
         if (face && face.map && P.RB_Head.material.map !== face.map) { P.RB_Head.material.map = face.map; P.RB_Head.material.needsUpdate = true; }
         uh.uSkin.value.setRGB(shade, shade * (0.9 + 0.1 * shade), shade * (0.82 + 0.18 * shade));
         if (face && RIG.bodySkin) ub.uSkin.value.setRGB(face.skin.r / RIG.bodySkin.r, face.skin.g / RIG.bodySkin.g, face.skin.b / RIG.bodySkin.b).multiply(uh.uSkin.value);
         const ink = inkFor(shirt.color);
-        drawBack(this.back, pr.pid || '', ink);
+        drawBack(this.back, pr.umpire ? '' : pr.pid || '', ink);
         const ct = chestTex(team, shirt.color);
         if (P.RB_Chest.material.map !== ct) { P.RB_Chest.material.map = ct; P.RB_Chest.material.needsUpdate = true; }
       }
-      if (this.isProduction) PRODUCTION.setAppearance(P, shirt.color, pants.color, SKIN_TONES[skinIdx % SKIN_TONES.length], G.inn?.[pr.team==='bat'?'bat':'bowl']?.id);
+      if (this.isProduction) PRODUCTION.setAppearance(P, shirt.color, pants.color, SKIN_TONES[skinIdx % SKIN_TONES.length], pr.umpire ? undefined : G.inn?.[pr.team==='bat'?'bat':'bowl']?.id);
       if(this.isProduction && PRODUCTION.reference && P.SKIN_Human?.morphTargetDictionary?.Blink!==undefined) {
         const t=(G.clock+skinIdx*.613)%4.7;
         const close=t<.12?T.MathUtils.smoothstep(t,0,.12):1-T.MathUtils.smoothstep(t,.16,.28);
@@ -1253,7 +1276,7 @@ window.Cricket3D = function (G) {
     set(pr) {
       const j = pr.j, bat = pr.team === 'bat', keeper = !!pr.keeper;
       if (this.model) this.model.visible = true;
-      const shirt = bat ? M3.batShirt : M3.bowlShirt, pants = bat ? M3.batPants : M3.bowlPants;
+      const ump = !!pr.umpire, shirt = bat ? M3.batShirt : ump ? M3.umpShirt : M3.bowlShirt, pants = bat ? M3.batPants : ump ? M3.umpPants : M3.bowlPants;
       const hs = hash(pr.pid || 'x'), skin = SKIN[hs % SKIN.length];
       this.g.visible = true;
       // the body's own axes: across the shoulders (vs), up the spine (vu), forward (vf)
@@ -1264,7 +1287,7 @@ window.Cricket3D = function (G) {
       vf.crossVectors(vs, vu).normalize();
       const side = vs.clone(), fwd = vf.clone(), yawB = Math.atan2(fwd.x, fwd.z);
       // legs: batters and the keeper wear pads over the shins
-      const padded = bat || keeper;
+      const padded = (bat || keeper) && !pr.bare;
       for (const [th, sh, pd, kn, ft, so, hip, knee, foot] of [[this.thighL, this.shinL, this.padL, this.kneeL, this.footL, this.soleL, j.hipL, j.kneeL, j.footL],
                                                               [this.thighR, this.shinR, this.padR, this.kneeR, this.footR, this.soleR, j.hipR, j.kneeR, j.footR]]) {
         th.material = pants; seg(th, hip, knee, 0.078);
@@ -1303,16 +1326,16 @@ window.Cricket3D = function (G) {
       this.headG.position.set(hp[0], hp[1], hp[2]); this.headG.rotation.set(-0.08, yaw, 0, 'YXZ');
       this.gear.position.set(0, -0.105, 0.0);   // without the model, the head joint is the middle of the head
       for (const m of [this.skull, this.jaw, this.nose, this.earL, this.earR]) m.material = skin;
-      const helm = bat || keeper;
-      this.helmet.visible = helm; this.cap.visible = !helm; this.hair.visible = !helm;
+      const helm = (bat || keeper) && !pr.bare;
+      this.helmet.visible = helm; this.cap.visible = !helm && !ump && !pr.bare; this.hat.visible = ump; this.hair.visible = !helm && !ump;
       this.shades.visible = !helm && hs % 3 === 0;
       // the bat: handle, a flat blade and the ridge down its back
       if (this.model) this.fit(pr, fwd, side, hs, shirt, pants);
       const hasBat = !!pr.bat, eq = !!this.eqBat;
       if (eq) {   // the equipment models replace the shape-built bat, pads, helmet and cap
         const mh = EQUIP_OPT.helmet === 'model';
-        this.helmet.visible = helm && !mh; this.cap.visible = !helm && !mh;
-        this.eqHelmet.visible = helm && mh; this.eqCap.visible = !helm && mh;
+        this.helmet.visible = helm && !mh; this.cap.visible = !helm && !mh && !ump && !pr.bare;
+        this.eqHelmet.visible = helm && mh; this.eqCap.visible = !helm && mh && !ump && !pr.bare;
         this.padL.visible = this.padR.visible = false;
         for (const [o, knee, foot, sx] of [[this.eqPadL, j.kneeL, j.footL, 1], [this.eqPadR, j.kneeR, j.footR, -1]]) {
           o.visible = padded;
@@ -1345,7 +1368,7 @@ window.Cricket3D = function (G) {
     }
   }
   const pool = [];
-  for (let i = 0; i < 14; i++) pool.push(new Person());
+  for (let i = 0; i < 16; i++) pool.push(new Person());   // 13 or 14 players and the two umpires
   if(PRODUCTION) PRODUCTION.framing=()=>{
     scene.updateMatrixWorld(true);
     return pool.slice(0,3).map((p,index)=>{
@@ -1442,7 +1465,7 @@ window.Cricket3D = function (G) {
       ball:ballMesh.visible?ballMesh.position.clone().project(camera).toArray():null};
   };
   const blobs = [];
-  for (let i = 0; i < 14; i++) { const b = new T.Mesh(blobGeo, blobMat); b.scale.set(0.9, 1, 0.9); b.position.y = 0.012; scene.add(b); blobs.push(b); }
+  for (let i = 0; i < 16; i++) { const b = new T.Mesh(blobGeo, blobMat); b.scale.set(0.9, 1, 0.9); b.position.y = 0.012; scene.add(b); blobs.push(b); }
 
   // ---------------------------------------------------------------- the TV look (pmndrs postprocessing, vendor/)
   // glow around the floodlights and the ball, filmic tone mapping, a slightly calmer colour grade and a soft vignette
@@ -1560,6 +1583,7 @@ window.Cricket3D = function (G) {
     const perfFitEnd = perf ? performance.now() : 0;
     blobs.forEach((b, i) => { b.visible = i < list.length; if (b.visible) b.position.set(list[i].at[0], 0.012, list[i].at[2]); });
 
+    { const c = G.coin; coinMesh.visible = !!c; if (c) { coinMesh.position.set(c.pos[0], c.pos[1], c.pos[2]); coinMesh.rotation.set(c.ang, 0, 0); } }
     const bp = G.M ? ballPos() : null;
     ballMesh.visible = ballGlow.visible = ballShadow.visible = !!bp;
     if (bp) {

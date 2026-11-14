@@ -116,8 +116,15 @@
     if (!result) throw new Error('Result required');
     var a = score(result.a), b = score(result.b);
     var expected = a.runs === b.runs ? null : a.runs > b.runs ? f.a : f.b;
+    // Level scores decided by a Super Over: the result names its winner, who takes the win (league) or advances (knockout).
+    var superOver = result.superOver === true;
+    if (superOver) {
+      if (expected !== null || (result.winner !== f.a && result.winner !== f.b)) throw new Error('A Super Over needs level scores and a winning side');
+      expected = result.winner;
+    } else if (result.superOver !== undefined) throw new Error('Invalid Super Over flag');
     if (result.winner !== expected) throw new Error('Winner must match scores and fixture sides');
     var normalized = {a: a, b: b, winner: expected};
+    if (superOver) normalized.superOver = true;
     if (f.stage !== 'league') {
       var ranks = standings(s).map(function (r) { return r.id; });
       normalized.advance = expected === null ? (ranks.indexOf(f.a) < ranks.indexOf(f.b) ? f.a : f.b) : expected;
