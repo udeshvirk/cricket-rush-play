@@ -174,6 +174,25 @@
   .screen { position: absolute; inset: 0; display: grid; place-items: center; overflow-y: auto;
             background: linear-gradient(180deg, rgba(10,16,36,0.6), rgba(10,16,36,0.94) 60%);
             padding: 24px max(16px, env(safe-area-inset-left, 0px)) 24px max(16px, env(safe-area-inset-right, 0px)); }
+  #menu .title { font-size: clamp(46px, 9vw, 72px); }
+  #menu .levels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #menu .level .n { font-size: 24px; }
+  #menu .level .s, #menu .best:empty { display: none; }
+  #setup .card { gap: 12px; width: min(760px, 100%); }
+  #setup .title { font-size: 38px; }
+  .setup-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px; }
+  .setup-grid:has(#opponentField[hidden]) > label:first-child { grid-column: 1 / -1; }
+  #tournamentTable td:first-child { text-align:left; }
+  .team-select { width:100%;padding:10px 8px;background:#18233a;color:var(--chalk);border:1px solid var(--line);border-radius:4px;font:600 16px var(--ui); }
+  #setup details summary { cursor:pointer;color:var(--muted);font-size:16px; }
+  #setup details .how { margin-top:10px; }
+  .setup-actions { position:sticky;bottom:-12px;background:#111c30;padding:10px 0;z-index:2; }
+  #tournament .card { width:min(760px,100%); }
+  #tournament table { width:100%; }
+  .fixture-list { max-height:260px;overflow:auto; }
+  .fixture { padding:8px 0;border-bottom:1px solid var(--line);font-size:16px; }
+  .fixture small { color:var(--muted); }
+  @media(max-height:460px) { #setup .card { gap:8px; } #setup .title { font-size:30px; } #setup .opt { padding:6px 9px; } }
   .card { width: min(640px, 100%); display: flex; flex-direction: column; gap: 16px; }
   /* while a menu screen is up, the match's score, map and touch buttons don't show through it */
   #game:has(> .screen:not([hidden])) :is(#tvbar, #minimap, #batpad, #bowlpad, #autopad, .vars, #delivery, #swipeHint, #nextTag, #tvcard) { visibility: hidden; }
@@ -493,7 +512,7 @@
 
   <div id="menu" class="screen">
     <div class="card">
-      <div class="title">CRICKET<br><span>RUSH</span></div>
+      <div class="title">CRICKET <span>RUSH</span></div>
       <div class="tag">Night cricket under the lights.</div>
       <div class="levels">
         <button class="level" type="button" id="goMatch"><span class="n">Play a match</span><span class="d">Bat and bowl, two innings</span>
@@ -501,6 +520,7 @@
         <button class="level" type="button" id="goResume" hidden><span class="n">Continue match</span><span class="d" id="resumeLine"></span></button>
         <button class="level" type="button" id="goSeries"><span class="n">Mini series</span><span class="d">Best of 3 or 5 matches</span>
           <span class="s">One opponent · series trophy · player of the series</span><span class="best" id="seriesLine"></span></button>
+        <button class="level" type="button" id="goTournament"><span class="n">Tournaments</span><span class="d">World Cup · IPL</span><span class="best" id="tournamentLine"></span></button>
         <button class="level" type="button" id="goChase"><span class="n">Quick chase</span><span class="d">Chase a target</span>
           <span class="s">Gully · Club · Super Over</span><span class="best"></span></button>
       </div>
@@ -520,12 +540,17 @@
   <div id="setup" class="screen" hidden>
     <div class="card">
       <div class="title sm" id="setupTitle">MATCH <span>SETUP</span></div>
+      <div><div class="lbl2">Teams</div><div class="opts" id="leaguePick"></div></div>
       <div><div class="lbl2">Format</div><div class="opts" id="formatPick"></div></div>
-      <div><div class="lbl2">Your team</div><div class="opts" id="teamA"></div></div>
-      <div><div class="lbl2">Opponent</div><div class="opts" id="teamB"></div></div>
+      <div class="setup-grid">
+        <label><span class="lbl2">Your team</span><select class="team-select" id="teamA"></select></label>
+        <label id="opponentField"><span class="lbl2">Opponent</span><select class="team-select" id="teamB"></select></label>
+      </div>
+      <p class="how" id="competitionInfo" hidden></p>
       <div><div class="lbl2">Overs per side</div><div class="opts" id="oversPick"></div></div>
-      <div><div class="lbl2">Difficulty</div><div class="opts" id="diffPick"></div></div>
-      <div><div class="lbl2">When your team bowls</div><div class="opts" id="bowlPick"></div></div>
+      <div class="setup-grid"><div><div class="lbl2">Difficulty</div><div class="opts" id="diffPick"></div></div>
+      <div><div class="lbl2">When your team bowls</div><div class="opts" id="bowlPick"></div></div></div>
+      <details><summary>How to play · controls</summary>
       <p class="how"><b>Batting:</b> choose <b>Defend</b>, <b>Shot</b> or <b>Loft</b> before the ball arrives. As it reaches the bat,
         <b>swipe anywhere</b> in the direction you want it to go: down the screen is straight back past the bowler, left is the
         off side, right is the leg side, up is behind you. Loft goes in the air: more runs, but it can be caught.</p>
@@ -537,13 +562,22 @@
         The circle on the pitch shows where the ball will bounce.</p>
       <p class="how"><b>Bowling yourself:</b> before each over, pick a bowler and a field. Tap the pitch where you want the ball to land,
         choose a variation, press BOWL, then press again when the moving needle is in the green.</p>
-      <div class="row">
+      </details>
+      <div class="row setup-actions">
         <button class="btn" id="toToss" type="button">Go to the toss</button>
         <button class="btn ghost" id="setupBack" type="button">Back</button>
       </div>
     </div>
   </div>
 
+  <div id="tournament" class="screen" hidden><div class="card">
+    <div class="title sm" id="tournamentTitle"></div>
+    <div class="tag" id="tournamentStatus"></div>
+    <div class="row"><button class="btn" id="tournamentPlay" type="button">Play next match</button><button class="btn ghost" id="tournamentNew" type="button">New tournament</button><button class="btn ghost" id="tournamentBack" type="button">Main menu</button></div>
+    <p class="how" id="tournamentRules"></p>
+    <div id="tournamentTable"></div>
+    <details><summary>Fixtures &amp; results</summary><div class="fixture-list" id="tournamentFixtures"></div></details>
+  </div></div>
   <div id="chaseMenu" class="screen" hidden>
     <div class="card">
       <div class="title sm">QUICK <span>CHASE</span></div>
@@ -627,6 +661,8 @@
   </div>
 </div>
 
+<script src="tournament.js"></script>
+<script src="franchise-teams.js"></script>
 <script src="vendor/three.min.js"></script>
 <script src="vendor/postprocessing.min.js"></script>
 <script src="vendor/GLTFLoader.js"></script>
@@ -653,10 +689,12 @@ const DRIVE_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.
 const CUT_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('cut') !== 'old';
 const PULL_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('pull') !== 'old';
 const BDRIVE_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('bdrive') !== 'old';
-// back-foot strokes with staged key poses (player-production/motion.js); the upper cut and hook need the staged cut and pull
+// Dedicated staged strokes (player-production/motion.js), sampled against the gameplay contact clock.
 const NEW_STROKES = CUT_MOTION && PULL_MOTION;   // reverse sweep, late cut, leg glance
 const SWEEP_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('sweep') !== 'old';
-const stagedBack = f => (SWEEP_MOTION && f==='sweep') || (NEW_STROKES && (f==='rsweep'||f==='lcut'||f==='glance')) || (CUT_MOTION && (f==='cut'||f==='ucut')) || (PULL_MOTION && (f==='pull'||f==='hook')) || (BDRIVE_MOTION && f==='bdrive');
+const LEG_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('leg') !== 'old';
+const REMAINING_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('strokes') !== 'old';
+const stagedStroke = f => (REMAINING_MOTION && ['fdef','bdef','push','slog'].includes(f)) || (LEG_MOTION && f==='flick') || (SWEEP_MOTION && f==='sweep') || (NEW_STROKES && (f==='rsweep'||f==='lcut'||f==='glance')) || (CUT_MOTION && (f==='cut'||f==='ucut')) || (PULL_MOTION && (f==='pull'||f==='hook')) || (BDRIVE_MOTION && f==='bdrive');
 document.body.classList.toggle('reference-view',REFERENCE_VIEW);
 
 // ======================================================================= setup
@@ -756,6 +794,7 @@ const TEAMS = [
     ['M. Nabbi', 70, 'O', 74], ['G. Naeb', 62, 'M', 60], ['R. Khaan', 50, 'L', 92], ['N. Ahmadd', 18, 'L', 82],
     ['F. Farooqee', 12, 'F', 82], ['N. Ulhaq', 15, 'F', 78]] },
 ];
+TEAMS.push(...(window.CricketFranchises || []));
 const badgeHTML = t => '<span class="badge" style="background:linear-gradient(135deg,' + t.col + ' 0 55%,' + t.dark + ' 55%);color:' + onCol(t.col) + '">' + esc(t.short) + '</span>';
 // text colour that reads on a team colour
 const onCol = c => { const n = parseInt(c.slice(1), 16), l = (0.299 * (n >> 16) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255; return l > 0.55 ? '#0a1024' : '#f3efe4'; };
@@ -1441,10 +1480,10 @@ function strokeFamily(a, loft, defend, push, short, spin, at) {
   }
   const sweepableSpin = spin && h <= 1.05; // full/good-length spin through waist height; short/high handled above
   if (a > 35) {
-    if (!loft && a >= 55 && a <= 155 && sweepableSpin) return 'sweep';
+    if (a >= 115 && a <= 155 && sweepableSpin) return 'sweep'; // Up + leg side; Shift lifts the same sweep
     if (NEW_STROKES && !loft && a > 115 && a <= 155 && !(spin && h < 0.75)) return 'glance';   // fine on the leg side: the leg glance (spin, low: the fine sweep)
     if (loft) return a < 120 ? 'slog' : 'flick';
-    return a >= 55 && h < 0.75 && (spin || a >= 80) ? 'sweep' : 'flick';   // square or fine on the leg side off a low ball: the sweep
+    return 'flick'; // side-only leg aim stays a standing stroke
   }
   if (NEW_STROKES && a < -115 && a >= -155) {   // fine on the off side: the reverse sweep to a low ball from a spinner, else the late cut
     if (!loft && sweepableSpin) return 'rsweep';
@@ -1457,7 +1496,7 @@ function strokeFamily(a, loft, defend, push, short, spin, at) {
 function strokeKeys(sw) {
   const T = sw.target, a = sw.intent * deg, dir = [Math.sin(a), 0, Math.cos(a)], loft = sw.loft;
   const R = MOTION2 ? (sw.visualStart || PREPARE) : READY;
-  if((DRIVE_MOTION && sw.fam==='drive') || stagedBack(sw.fam)) {
+  if((DRIVE_MOTION && sw.fam==='drive') || stagedStroke(sw.fam)) {
     // Preserve the existing random stream consumption without making the
     // staged strokes' support/contact poses wander on each delivery.
     if(!sw.vary)sw.vary={l:rand(-4,4),y:rand(-7,7),h:[rand(-.08,.08),rand(-.1,.1),rand(-.06,.06)],f:rand(-.03,.05),hold:rand(.8,1.3)};
@@ -1717,7 +1756,7 @@ function batterPose(sw) {
     if (!sw.keys) sw.keys = strokeKeys(sw);
     if(MOTION2) {
       if(!sw.curve)sw.curve=CricketMotion.prepare(sw.keys);
-      if((DRIVE_MOTION && sw.fam==='drive') || stagedBack(sw.fam)) {
+      if((DRIVE_MOTION && sw.fam==='drive') || stagedStroke(sw.fam)) {
         const sampled=CricketMotion[sw.fam==='drive'?'sampleDrive':'sampleCut'](sw.curve,sw.t,sw.contactAge,SWING_LAG);
         k=sampled.pose;motionTime=sampled.time;
       } else k=CricketMotion.sample(sw.curve,sw.t);
@@ -1745,9 +1784,9 @@ function batterPose(sw) {
   const follow=MOTION2 && sw?smooth(clamp((motionTime-SWING_LAG-.04)/.32,0,1)):0;
   const gaze=facing(MOTION2 && sw?clamp(sw.intent||0,-70,70)*follow:0);
   if(MOTION2 && sw?.loft)j.head[2]-=.035*follow;
-  const framed=sw && ((DRIVE_MOTION && sw.fam==='drive') || (SWEEP_MOTION && /^(r?sweep)$/.test(sw.fam))
+  const framed=sw && ((REMAINING_MOTION && ['fdef','bdef','push','slog'].includes(sw.fam)) || (BDRIVE_MOTION && sw.fam==='bdrive') || (DRIVE_MOTION && sw.fam==='drive') || (SWEEP_MOTION && /^(r?sweep)$/.test(sw.fam))
     || (PULL_MOTION && ['pull','hook'].includes(sw.fam))
-    || (CUT_MOTION && ['cut','ucut'].includes(sw.fam)) || (NEW_STROKES && sw.fam==='lcut'));
+    || (CUT_MOTION && ['cut','ucut'].includes(sw.fam)) || (NEW_STROKES && ['lcut','glance'].includes(sw.fam)) || (LEG_MOTION && sw.fam==='flick'));
   const width=framed ? CricketMotion.pathWidth(sw.curve,motionTime,bd,k.batRoll||0) : null;
   return { j, hands: k.h.slice(), tip: add(k.h, mul(bd, 0.85)), pose:k,look:gaze,motionTime,width };
 }
@@ -2254,7 +2293,7 @@ const wrapA = a => ((a + 540) % 360) - 180;   // keep an angle within -180..180
 function shotName(a, loft, defend, push, family) {
   // Name the action actually selected, not the timing-deflected exit direction.
   // The old angle-only labels called fine-leg pulls (and lofted flicks) "Glance".
-  if (family === 'sweep') return Math.abs(a)>125 ? 'Fine sweep' : 'Sweep';
+  if (family === 'sweep') return loft ? 'Lofted sweep' : 'Sweep';
   const names={rsweep:'Reverse sweep',glance:'Leg glance',lcut:'Late cut',ucut:'Upper cut',
     cut:'Square cut',pull:'Pull',hook:'Hook',bdrive:'Back-foot drive',flick:'Flick',slog:'Slog',
     fdef:'Forward defence',bdef:'Back-foot defence',push:'Push'};
@@ -2600,7 +2639,7 @@ function saveMatch() {
   if (!M || M.mode !== 'match' || quiet) return;
   try {
     const t = x => TEAMS.indexOf(x);
-    localStorage.setItem(MATCH_KEY, JSON.stringify({ a: t(M.teams[0]), b: t(M.teams[1]), overs: M.overs, diff: DIFFS.indexOf(M.diff), cur: M.cur, series: !!M.series,
+    localStorage.setItem(MATCH_KEY, JSON.stringify({ a: t(M.teams[0]), b: t(M.teams[1]), overs: M.overs, diff: DIFFS.indexOf(M.diff), cur: M.cur, series: !!M.series, tournamentId: M.tournamentId, fixtureId: M.fixtureId,
       innings: M.innings.map(i => ({ ...i, bat: t(i.bat), bowl: t(i.bowl) })) }));
   } catch (e) {}
   renderMatchLine();
@@ -2620,7 +2659,8 @@ function resumeMatch() {
   const d = loadMatch(); if (!d) return;
   M = { mode: 'match', overs: d.overs, diff: DIFFS[d.diff] || DIFFS[1], teams: [TEAMS[d.a], TEAMS[d.b]], cur: d.cur, autoplay: null,
         autoBowl: setup.autoBowl !== false, watchFast: false, series: d.series && series && !seriesState(series).done ? series : null,
-        innings: d.innings.map(i => ({ ...i, bat: TEAMS[i.bat], bowl: TEAMS[i.bowl] })) };
+        innings: d.innings.map(i => ({ ...i, bat: TEAMS[i.bat], bowl: TEAMS[i.bowl] })),
+        tournamentId: d.tournamentId===tournament?.id?d.tournamentId:undefined, fixtureId:d.fixtureId };
   startInnings(M.cur);
 }
 function startOver() {
@@ -2974,6 +3014,7 @@ function endMatch() {
     [bestB ? bestB.w + '–' + bestB.r : '-', 'Best bowling · ' + (bestB ? surname(bestB.n) : '')]]
     .map(([v, l]) => '<div><b>' + esc(v) + '</b><span>' + esc(l) + '</span></div>').join('');
   renderTabs('endTabs', 'endCard', 1);
+  recordTournamentMatch(winner);
   renderEndOptions();
   const news = recordStats(winner);
   if (news.length) $('endSub').textContent += ' New record: ' + news.join(', ') + '.';
@@ -3116,7 +3157,7 @@ function renderTabs(tabsId, cardId, sel) {
 }
 
 // ----------------------------------------------------------------------- screens
-const SCREENS = ['menu', 'setup', 'chaseMenu', 'toss', 'break', 'pause', 'end', 'stats'];
+const SCREENS = ['menu', 'setup', 'chaseMenu', 'toss', 'break', 'pause', 'end', 'stats', 'tournament'];
 function showScreen(id) { for (const s of SCREENS) $(s).hidden = s !== id; }
 function toMenu() {
   M = null; inn = null; ball = null; phase = 'menu'; paused = false; setFF(false);
@@ -3124,12 +3165,12 @@ function toMenu() {
   hideBanner(); $('delivery').classList.remove('show'); $('timing').classList.remove('show');
   $('batpad').hidden = false; $('bowlpad').hidden = true;
   newFielders();
-  renderRecord(); renderSeriesLine();
+  renderRecord(); renderSeriesLine(); renderTournamentLine();
   showScreen('menu');
 }
 
 // match setup (remembered in this browser)
-const setup = { a: 0, b: 1, overs: 5, diff: 1, autoBowl: true, series: 0 };
+const setup = { a: 0, b: 1, overs: 5, diff: 1, autoBowl: true, series: 0, league: 'international', tournament: false };
 try { Object.assign(setup, JSON.parse(localStorage.getItem('boundary-rush-setup') || '{}')); } catch (e) {}
 function saveSetup() { try { localStorage.setItem('boundary-rush-setup', JSON.stringify(setup)); } catch (e) {} }
 function optButtons(boxId, items, isOn, onPick) {
@@ -3144,19 +3185,84 @@ function optButtons(boxId, items, isOn, onPick) {
     box.appendChild(b);
   });
 }
+function teamPool(league) { return TEAMS.map((t,id)=>({t,id})).filter(x=>(x.t.league==='ipl')===(league==='ipl')); }
 function renderSetup() {
-  const teamItems = TEAMS.map(t => ({ html: badgeHTML(t) + esc(t.name) }));
-  optButtons('formatPick', [0, 3, 5].map(v => ({ v, html: v ? 'Series, best of ' + v : 'One match' })), it => it.v === (setup.series || 0),
-    it => { setup.series = it.v; saveSetup(); renderSetup(); });
-  $('toToss').textContent = setup.series ? 'Start the series' : 'Go to the toss';
-  $('setupTitle').innerHTML = (setup.series ? 'SERIES' : 'MATCH') + ' <span>SETUP</span>';
-  optButtons('teamA', teamItems, (it, k) => k === setup.a, (it, k) => { if (k === setup.b) setup.b = setup.a; setup.a = k; saveSetup(); renderSetup(); });
-  optButtons('teamB', teamItems, (it, k) => k === setup.b, (it, k) => { if (k === setup.a) setup.a = setup.b; setup.b = k; saveSetup(); renderSetup(); });
-  optButtons('oversPick', [2, 5, 10, 20, 50].map(v => ({ v, html: v === 20 ? 'T20' : v === 50 ? 'ODI (50)' : v + ' overs' })), it => it.v === setup.overs, it => { setup.overs = it.v; saveSetup(); renderSetup(); });
-  optButtons('diffPick', DIFFS.map(d => ({ html: d.name })), (it, k) => k === setup.diff, (it, k) => { setup.diff = k; saveSetup(); renderSetup(); });
-  optButtons('bowlPick', [{ v: true, html: 'Computer bowls for me' }, { v: false, html: 'I\'ll bowl' }], it => it.v === setup.autoBowl,
-    it => { setup.autoBowl = it.v; saveSetup(); renderSetup(); });
+  const pool=teamPool(setup.league);
+  if(!pool.some(x=>x.id===setup.a))setup.a=pool[0].id;
+  if(!pool.some(x=>x.id===setup.b)||setup.a===setup.b)setup.b=pool.find(x=>x.id!==setup.a).id;
+  optButtons('leaguePick',[{v:'international',html:'International'},{v:'ipl',html:'IPL teams'}],it=>it.v===setup.league,
+    it=>{setup.league=it.v;saveSetup();renderSetup();});
+  optButtons('formatPick',[{v:0,html:'One match'},{v:3,html:'3-match series'},{v:5,html:'5-match series'},{v:'cup',html:setup.league==='ipl'?'IPL season':'World Cup'}],
+    it=>it.v===(setup.tournament?'cup':setup.series||0),it=>{setup.tournament=it.v==='cup';setup.series=setup.tournament?0:it.v;saveSetup();renderSetup();});
+  $('toToss').textContent=setup.tournament?'Start tournament':setup.series?'Start series':'Go to toss';
+  $('setupTitle').innerHTML=(setup.tournament?'TOURNAMENT':setup.series?'SERIES':'MATCH')+' <span>SETUP</span>';
+  for(const [id,key,other] of [['teamA','a','b'],['teamB','b','a']]){
+    const el=$(id);el.innerHTML=pool.map(({t,id})=>'<option value="'+id+'">'+esc(t.name)+'</option>').join('');el.value=setup[key];
+    el.onchange=()=>{const next=+el.value;if(next===setup[other])setup[other]=setup[key];setup[key]=next;saveSetup();renderSetup();};
+  }
+  $('opponentField').hidden=!!setup.tournament;
+  $('competitionInfo').hidden=!setup.tournament&&setup.league!=='ipl';
+  $('competitionInfo').textContent=(setup.tournament?'10 teams · play each opponent once · '+(setup.league==='ipl'?'top four playoffs.':'semifinals and final.')+' Shortened game format. ':'')+(setup.league==='ipl'?'Original kits and fictional squads.':'');
+  optButtons('oversPick',[2,5,10,20,50].map(v=>({v,html:v===20?'T20':v===50?'ODI (50)':v+' overs'})),it=>it.v===setup.overs,it=>{setup.overs=it.v;saveSetup();renderSetup();});
+  optButtons('diffPick',DIFFS.map(d=>({html:d.name})),(it,k)=>k===setup.diff,(it,k)=>{setup.diff=k;saveSetup();renderSetup();});
+  optButtons('bowlPick',[{v:true,html:'Computer bowls'},{v:false,html:"I'll bowl"}],it=>it.v===setup.autoBowl,it=>{setup.autoBowl=it.v;saveSetup();renderSetup();});
 }
+// Tournament progress is separate from saved single matches and mini series.
+const CUP_KEY='cricket-rush-tournament';
+let tournament=null,cupReplaceArmed=false;
+try { const saved=JSON.parse(localStorage.getItem(CUP_KEY)||'null');
+  if(saved?.v===1&&['world','ipl'].includes(saved.kind)&&Array.isArray(saved.teamIds)&&saved.teamIds.every(id=>TEAMS[id])&&Array.isArray(saved.fixtures))tournament=saved;
+} catch(e) {}
+function saveTournament(){try{localStorage.setItem(CUP_KEY,JSON.stringify(tournament));}catch(e){}renderTournamentLine();}
+function renderTournamentLine(){const el=$('tournamentLine');if(el)el.textContent=tournament&&!tournament.finished?'Continue '+(tournament.kind==='ipl'?'IPL':'World Cup')+' · '+TEAMS[tournament.userId].short:'';}
+function tournamentNext(){
+  if(!tournament)return null;
+  let fixture=CricketTournament.next(tournament),guard=0;
+  while(fixture&&fixture.a!==tournament.userId&&fixture.b!==tournament.userId&&guard++<100){
+    CricketTournament.record(tournament,fixture.id,CricketTournament.simulate(tournament,fixture));fixture=CricketTournament.next(tournament);
+  }
+  saveTournament();return fixture;
+}
+function newTournament(){
+  if(tournament&&!tournament.finished&&!cupReplaceArmed){cupReplaceArmed=true;$('toToss').textContent='Replace saved tournament? Tap again';return;}
+  if(tournament&&loadMatch()?.tournamentId===tournament.id)clearMatch();
+  tournament=CricketTournament.create({kind:setup.league==='ipl'?'ipl':'world',teamIds:teamPool(setup.league).map(x=>x.id),userId:setup.a,overs:setup.overs,diff:setup.diff,seed:Date.now()>>>0});
+  cupReplaceArmed=false;saveTournament();showTournament();
+}
+function fixtureLabel(f){return f.stage==='league'?'League · Round '+f.round:({sf1:'Semifinal 1',sf2:'Semifinal 2',q1:'Qualifier 1',eliminator:'Eliminator',q2:'Qualifier 2',final:'Final'}[f.stage]||f.stage);}
+function showTournament(){
+  if(!tournament){setup.tournament=true;setup.series=0;renderSetup();showScreen('setup');return;}
+  RP=null;toMenu();const f=tournamentNext(),name=tournament.kind==='ipl'?'IPL':'WORLD CUP';
+  $('tournamentTitle').textContent=name;
+  $('tournamentStatus').textContent=tournament.finished?'Champions: '+TEAMS[tournament.winner].name:
+    'You: '+TEAMS[tournament.userId].name+' · Next: '+TEAMS[f.a].short+' v '+TEAMS[f.b].short+' · '+fixtureLabel(f);
+  $('tournamentPlay').hidden=!f;
+  const saved=loadMatch();$('tournamentPlay').textContent=f&&saved?.tournamentId===tournament.id&&saved?.fixtureId===f.id?'Resume match':'Play next match';
+  $('tournamentRules').textContent='Each team plays every opponent once. '+(tournament.kind==='ipl'?'Top four: Qualifier 1, Eliminator, Qualifier 2 and final.':'Top four: semifinals and final.')+' Win: 2 points; tie: 1. Tied knockout: higher league position advances. Other fixtures are simulated. Progress saves on this device.';
+  const rows=CricketTournament.standings(tournament);
+  $('tournamentTable').innerHTML='<table class="sc"><thead><tr><th>Team</th><th>P</th><th>W</th><th>L</th><th>Pts</th><th>NRR</th></tr></thead><tbody>'+rows.map((r,i)=>'<tr'+(r.id===tournament.userId?' style="color:var(--teal)"':'')+'><td>'+(i+1)+'. '+esc(TEAMS[r.id].short)+'</td><td>'+r.p+'</td><td>'+r.w+'</td><td>'+r.l+'</td><td><b>'+r.pts+'</b></td><td>'+r.nrr.toFixed(2)+'</td></tr>').join('')+'</tbody></table>';
+  $('tournamentFixtures').innerHTML=tournament.fixtures.map(x=>{
+    const r=x.result;return '<div class="fixture">'+esc(fixtureLabel(x))+' · '+esc(TEAMS[x.a].short)+' v '+esc(TEAMS[x.b].short)+'<br><small>'+
+      (r?esc(TEAMS[x.a].short)+' '+r.a.runs+'/'+r.a.wkts+' · '+esc(TEAMS[x.b].short)+' '+r.b.runs+'/'+r.b.wkts+(r.winner!==null?' · '+esc(TEAMS[r.winner].short)+' won':' · Tied'+(r.advance!==undefined?' · '+esc(TEAMS[r.advance].short)+' advance':'')):'Upcoming')+'</small></div>';
+  }).join('');showScreen('tournament');
+}
+function playTournament(){
+  const f=tournamentNext();if(!f)return showTournament();
+  const saved=loadMatch();if(saved?.tournamentId===tournament.id&&saved.fixtureId===f.id)return resumeMatch();
+  const keep=series;series=null;
+  Object.assign(setup,{a:tournament.userId,b:f.a===tournament.userId?f.b:f.a,overs:tournament.overs,diff:tournament.diff});
+  startToss();series=keep;M.tournamentId=tournament.id;M.fixtureId=f.id;
+}
+function recordTournamentMatch(winner){
+  if(!M.tournamentId||tournament?.id!==M.tournamentId)return;
+  const f=tournament.fixtures.find(x=>x.id===M.fixtureId);if(!f||f.result)return;
+  const score=id=>{const i=M.innings.find(x=>TEAMS.indexOf(x.bat)===id);return {runs:i.runs,wkts:i.wkts,balls:i.balls};};
+  const tied=!winner&&f.stage!=='league';
+  CricketTournament.record(tournament,f.id,{a:score(f.a),b:score(f.b),winner:winner?TEAMS.indexOf(winner):null});
+  CricketTournament.next(tournament);saveTournament();
+  if(tied){const advanced=f.result.advance??f.result.winner;if(advanced!==null&&advanced!==undefined)$('endSub').textContent+=' '+TEAMS[advanced].name+' advance on league position.';}
+}
+
 // A mini series: best of 3 or 5 against one team, saved after every match so it can be continued later.
 const SERIES_KEY = 'cricket-rush-series';
 let series = null;
@@ -3215,8 +3321,9 @@ function renderEndOptions() {
   $('seriesChoice').hidden = !choice;
   $('seriesChoice').textContent = choice ? st.text + '. Play the remaining '+plural(st.remaining,'match')+' or finish the series now? The series award is presented when you finish.' : '';
   $('finishSeries').hidden = !choice;
-  $('endRematch').hidden = !sr;
+  $('endRematch').hidden = !sr && !M?.tournamentId;
   $('again').textContent = !sr ? 'Rematch' : st.done ? 'New series' : choice ? 'Play remaining '+plural(st.remaining,'match') : 'Next match ('+(sr.games.length+1)+' of '+sr.n+')';
+  if(M?.tournamentId)$('again').textContent='Tournament table';
 }
 function finishSeriesNow() {
   const sr = M?.series;
@@ -3227,14 +3334,16 @@ function finishSeriesNow() {
 // can only be rematched outside the series, so its recorded result is never duplicated.
 function rematch(standalone = false) {
   if (!M) return;
+  const keepCup=!standalone&&phase!=='over';
   const previous = M, chase = M.mode === 'chase', sr = !standalone && phase !== 'over' ? M.series : null;
   const cfg = !chase && {a:TEAMS.indexOf(M.teams[0]),b:TEAMS.indexOf(M.teams[1]),overs:M.overs,
-    diff:Math.max(0,DIFFS.indexOf(M.diff)),autoBowl:M.autoBowl,series:0};
+    diff:Math.max(0,DIFFS.indexOf(M.diff)),autoBowl:M.autoBowl,series:0,tournament:false,league:M.teams[0].league==='ipl'?'ipl':'international'};
   RP = null; held.clear(); pending = null; clearMatch(); toMenu();
   if (chase) return startChase(level);
   Object.assign(setup,cfg);
   const keep = series; series = sr || null; startToss(); series = keep;
   M.autoBowl = previous.autoBowl;
+  if(keepCup){M.tournamentId=previous.tournamentId;M.fixtureId=previous.fixtureId;}
 }
 function renderSeriesLine() {
   const el = $('seriesLine'); if (!el) return;
@@ -3907,7 +4016,7 @@ function livePeople() {
       hands=lerp3(add(from.hands,offset),hands,turn);
       const direction=CricketMotion.blendDirection(norm(sub(from.tip,from.hands)),norm(sub(tip,hand)),turn);
       tip=add(hands,mul(direction,lerp(len(sub(from.tip,from.hands)),len(sub(tip,hand)),turn)));
-      const sourceWidth=from.width || (stagedBack(sw?.fam)
+      const sourceWidth=from.width || (stagedStroke(sw?.fam)
         ? CricketMotion.cutWidth(norm(sub(from.tip,from.hands)),sw.keys.find(k=>Math.abs(k[0]-SWING_LAG)<1e-8)[1].bd)
         : MOTION2 && sw && sw.fam!=='drive' && sw.keys ? norm(cross(mul(sw.keys[2][1].bd,-1),[0,0,1])) : [1,0,0]);
       width=CricketMotion.blendDirection(sourceWidth,side,turn);
@@ -3955,7 +4064,7 @@ function livePeople() {
       if (ball.charge.t < 0.4) { const ph = Math.sin(ball.charge.t * 24) * 0.12; j.footL[2] += ph; j.footR[2] -= ph; j.kneeL[2] += ph / 2; j.kneeR[2] -= ph / 2; }
     }
     const stroke=ball && ball.swing;
-    const width=authoredWidth || (stagedBack(stroke?.fam) && stroke.keys
+    const width=authoredWidth || (stagedStroke(stroke?.fam) && stroke.keys
       ? CricketMotion.cutWidth(norm(sub(tip,hands)),stroke.keys.find(k=>Math.abs(k[0]-SWING_LAG)<1e-8)[1].bd)
       : MOTION2 && stroke && stroke.fam!=='drive' && stroke.keys
       ? norm(cross(mul(stroke.keys[2][1].bd,-1),[0,0,1])) : [1,0,0]);
@@ -4440,11 +4549,11 @@ document.addEventListener('fullscreenchange', fsButtons); document.addEventListe
 $('fsBtn').addEventListener('click', toggleFull);
 $('fsMenu').addEventListener('click', toggleFull);
 $('pauseBtn').addEventListener('click', () => { if (paused) resume(); else openPause(); });
-$('goMatch').addEventListener('click', () => { audio(); setup.series = 0; renderSetup(); showScreen('setup'); });
+$('goMatch').addEventListener('click', () => { audio(); setup.series = 0; setup.tournament=false; cupReplaceArmed=false; renderSetup(); showScreen('setup'); });
 $('goChase').addEventListener('click', () => { audio(); renderLevels(); showScreen('chaseMenu'); });
 $('setupBack').addEventListener('click', toMenu);
 $('chaseBack').addEventListener('click', toMenu);
-$('toToss').addEventListener('click', () => { audio(); if (setup.series) newSeries(); startTossOne(); });
+$('toToss').addEventListener('click', () => { audio(); if(setup.tournament)return newTournament(); if (setup.series) newSeries(); startTossOne(); });
 // a single match from the setup screen doesn't touch a series in progress
 function startTossOne() { if (setup.series) return startToss(); const keep = series; series = null; startToss(); series = keep; }
 $('goStats').addEventListener('click', () => { audio(); statsArm = false; renderStats(); showScreen('stats'); });
@@ -4453,11 +4562,16 @@ $('statsReset').addEventListener('click', () => { if (statsArm) { try { localSto
 $('goResume').addEventListener('click', () => { audio(); resumeMatch(); });
 renderMatchLine();
 $('goSeries').addEventListener('click', () => {
-  audio();
+  audio();setup.tournament=false;
   if (series && !seriesState(series).done) return startToss();   // carry on where you left off
   if (!setup.series) setup.series = 3;
   renderSetup(); showScreen('setup');
 });
+$('goTournament').addEventListener('click',()=>{audio();cupReplaceArmed=false;showTournament();});
+$('tournamentPlay').addEventListener('click',()=>{audio();playTournament();});
+$('tournamentBack').addEventListener('click',toMenu);
+$('tournamentNew').addEventListener('click',()=>{setup.tournament=true;setup.series=0;cupReplaceArmed=false;renderSetup();showScreen('setup');});
+renderTournamentLine();
 $('breakGo').addEventListener('click', () => { audio(); startInnings(1); });
 $('pickGo').addEventListener('click', pickGo);
 $('pickPause').addEventListener('click', () => { $('pick').hidden = true; openPause(); });
@@ -4475,7 +4589,7 @@ $('restartMatch').addEventListener('click', () => {
 $('endRematch').addEventListener('click', () => { audio(); rematch(true); });
 $('finishSeries').addEventListener('click', finishSeriesNow);
 $('again').addEventListener('click', () => {
-  audio();
+  audio();if(M?.tournamentId)return showTournament();
   if (M && M.mode === 'match') {
     if (M.series && seriesState(M.series).done) { Object.assign(setup, { series: M.series.n, a: M.series.a, b: M.series.b, overs: M.series.overs, diff: M.series.diff }); newSeries(); }
     if (M.series) startToss(); else rematch(true);
