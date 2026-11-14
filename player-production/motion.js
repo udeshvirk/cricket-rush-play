@@ -129,42 +129,47 @@
       [impact+.075,through],[impact+.18,extension],[impact+.42,finish],
       [impact+.95,settle],[impact+1.6,stance]];
   }
+  // A full swing of a horizontal bat: cocked high behind, round and down onto a
+  // ball met behind square with the arms out, the wrists rolling it on round
+  // toward cover and up in front of the leading shoulder. (It used to chop
+  // backward toward the keeper and stop.)
   function cutKeys({start,target,stance,impact=.15}) {
-    const bd=unit([-.98,-.13,.15]),h=add(target,scale(bd,-.48));
+    const bd=unit([-.94,-.15,-.3]),h=add(target,scale(bd,-.48));
     const shift=clamp(target[0],-.35,.25);
-    const contact={...start,fr:[.78+shift,0,1.02],bk:[.62+shift,0,.38],pel:[.72+shift,.86,.62],
-      hy:-92,sy:-98,lean:12,side:-3,h,bd,kpL:[-1,0,.25],kpR:[-1,0,-.15],rearFootPitch:0};
-    // Load from the actual waiting pose. The previous fixed load reversed the
-    // blade from behind the batter to forward in 50ms before the real stroke.
+    const contact={...start,fr:[.8+shift,0,1.1],bk:[.62+shift,0,.46],pel:[.72+shift,.84,.72],
+      hy:-92,sy:-100,lean:16,side:-3,h,bd,kpL:[-1,0,.25],kpR:[-1,0,-.15],rearFootPitch:0};
     const load={...contact,pel:start.pel.map((v,i)=>v+(contact.pel[i]-v)*.4),
-      hy:start.hy+(contact.hy-start.hy)*.4,sy:start.sy+(contact.sy-start.sy)*.2,
-      h:start.h.map((v,i)=>v+(h[i]-v)*.3+(i===1?.025:0)),
-      bd:slerp(unit(start.bd),unit([-.85,.35,.4]),.22)};
-    const slot={...contact,hy:-89,sy:-87,h:add(h,[.01,.055,.025]),bd:unit([-.88,.24,.4])};
-    const through={...contact,hy:-104,sy:-119,h:add(h,[-.12,-.07,-.16]),bd:unit([-.88,-.16,-.45])};
-    const finish={...contact,hy:-108,sy:-128,lean:10,
-      h:[clamp(h[0]-.24,-.1,.5),clamp(h[1]-.1,.95,1.4),.63],bd:unit([-.7,.12,-.7])};
-    const settle={...finish,hy:-103,sy:-118,lean:12,
-      h:add(finish.h,[.025,-.09,.045]),bd:unit([-.78,-.18,-.6])};
+      hy:start.hy+(contact.hy-start.hy)*.4,sy:start.sy+(contact.sy-start.sy)*.3,lean:start.lean+(16-start.lean)*.4,
+      h:start.h.map((v,i)=>v+(h[i]-v)*.3+(i===1?.03:0)),
+      bd:slerp(unit(start.bd),unit([-.4,.75,-.5]),.3)};
+    const slot={...contact,hy:-94,sy:-108,h:add(h,[.04,.1,-.14]),bd:unit([-.62,.35,-.7])};
+    const through={...contact,hy:-90,sy:-92,lean:17,h:add(h,[-.1,-.05,.1]),bd:unit([-.97,-.2,.12])};
+    const extension={...contact,hy:-86,sy:-82,lean:15,h:add(h,[-.12,0,.26]),bd:unit([-.72,-.05,.69])};
+    const finish={...contact,pel:[.72+shift,.87,.74],hy:-80,sy:-70,lean:10,
+      h:[contact.pel[0]-.15,1.45,1.02],bd:unit([-.35,.85,.4])};
+    const settle={...finish,sy:-74,lean:9,h:add(finish.h,[.01,-.07,-.02]),bd:unit([-.4,.84,.3])};
     return [[0,start],[impact*.33,load],[impact*.68,slot],[impact,contact],
-      [impact+.075,through],[impact+.27,finish],[impact+.8,settle],[impact+1.45,stance]];
+      [impact+.075,through],[impact+.17,extension],[impact+.36,finish],[impact+.85,settle],[impact+1.5,stance]];
   }
+  // Back and across, the front leg opening to the leg side: the hips turn
+  // first, the shoulders follow right round, and the batter finishes facing
+  // square leg up on the back toe, the bat high over the leading shoulder.
   function pullKeys({start,target,stance,loft=false,impact=.15}) {
     const shift=clamp(target[0]*.6,-.18,.18),bd=unit([-.96,-.04,.28]);
     const h=add(target,scale(bd,-.48));
-    const contact={...start,fr:[.9+shift,0,.97],bk:[.5+shift,0,.34],pel:[.67+shift,.85,.6],
-      hy:-55,sy:-35,lean:8,side:0,h,bd,kpL:[.15,0,1],kpR:[-.7,0,.6],rearFootPitch:0};
+    const contact={...start,fr:[.98+shift,0,.9],bk:[.46+shift,0,.3],pel:[.68+shift,.83,.56],
+      hy:-40,sy:-30,lean:6,side:0,h,bd,kpL:[.6,0,.8],kpR:[-.5,0,.85],rearFootPitch:0};
     const load={...contact,pel:start.pel.map((v,i)=>v+(contact.pel[i]-v)*.4),
-      hy:start.hy+(contact.hy-start.hy)*.4,sy:start.sy+(contact.sy-start.sy)*.15,
+      hy:start.hy+(contact.hy-start.hy)*.5,sy:start.sy+(contact.sy-start.sy)*.1,
       h:start.h.map((v,i)=>v+(h[i]-v)*.25+(i===1?.025:0)),
       bd:slerp(unit(start.bd),unit([-.9,.25,-.25]),.25)};
-    const slot={...contact,hy:-63,sy:-68,h:add(h,[-.025,.055,-.035]),bd:unit([-.94,.26,-.22])};
-    const through={...contact,pel:[.71+shift,.86,.65],hy:-32,sy:-5,
+    const slot={...contact,hy:-52,sy:-74,h:add(h,[-.025,.055,-.035]),bd:unit([-.94,.26,-.22])};
+    const through={...contact,pel:[.71+shift,.84,.6],hy:-18,sy:4,
       h:add(h,[.15,.025,.24]),bd:unit([-.3,-.06,.95])};
-    const extension={...through,hy:-20,sy:18,h:[.87+shift,h[1]+.13,1.15],bd:unit([.6,.22,.77])};
-    const finish={...contact,pel:[.76+shift,.88,.7],hy:-12,sy:35,lean:6,
-      h:[.97+shift,loft?1.62:1.48,1.03],bd:unit([.76,loft?.72:.52,.35])};
-    const settle={...finish,hy:-18,sy:25,lean:8,h:add(finish.h,[-.04,-.09,0]),bd:unit([.82,.35,.45])};
+    const extension={...through,pel:[.73+shift,.86,.62],hy:0,sy:32,h:[.87+shift,h[1]+.13,1.12],bd:unit([.6,.22,.77]),rearFootPitch:.18};
+    const finish={...contact,pel:[.75+shift,.87,.63],hy:15,sy:62,lean:5,rearFootPitch:.3,
+      h:[.95+shift,loft?1.64:1.52,.88],bd:unit([.72,loft?.76:.62,.12])};
+    const settle={...finish,hy:8,sy:50,lean:7,h:add(finish.h,[-.04,-.09,0]),bd:unit([.8,.42,.3])};
     return [[0,start],[impact*.33,load],[impact*.68,slot],[impact,contact],
       [impact+.075,through],[impact+.18,extension],[impact+.34,finish],[impact+.85,settle],[impact+1.5,stance]];
   }
