@@ -69,6 +69,7 @@
   .chip.cw { background: var(--red); color: var(--chalk); }
   .chip.cx { background: transparent; border: 1px solid var(--muted); color: var(--muted); font-size: 12px; }
   .chip.todo { background: transparent; border: 1px dashed rgba(243, 239, 228, 0.3); }
+  .chip.cf { border: 1px dashed var(--amber); color: var(--amber); font-size: 11px; }
 
   #mapwrap { top: calc(12px + env(safe-area-inset-top, 0px)); right: calc(12px + env(safe-area-inset-right, 0px)); }
   #minimap { width: 120px; height: 120px; display: block; }
@@ -220,9 +221,6 @@
   .opt.on { border-color: var(--amber); background: rgba(255, 176, 46, 0.2); }
   .opt:disabled { opacity: 0.35; cursor: default; }
   .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
-  /* our own team badges: a small two-colour shield with the team code */
-  .badge { display: inline-grid; place-items: center; width: 30px; height: 34px; margin-right: 8px; vertical-align: middle;
-           clip-path: polygon(0 0, 100% 0, 100% 62%, 50% 100%, 0 62%); font: 800 10px var(--ui); letter-spacing: 0.04em; padding-bottom: 6px; }
   .result { font-family: var(--display); font-weight: 900; font-size: clamp(48px, 10vw, 84px); line-height: 0.9; }
   .result.win { color: var(--teal); }
   .result.lose { color: var(--red); }
@@ -550,6 +548,7 @@
       <div><div class="lbl2">Overs per side</div><div class="opts" id="oversPick"></div></div>
       <div class="setup-grid"><div><div class="lbl2">Difficulty</div><div class="opts" id="diffPick"></div></div>
       <div><div class="lbl2">When your team bowls</div><div class="opts" id="bowlPick"></div></div></div>
+      <div><div class="lbl2">No-balls</div><div class="opts" id="nbPick"></div></div>
       <details><summary>How to play · controls</summary>
       <p class="how"><b>Batting:</b> choose <b>Defend</b>, <b>Shot</b> or <b>Loft</b> before the ball arrives. As it reaches the bat,
         <b>swipe anywhere</b> in the direction you want it to go: down the screen is straight back past the bowler, left is the
@@ -795,7 +794,6 @@ const TEAMS = [
     ['F. Farooqee', 12, 'F', 82], ['N. Ulhaq', 15, 'F', 78]] },
 ];
 TEAMS.push(...(window.CricketFranchises || []));
-const badgeHTML = t => '<span class="badge" style="background:linear-gradient(135deg,' + t.col + ' 0 55%,' + t.dark + ' 55%);color:' + onCol(t.col) + '">' + esc(t.short) + '</span>';
 // text colour that reads on a team colour
 const onCol = c => { const n = parseInt(c.slice(1), 16), l = (0.299 * (n >> 16) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255; return l > 0.55 ? '#0a1024' : '#f3efe4'; };
 // the left-handed batters
@@ -1018,7 +1016,6 @@ function drawScenery(time) {
 function crowdJump(c) { return cheer > 0 ? Math.max(0, Math.sin(clock * 14 + c.ph * 3)) * cheer * 2.2 : 0; }
 
 // ======================================================================= stick figures
-const KIT = { bat: '#f3efe4', pads: '#ffffff', skin: '#c99872' };
 const fieldCol = () => inn ? inn.bowl.col : '#ffb02e';
 const fieldDark = () => inn ? inn.bowl.dark : '#b86d0b';
 const helmetCol = () => inn ? (inn.bat.helmet || inn.bat.dark) : '#18245a';
@@ -2030,10 +2027,6 @@ function sndHorn() {   // softer distant cheer accent after a six
 }
 const sndTick = () => { if (live()) { ping(1900, 0.025, 0.05, 0, 'triangle'); } };
 function sndBuzz(level) {   // the crowd stirring as the bowler runs in: switched off with the murmur (see crowdGain)
-  return;
-  if (!live() || !crowdGain) return;
-  const t = actx.currentTime, g = crowdGain.gain;
-  g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(0.16 + level, t + 0.8); g.setTargetAtTime(0.16, t + 1.6, 0.8);
 }
 
 // ======================================================================= game state
@@ -2084,7 +2077,7 @@ function newFielders() {
 }
 
 function newInnings(bat, bowl, maxBalls, maxWkts, target, userBats) {
-  const i = { bat, bowl, userBats, maxBalls, maxWkts, target, runs: 0, wkts: 0, balls: 0, extras: 0, wides: 0,
+  const i = { bat, bowl, userBats, maxBalls, maxWkts, target, runs: 0, wkts: 0, balls: 0, extras: 0, wides: 0, noBalls: 0, freeHit: false,
     fours: 0, sixes: 0, dots: 0,
     cards: bat.players.map(() => ({ runs: 0, balls: 0, fours: 0, sixes: 0, out: null, in: false })),
     striker: 0, non: 1, next: 2, bowlers: {}, bowlOrder: [], bowler: null, lastBowler: null, field: 'balanced',
@@ -2098,6 +2091,27 @@ const overLimit = () => M.mode === 'chase' ? 99 : Math.max(1, Math.ceil(M.overs 
 const ppOvers = () => M && M.mode === 'match' && M.overs >= 10 ? (M.overs >= 50 ? 10 : Math.round(M.overs * 0.3)) : 0;
 const inPP = () => !!inn && Math.floor(inn.balls / 6) < ppOvers();
 const oversBy = k => inn.bowlers[k] ? Math.floor(inn.bowlers[k].balls / 6) : 0;
+// no-balls (match setup): 0 = off, 1 = no-balls, 2 = no-balls and the next ball is a free hit
+const nbRule = () => (M && M.mode === 'match' && M.noBall) || 0;
+// did the bowler overstep? e: how far your needle was from the middle when you bowl (flat out is riskier, holding back is safe);
+// the computer's bowlers do it now and then, the quicks more than the spinners
+function overstepped(bp, e) {
+  if (!nbRule()) return false;
+  if (e !== undefined) return effort >= 0 && Math.abs(e) > (effort > 0 ? 0.9 : 0.96);
+  return Math.random() < (isSpin(bp) ? 0.008 : 0.025) * (1.6 - clamp(bp.bowl / 100, 0, 1));
+}
+// the ball's outcome under those rules: nobody is out bowled, caught or stumped off a no-ball or a free hit
+function lawful(o) {
+  const nb = !!(ball && ball.noBall), fh = !!inn.freeHit;
+  if (!nb && !fh) return o;
+  const r = { runs: o.runs || 0, freeHit: fh };
+  if (o.out) r.notOut = o.out.how;
+  if (nb) r.noBall = true; else if (o.wide) r.wide = true;
+  return r;
+}
+// one entry of inn.over ('0'-'6', 'W', 'wd', 'nb', 'nb4'): is it one of the six, and what it cost
+const legalChip = v => v !== 'wd' && v[0] !== 'n';
+const chipRuns = v => v === 'wd' ? 1 : v === 'W' ? 0 : v[0] === 'n' ? 1 + (+v.slice(2) || 0) : +v;
 
 // ----------------------------------------------------------------------- deliveries
 // where to pitch it so that, before any swing or turn, it would carry on to `line` at the stumps
@@ -2335,6 +2349,7 @@ function aggression() {
   } else a = 0.26 + prog * prog * 0.55;
   if (wl <= 3 && prog < 0.85) a -= 0.12;
   a += inn.maxBalls <= 30 ? 0.18 : inn.maxBalls <= 60 ? 0.08 : 0;
+  if (inn.freeHit) a += 0.35;   // nothing to lose
   return clamp(a, 0.08, 1);
 }
 const batSkill = k => clamp(batterP(k).bat / 100 * (inn.userBats ? 1 : M.diff.aiBat), 0.05, 1);
@@ -2576,13 +2591,25 @@ function dismissal(out) {
   return 'c ' + (f.keeper ? '†' : '') + n + ' b ' + b;
 }
 
-// o: { runs, wide, out: { how: 'bowled' | 'caught', by: fielder } }
+// o: { runs, wide, noBall, out: { how: 'bowled' | 'caught' | 'stumped', by: fielder } } (after lawful())
 function recordBall(o) {
   const i = inn, k = i.bowler;
   const bw = i.bowlers[k] || (i.bowlers[k] = { balls: 0, runs: 0, wkts: 0, wides: 0 });
   if (!i.bowlOrder.includes(k)) i.bowlOrder.push(k);
-  if (o.wide) { i.runs++; i.extras++; i.wides++; bw.runs++; bw.wides++; i.over.push('wd'); return; }
+  if (o.wide) { i.runs++; i.extras++; i.wides++; bw.runs++; bw.wides++; i.over.push('wd'); return; }   // a free hit stays for the next ball
   const c = i.cards[i.striker];
+  if (o.noBall) {   // one extra, not one of the six; the batter keeps what he hit and can't be out
+    const r = o.runs || 0;
+    i.runs += 1 + r; i.extras++; i.noBalls = (i.noBalls || 0) + 1; bw.runs += 1 + r; bw.nbs = (bw.nbs || 0) + 1;
+    c.balls++; c.runs += r;
+    if (r === 4) { c.fours++; i.fours++; }
+    if (r === 6) { c.sixes++; i.sixes++; }
+    i.over.push('nb' + (r || ''));
+    if (r % 2) [i.striker, i.non] = [i.non, i.striker];
+    i.freeHit = nbRule() === 2;
+    return;
+  }
+  i.freeHit = false;
   i.balls++; c.balls++; bw.balls++;
   i.runs += o.runs; c.runs += o.runs; bw.runs += o.runs;
   if (o.runs === 4) { c.fours++; i.fours++; }
@@ -2598,7 +2625,7 @@ function recordBall(o) {
   } else if (o.runs % 2) [i.striker, i.non] = [i.non, i.striker];
   if (i.balls % 6 === 0) {
     [i.striker, i.non] = [i.non, i.striker]; i.overDone = true; i.lastBowler = k;
-    i.lastOver = { runs: i.over.reduce((s, v) => s + (v === 'wd' ? 1 : v === 'W' ? 0 : +v), 0), wkts: i.over.filter(v => v === 'W').length };
+    i.lastOver = { runs: i.over.reduce((s, v) => s + chipRuns(v), 0), wkts: i.over.filter(v => v === 'W').length };
   }
 }
 
@@ -2639,7 +2666,7 @@ function saveMatch() {
   if (!M || M.mode !== 'match' || quiet) return;
   try {
     const t = x => TEAMS.indexOf(x);
-    localStorage.setItem(MATCH_KEY, JSON.stringify({ a: t(M.teams[0]), b: t(M.teams[1]), overs: M.overs, diff: DIFFS.indexOf(M.diff), cur: M.cur, series: !!M.series, tournamentId: M.tournamentId, fixtureId: M.fixtureId,
+    localStorage.setItem(MATCH_KEY, JSON.stringify({ a: t(M.teams[0]), b: t(M.teams[1]), overs: M.overs, diff: DIFFS.indexOf(M.diff), cur: M.cur, series: !!M.series, tournamentId: M.tournamentId, fixtureId: M.fixtureId, noBall: nbRule(),
       innings: M.innings.map(i => ({ ...i, bat: t(i.bat), bowl: t(i.bowl) })) }));
   } catch (e) {}
   renderMatchLine();
@@ -2660,7 +2687,7 @@ function resumeMatch() {
   M = { mode: 'match', overs: d.overs, diff: DIFFS[d.diff] || DIFFS[1], teams: [TEAMS[d.a], TEAMS[d.b]], cur: d.cur, autoplay: null,
         autoBowl: setup.autoBowl !== false, watchFast: false, series: d.series && series && !seriesState(series).done ? series : null,
         innings: d.innings.map(i => ({ ...i, bat: TEAMS[i.bat], bowl: TEAMS[i.bowl] })),
-        tournamentId: d.tournamentId===tournament?.id?d.tournamentId:undefined, fixtureId:d.fixtureId };
+        tournamentId: d.tournamentId===tournament?.id?d.tournamentId:undefined, fixtureId:d.fixtureId, noBall: d.noBall || 0 };
   startInnings(M.cur);
 }
 function startOver() {
@@ -2699,7 +2726,7 @@ function beginBall(delay, announce) {
     el.innerHTML = touch ? 'Tap the pitch to aim, then <b>BOWL</b>' : 'Click the pitch or use the arrow keys to aim, then <b>BOWL</b> (Space)';
     el.classList.add('show');
   } else { phase = 'wait'; phaseT = -delay - (inn.userBats ? 0.8 : 0) - (ff || M.autoplay || quiet ? 0 : BALL_GAP); }
-  if (inn.userBats) preBall = buildDelivery(aiSpec(bowlerP(), M.diff.aiBowl));   // so its bounce mark shows before the run-up
+  if (inn.userBats) { preBall = buildDelivery(aiSpec(bowlerP(), M.diff.aiBowl)); preBall.noBall = overstepped(bowlerP()); }   // so its bounce mark shows before the run-up
   showControls();
   updateScore();
 }
@@ -2715,13 +2742,14 @@ function afterBall() {
 // release: make the ball, and if the computer is batting, decide its shot
 function release() {
   const bp = bowlerP();
-  let spec;
+  let spec, e;
   if (userBowling()) {
-    const e = meter ? (meter.lock !== null ? meter.lock : needle()) : 1;
+    e = meter ? (meter.lock !== null ? meter.lock : needle()) : 1;
     if (meter && meter.lock === null) lockFeedback(e);
     spec = userSpec(bp, e);
   } else if (!preBall) spec = aiSpec(bp, inn.userBats ? M.diff.aiBowl : 1);
-  ball = preBall || buildDelivery(spec); preBall = null;
+  if (preBall) ball = preBall; else { ball = buildDelivery(spec); ball.noBall = overstepped(bp, meter ? e : undefined); }
+  preBall = null;
   if (!inn.userBats) {
     if (userBowling()) {
       varStreak.n = spec.vi && spec.vi === varStreak.vi ? varStreak.n + 1 : 0;
@@ -2739,6 +2767,7 @@ function simBall() {
   quiet = true;
   newFielders();
   ball = buildDelivery(aiSpec(bowlerP(), inn.userBats ? M.diff.aiBowl : 1));
+  ball.noBall = overstepped(bowlerP());
   const o = resolveBall(aiPlan(ball, batSkill(inn.striker), aggression()), 1);
   recordBall(o);
   quiet = false;
@@ -2757,7 +2786,7 @@ function resolveBall(plan, w) {
     else if (h.res.kind === 'caught') o = { runs: 0, out: { how: 'caught', by: h.res.fielder } };
     else o = { runs: h.res.runs };
   }
-  return o;
+  return lawful(o);
 }
 // play out the rest of this over ('over') or innings ('innings') instantly
 function autoRun(mode) {
@@ -2816,15 +2845,16 @@ function updateScore() {
   // this over, ball by ball
   const chips = $('overchips');
   chips.textContent = '';
-  const legal = i.over.filter(v => v !== 'wd').length;
+  const legal = i.over.filter(legalChip).length;
   const shown = i.over.slice();
   for (let k = legal; k < 6 && k < legal + (i.maxBalls - i.balls); k++) shown.push(null);
   for (const v of shown) {
     const c = document.createElement('div');
-    c.className = 'chip' + (v === null ? ' todo' : v === 'W' ? ' cw' : v === '6' ? ' c6' : v === '4' ? ' c4' : v === 'wd' ? ' cx' : '');
-    c.textContent = v === null ? '' : v === '0' ? '•' : v;
+    c.className = 'chip' + (v === null ? ' todo' : v === 'W' ? ' cw' : v === '6' ? ' c6' : v === '4' ? ' c4' : legalChip(v) ? '' : ' cx');
+    c.textContent = v === null ? '' : v === '0' ? '•' : v[0] === 'n' ? v.slice(2) + 'nb' : v;
     chips.appendChild(c);
   }
+  if (i.freeHit && chips.children[i.over.length]) { const c = chips.children[i.over.length]; c.classList.add('cf'); c.textContent = 'FH'; }   // the next ball is a free hit
 }
 function showBanner(head, line, cls, dur) {
   const b = $('banner');
@@ -2837,7 +2867,7 @@ function showBanner(head, line, cls, dur) {
 function hideBanner() { $('banner').className = 'hud'; bannerUntil = 0; }
 function showDelivery(d) {
   const el = $('delivery');
-  el.innerHTML = '<b>' + Math.round(d.kmh) + ' km/h</b> · ' + d.length + (userBowling() && d.vname !== 'Stock' ? ' · ' + d.vname : '');
+  el.innerHTML = (d.noBall ? '<b>NO BALL</b> · ' : inn.freeHit ? '<b>FREE HIT</b> · ' : '') + '<b>' + Math.round(d.kmh) + ' km/h</b> · ' + d.length + (userBowling() && d.vname !== 'Stock' ? ' · ' + d.vname : '');
   el.classList.add('show');
 }
 function showControls() {
@@ -2910,16 +2940,22 @@ function lockFeedback(e) {
 // ----------------------------------------------------------------------- result of a ball (animated)
 function finishBall(o, line) {
   const i = inn, k = i.striker, chaseMode = M.mode === 'chase';
+  o = lawful(o);
+  if (o.notOut) line = { bowled: 'Bowled', caught: 'Caught', stumped: 'Stumped' }[o.notOut] + (o.noBall ? ', but not out' : ' off the free hit');
+  else if (o.noBall) line = o.runs ? (o.runs >= 4 ? 'No-ball · ' : plural(o.runs, 'run') + ' and a no-ball · ') + line : 'One extra run';
   recMark(o, line);
   recordBall(o);
+  if (o.noBall && i.freeHit) line += ' · free hit next';
+  else if (o.wide && i.freeHit) line += ' · still a free hit';
   updateScore();
   const c = i.cards[k], who = chaseMode ? '' : surname(batterP(k).name) + ' ';
+  const milestone = o.out || chaseMode ? 0 : c.runs >= 100 && c.runs - o.runs < 100 ? 100 : c.runs >= 50 && c.runs - o.runs < 50 ? 50 : 0;
   {   // what the commentator needs: who, which shot, where it went, and the state of the match
     const d = ball && ball.decision, pl = ball && ball.play, res = pl && pl.res, by = o.out && o.out.by;
     const pt = res && res.point, fld = by || (res && res.fielder);
     commentaryCall('result', { ...o, id: 'ball-' + M.cur + '-' + i.balls + '-' + i.extras + '-' + i.runs + '-' + i.wkts, totalRuns: i.runs, wickets: i.wkts,
-      overDone: i.balls > 0 && i.balls % 6 === 0 && !o.wide,
-      milestone: !o.out && !chaseMode ? (c.runs >= 100 && c.runs - o.runs < 100 ? 100 : c.runs >= 50 && c.runs - o.runs < 50 ? 50 : 0) : 0,
+      overDone: i.balls > 0 && i.balls % 6 === 0 && !o.wide && !o.noBall, freeHitNext: !!i.freeHit,
+      milestone,
       batter: surname(batterP(k).name), bowler: surname(bowlerP().name), team: i.bat.name, chase: !!i.target,
       batRuns: c.runs, batBalls: c.balls, target: i.target || 0, need: i.target ? i.target - i.runs : 0, ballsLeft: i.maxBalls - i.balls,
       lastOver: i.lastOver, shot: d && d.shot, contact: d ? d.kind : 'none', loft: !!(d && d.loft), defend: !!(d && d.defend),
@@ -2930,17 +2966,19 @@ function finishBall(o, line) {
   }
   const ours = i.userBats;   // the crowd is on your side
   if (!quiet && !ff) shake = o.out ? 0.9 : o.runs === 6 ? 0.6 : 0;
-  { const cc = i.cards[k]; celebrate = { out: o.out || null, runs: o.runs || 0, milestone: !chaseMode && !o.out && cc.runs >= 50 && cc.runs - o.runs < 50 }; }
+  celebrate = { out: o.out || null, runs: o.runs || 0, milestone: !!milestone };
   if (o.out) {
     showBanner('OUT!', chaseMode ? line : line + ' · ' + who + c.runs + ' (' + c.balls + ')', 'bw');
     if (ours) { sndOoh(1, true); sndClap(0.25, 3); } else { sndCrowd(0.9, 3); sndClap(0.7); cheer = 0.8; }
   } else if (o.wide) showBanner('WIDE', line, 'small');
+  else if (o.notOut) showBanner(o.noBall ? 'NO BALL' : 'NOT OUT', line, 'small');
+  else if (o.noBall && o.runs < 4) showBanner('NO BALL', line, 'small');
   else if (o.runs === 6) { showBanner('SIX!', line, 'b6'); if (ours) { sndCrowd(1, 3.5); sndClap(0.8, 5); sndHorn(); cheer = 1; } else { sndCrowd(0.3, 2); sndClap(0.35); } }
   else if (o.runs === 4) { showBanner('FOUR!', line, 'b4'); if (ours) { sndCrowd(0.7, 2.6); sndClap(0.6); cheer = 0.7; } else { sndCrowd(0.2, 1.5); sndClap(0.3); } }
   else {
     showBanner(o.runs === 0 ? 'DOT BALL' : o.runs + (o.runs === 1 ? ' RUN' : ' RUNS'), line, 'small');
   }
-  if (!chaseMode && !o.out && c.runs >= 50 && c.runs - o.runs < 50) { showBanner(c.runs >= 100 ? 'HUNDRED!' : 'FIFTY!', who + c.runs + ' off ' + c.balls, 'b6'); sndClap(1, 7); sndCrowd(0.6, 4); }
+  if (milestone) { showBanner(milestone === 100 ? 'HUNDRED!' : 'FIFTY!', who + c.runs + ' off ' + c.balls, 'b6'); sndClap(1, 7); sndCrowd(0.6, 4); }
   phase = 'result'; phaseT = 0;
 }
 
@@ -3126,7 +3164,7 @@ function scorecardHTML(i) {
     h += '<tr' + (atCrease ? ' class="live"' : '') + '><td class="nm">' + esc(p.name) + (k === i.bat.wk ? ' †' : '') + (atCrease && k === i.striker ? ' ▶' : '') +
       '</td><td class="how">' + esc(c.out || 'not out') + '</td><td><b>' + c.runs + '</b></td><td>' + c.balls + '</td><td>' + c.fours + '</td><td>' + c.sixes + '</td></tr>';
   });
-  h += '<tr><td class="nm">Extras</td><td class="how">' + (i.wides ? plural(i.wides, 'wide') : '') + '</td><td>' + i.extras + '</td><td colspan="3"></td></tr>';
+  h += '<tr><td class="nm">Extras</td><td class="how">' + [i.wides && plural(i.wides, 'wide'), i.noBalls && plural(i.noBalls, 'no-ball')].filter(Boolean).join(', ') + '</td><td>' + i.extras + '</td><td colspan="3"></td></tr>';
   h += '<tr class="tot"><td class="nm">Total</td><td class="how">' + plural(i.wkts, 'wicket') + ', ' + ovStr(i.balls) + ' overs</td><td>' + i.runs + '</td><td colspan="3"></td></tr></tbody></table>';
   const dnb = i.cards.map((c, k) => c.in ? null : i.bat.players[k].name).filter(Boolean);
   if (dnb.length) h += '<p class="note">Yet to bat: ' + esc(dnb.join(', ')) + '</p>';
@@ -3170,7 +3208,7 @@ function toMenu() {
 }
 
 // match setup (remembered in this browser)
-const setup = { a: 0, b: 1, overs: 5, diff: 1, autoBowl: true, series: 0, league: 'international', tournament: false };
+const setup = { a: 0, b: 1, overs: 5, diff: 1, autoBowl: true, series: 0, league: 'international', tournament: false, noBall: 2 };
 try { Object.assign(setup, JSON.parse(localStorage.getItem('boundary-rush-setup') || '{}')); } catch (e) {}
 function saveSetup() { try { localStorage.setItem('boundary-rush-setup', JSON.stringify(setup)); } catch (e) {} }
 function optButtons(boxId, items, isOn, onPick) {
@@ -3206,6 +3244,7 @@ function renderSetup() {
   optButtons('oversPick',[2,5,10,20,50].map(v=>({v,html:v===20?'T20':v===50?'ODI (50)':v+' overs'})),it=>it.v===setup.overs,it=>{setup.overs=it.v;saveSetup();renderSetup();});
   optButtons('diffPick',DIFFS.map(d=>({html:d.name})),(it,k)=>k===setup.diff,(it,k)=>{setup.diff=k;saveSetup();renderSetup();});
   optButtons('bowlPick',[{v:true,html:'Computer bowls'},{v:false,html:"I'll bowl"}],it=>it.v===setup.autoBowl,it=>{setup.autoBowl=it.v;saveSetup();renderSetup();});
+  optButtons('nbPick',[{v:0,html:'Off'},{v:1,html:'On'},{v:2,html:'On, with a free hit'}],it=>it.v===setup.noBall,it=>{setup.noBall=it.v;saveSetup();renderSetup();});
 }
 // Tournament progress is separate from saved single matches and mini series.
 const CUP_KEY='cricket-rush-tournament';
@@ -3269,7 +3308,7 @@ let series = null;
 try { series = JSON.parse(localStorage.getItem(SERIES_KEY) || 'null'); if (series && !TEAMS[series.a]) series = null; } catch (e) {}
 function saveSeries() { try { localStorage.setItem(SERIES_KEY, JSON.stringify(series)); } catch (e) {} }
 function newSeries() {
-  series = { n: setup.series, a: setup.a, b: setup.b, overs: setup.overs, diff: setup.diff, games: [], stats: {} };
+  series = { n: setup.series, a: setup.a, b: setup.b, overs: setup.overs, diff: setup.diff, noBall: setup.noBall, games: [], stats: {} };
   saveSeries();
 }
 function seriesState(sr) {
@@ -3306,10 +3345,6 @@ function awardDetail(best) {
   if (e.w) contributions.push('Took ' + plural(e.w, 'wicket'));
   return e.t + ' · ' + (contributions.join('. ') || 'No runs or wickets') + '.';
 }
-function seriesStar(sr) {
-  const best = awardWinner(sr.stats);
-  return best ? 'Player of the series: ' + best.n + ' (' + awardDetail(best) + ')' : '';
-}
 function renderEndOptions() {
   const sr = M?.series, st = sr && seriesState(sr), match = {stats:{}};
   seriesAddStats(match);
@@ -3342,7 +3377,7 @@ function rematch(standalone = false) {
   if (chase) return startChase(level);
   Object.assign(setup,cfg);
   const keep = series; series = sr || null; startToss(); series = keep;
-  M.autoBowl = previous.autoBowl;
+  M.autoBowl = previous.autoBowl; M.noBall = previous.noBall || 0;
   if(keepCup){M.tournamentId=previous.tournamentId;M.fixtureId=previous.fixtureId;}
 }
 function renderSeriesLine() {
@@ -3352,7 +3387,7 @@ function renderSeriesLine() {
 function startToss() {
   const sr = series && !seriesState(series).done ? series : null, cfg = sr || setup;
   M = { mode: 'match', overs: cfg.overs, diff: DIFFS[cfg.diff] || DIFFS[1], teams: [TEAMS[cfg.a], TEAMS[cfg.b]], innings: [], cur: 0, autoplay: null,
-        autoBowl: setup.autoBowl !== false, watchFast: false, series: sr };
+        autoBowl: setup.autoBowl !== false, watchFast: false, series: sr, noBall: (sr ? sr.noBall : null) ?? setup.noBall };
   $('tossText').textContent = (sr ? seriesState(sr).text + '. ' : '') +
     M.teams[0].name + ' v ' + M.teams[1].name + ', ' + M.overs + ' overs a side. Call it:';
   $('tossTitle').innerHTML = sr ? 'MATCH <span>' + (sr.games.length + 1) + ' OF ' + sr.n + '</span>' : 'THE <span>TOSS</span>';
@@ -3501,7 +3536,7 @@ function update(dt) {
 
   if (cardUntil && clock > cardUntil) hideCard();
   const gapOn = phase === 'wait' && phaseT < GAP_END && !ff && !paused;
-  const nt = $('nextTag'); if (nt.hidden === gapOn) { nt.hidden = !gapOn; nt.lastChild.textContent = touch ? 'tap to skip' : 'S or Space to skip'; }
+  const nt = $('nextTag'); if (nt.hidden === gapOn) { nt.hidden = !gapOn; nt.firstChild.textContent = inn && inn.freeHit ? 'FREE HIT' : 'NEXT BALL'; nt.lastChild.textContent = touch ? 'tap to skip' : 'S or Space to skip'; }
   if (phase === 'wait' && phaseT >= 0) { phase = 'runup'; phaseT = 0; $('delivery').classList.remove('show'); sndBuzz(0.07); }
   else if (phase === 'aim') {
     const [x, y] = keyAxes();

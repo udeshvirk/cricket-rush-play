@@ -351,7 +351,6 @@ window.Cricket3D = function (G) {
   const cyl = new T.CylinderGeometry(1, 1, 1, 12);
   const sph = new T.SphereGeometry(1, 16, 12);
   const dome = new T.SphereGeometry(1, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.55);
-  const halfDisc = new T.CylinderGeometry(1, 1, 1, 18, 1, false, -Math.PI / 2, Math.PI);
   const bar = new T.TorusGeometry(1, 0.035, 5, 16, Math.PI * 0.9);
   const box = new T.BoxGeometry(1, 1, 1);
   const UP = new T.Vector3(0, 1, 0);
@@ -585,8 +584,6 @@ window.Cricket3D = function (G) {
     }, undefined, playerPreviewFailed);
   }
   const INVIS = new T.MeshBasicMaterial({ visible: false });
-  const EYES = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.25 });
-  const SKINV = SKIN.map(m => new T.MeshStandardMaterial({ color: m.color.clone().multiplyScalar(1.12), vertexColors: true, roughness: 0.62 }));
   // (V2 player: this paints only the BODY under the separate kit meshes, so where the kit leaves a gap the body shows the
   // same team colour instead of a seam)
   // one material per player: the kit is cut per pixel along clean lines in the rest pose (waist, collar, sleeves, ankles),
@@ -626,7 +623,6 @@ window.Cricket3D = function (G) {
   }
   // the textured player (vendor/player-rb.js): photo-textured cloth and skin. The cloth is neutral in the texture and takes the
   // team's colours here (mask: red = shirt, green = trousers, blue = bare skin); the skin takes each player's tone
-  const RB_SKIN = new T.Color('#d9a585');   // the texture's own skin colour
   const RB_KEY = { body: 'rb-body-2', head: 'rb-head-2' };
   // faces: [face, shade] choices per team (the shade darkens a lighter face, for more variety); any team not listed uses them all
   const TAN = [[6, 1], [5, 1], [6, 0.82], [1, 0.6], [4, 0.58], [0, 0.6], [5, 0.85], [3, 0.56], [8, 0.7]], FAIR = [[0, 1], [1, 1], [2, 1], [3, 1], [4, 1], [8, 1], [6, 1], [1, 0.85]],
@@ -932,7 +928,7 @@ window.Cricket3D = function (G) {
       if(deepest<.001 && reachError<.001)break;
     }
   }
-  const eqM = new T.Matrix4(), eX = new T.Vector3(), eY = new T.Vector3(), eZ = new T.Vector3();
+  const eX = new T.Vector3(), eY = new T.Vector3(), eZ = new T.Vector3();
   // place an equipment piece: its local -Y along 'down', local +Z toward 'face', at 'at', scaled by sy (sx = -1 mirrors it)
   function placeEq(obj, at, down, face, sy, sx = 1) {
     eY.copy(down).normalize().negate();

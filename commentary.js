@@ -119,6 +119,15 @@
       if(d.dropped&&!f)return {priority:80,text:pick([`Dropped! ${b} survives.`,`A let-off for ${b}! That was a chance.`,`Oh, that's gone down! ${w} can't believe it.`])};
       if(d.dropped)return {priority:80,text:pick([`Dropped! ${cap(f)} puts it down. ${b} survives.`,`Oh, that's a chance gone at ${f}!`,`A let-off for ${b}! ${cap(f)} couldn't hold it.`,`Put down at ${f}! ${w} can't believe it.`])};
       if(d.missedStumping)return {priority:70,text:pick([`The keeper missed the stumping! ${b} gets away with it.`,`${b} was miles out, but the keeper fumbled it!`])};
+      if(d.notOut){
+        const how=d.notOut==='caught'?'Caught':d.notOut==='stumped'?'Stumped':'Bowled him';
+        return {priority:80,text:d.noBall?pick([`${how}! But it's a no-ball. ${b} survives.`,`${how}, but ${w} has overstepped! Not out.`,`${how}! No, the umpire has called a no-ball.`])
+          :pick([`${how}, but it's a free hit. Not out.`,`${how}! It doesn't count, that was the free hit.`,`${how} off the free hit. ${b} stays.`])};
+      }
+      if(d.noBall){
+        const fh=d.freeHitNext?' '+pick([`Free hit coming up.`,`The next ball is a free hit.`,`${b} gets a free hit.`]):'';
+        return {priority:45,text:pick([`No-ball from ${w}.`,`${w} has overstepped. No-ball.`,`No-ball called.`])+(d.runs?` And ${plural(d.runs,'run')} off the bat as well.`:'')+fh};
+      }
       if(d.wide)return {priority:35,text:pick([`Wide. One added to the score.`,`Too wide from ${w}. That's a wide.`,`Wide called. An extra run.`,`${w} strays too wide.`])};
       if(d.runs===0){
         if(d.ducked)return {priority:30,text:pick([`Bouncer, and ${b} ducks under it.`,`Short one, and ${b} sways out of the way.`,`${b} gets well underneath that bouncer.`])};
@@ -160,7 +169,7 @@
       track.ball++;
       const bw=d.bowler||'?';
       const seq=track.bowlerSeq[bw]||(track.bowlerSeq[bw]=[]);
-      if(!d.wide)seq.push(d.out?'W':'.');if(seq.length>3)seq.shift();
+      if(!d.wide&&!d.noBall)seq.push(d.out?'W':'.');if(seq.length>3)seq.shift();
       if(d.out)track.wicketBalls.push(track.ball);
       track.wicketBalls=track.wicketBalls.filter(n=>track.ball-n<12);
       const boundary=!d.out&&(d.runs===4||d.runs===6);
@@ -179,6 +188,7 @@
       }
       if(boundary){
         let t=boundaryLine(d);
+        if(d.noBall)t+=' '+pick([`And it's a no-ball too.`,`A no-ball as well!`])+(d.freeHitNext?' Free hit next.':'');
         if(track.boundaries===3)t+=' '+pick([`That's three in a row!`,`Three boundaries on the trot for ${d.batter}!`]);
         else if(track.boundaries>=4)t+=' '+pick([`Another one! ${d.batter} is on fire.`,`${d.batter} is taking ${d.bowler||'the bowler'} apart!`]);
         const s=situation(d,true);
@@ -191,7 +201,7 @@
       const q=quietLine(d);
       if(q.priority<50){
         // quiet balls: say most of them, but a dot now and then is left to the crowd
-        if(d.runs===0&&!d.wide&&!d.ducked&&q.priority<30&&(track.dots=(track.dots+1)%3)===2)return null;
+        if(d.runs===0&&!d.wide&&!d.noBall&&!d.notOut&&!d.ducked&&q.priority<30&&(track.dots=(track.dots+1)%3)===2)return null;
         const s=situation(d,false);
         if(s){q.text+=' '+s;q.priority=50;}
       }
