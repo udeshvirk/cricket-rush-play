@@ -95,36 +95,38 @@
     }
     return {pose,time};
   }
-  // A staged drive, rather than a hand orbit plus an unwrapped blade angle.
-  // The authored controls separate loading, slot, impact, extension and finish.
-  // They remain kinematic authoring controls, not a mocap or collision system.
+  // Drive direction changes the stride, body alignment and finish plane,
+  // not just the exit angle. Profiles blend continuously between named shots.
   function driveKeys({start,target,aim=0,loft=false,stance,impact=.15}) {
     const mix=(a,b,u)=>a+(b-a)*u;
     const blend=(a,b,u)=>Object.fromEntries(Object.keys(a).map(k=>[k,
       Array.isArray(a[k])?a[k].map((v,i)=>mix(v,(b[k]||a[k])[i],u))
         :typeof a[k]==='number'?mix(a[k],b[k]??a[k],u):a[k]]));
-    const angle=clamp(aim,-100,35)*Math.PI/180,dx=Math.sin(angle),dz=Math.max(.12,Math.cos(angle));
-    // One drive per direction: c is 0 straight, 1 through cover, about 1.4 square;
-    // on is 0..1 for the on drive. The stride, the hips and shoulders, the angle of
-    // the bat and the finish all follow it, not just the direction of the hands.
-    const c=clamp(-aim,0,100)/70,on=clamp(aim,0,35)/35,sq=Math.max(0,c-.9);
-    const fr=[clamp(target[0]+.32-.06*c+.05*on,.02,.78),0,1.4-.16*sq];
-    const bd=unit([-.06+dx*.22-.25*sq,-1,-.08]);
-    const h=add(target,scale(bd,-.48));
-    const pelvis=[mix(start.pel[0],fr[0],.7),clamp(.78+(target[1]-.5)*.1,.72,.84)-.03*c,1.01-.1*sq];
-    const contact={...start,fr,pel:pelvis,hy:-60-8*c+10*on,sy:-76-10*c+14*on,lean:24+4*c,side:7+3*c,h,bd,
-      kpL:[-.25-.35*c+.15*on,0,1],rearFootPitch:.18};
-    const load={...start,pel:add(start.pel,[0,-.015,.025]),hy:start.hy+8,sy:start.sy-4,
-      h:add(start.h,[.015,.025,-.035]),bd:slerp(unit(start.bd),unit([-.4,.76,-.51]),.3)};
+    const angle=clamp(aim,-100,35),rad=angle*Math.PI/180,dx=Math.sin(rad),dz=Math.max(.12,Math.cos(rad));
+    // angle, stride x, stride z, hip/shoulder contact, finish height, finish shoulder
+    const profiles=[[-100,.12,1.12,-88,-108,1.08,-80],[-45,.20,1.30,-76,-94,1.36,-56],
+      [0,.34,1.43,-62,-78,1.62,-18],[35,.50,1.34,-44,-60,1.53,20]];
+    let i=0;while(i<profiles.length-2&&angle>profiles[i+1][0])i++;
+    const a=profiles[i],b=profiles[i+1],u=clamp((angle-a[0])/(b[0]-a[0]),0,1),p=a.map((v,k)=>mix(v,b[k],u));
+    const low=clamp((.5-target[1])*.35,0,.10),fr=[clamp(target[0]+p[1],-.18,.9),0,p[2]];
+    const bd=unit([-.04+dx*.30,-1,-.08]),h=add(target,scale(bd,-.48));
+    const pelvis=[mix(start.pel[0],fr[0],.65),.79-low,1.0-.14*Math.max(0,(-angle-45)/55)];
+    const contact={...start,fr,pel:pelvis,hy:p[3],sy:p[4],lean:24+low*70,side:4,h,bd,
+      kpL:[dx*.65-.10,0,1],rearFootPitch:.14};
+    const load={...start,pel:add(start.pel,[0,-.015,.025]),hy:start.hy+6,sy:start.sy-5,
+      h:add(start.h,[.01,.025,-.025]),bd:slerp(unit(start.bd),unit([-.4,.76,-.51]),.3)};
     const slot={...blend(start,contact,.65),hy:mix(start.hy,contact.hy,.85),sy:mix(start.sy,contact.sy,.45),
-      h:[mix(start.h[0],h[0],.7),h[1]+.1,h[2]-.12],bd:unit([-.22,-.32,-.92])};
-    const through={...contact,pel:add(pelvis,[0,.025,.025]),hy:-45,sy:-60,lean:20,side:5,
-      h:add(h,[dx*.22,.07,dz*.2]),bd:unit([dx*.45-.07,-.65,.76*dz]),rearFootPitch:.26};
-    const extension={...contact,pel:add(pelvis,[0,.06,.06]),hy:-35,sy:-40,lean:14,side:3,
-      h:add(h,[.04+dx*.34,.23+(loft?.08:0),.38*dz]),bd:unit([dx*.85-.12,loft?.28:.08,.99*dz]),rearFootPitch:.32};
-    const finish={...contact,pel:[pelvis[0]+.025,.89-.03*c,1.07-.1*sq],hy:-28-10*c+12*on,sy:-12+clamp(aim,-100,35)*.25,lean:9+3*c,side:0,
-      h:[pelvis[0]-.22+dx*.14,loft?1.72:1.55,1.25-.15*c],bd:unit([-.58+dx*.25,.79,.18-.2*c]),rearFootPitch:.34};
-    const settle={...finish,h:add(finish.h,[0,-.05,0]),lean:7};
+      h:[mix(start.h[0],h[0],.7),h[1]+.1,h[2]-.12],bd:unit([-.18+dx*.12,-.32,-.92])};
+    const through={...contact,pel:add(pelvis,[0,.025,.02]),hy:p[3]+12,sy:p[4]+12,lean:20+low*30,side:3,
+      h:add(h,[dx*.16,.035,dz*.20]),bd:unit([dx*.55-.04,-.65,.75*dz]),rearFootPitch:.23};
+    const extension={...contact,pel:add(pelvis,[0,.055,.035]),hy:p[3]+22,sy:p[4]+28,lean:14,side:1,
+      h:add(h,[dx*.24,.18+(loft?.15:0),.30*dz]),bd:unit([dx*.9-.04,loft?.4:.12,.96*dz]),rearFootPitch:.3};
+    const height=loft?Math.max(1.60,p[5]+.15):p[5];
+    const finish={...contact,pel:[pelvis[0]+.015,.88,1.04-.12*Math.max(0,(-angle-45)/55)],
+      hy:p[3]+30,sy:p[6],lean:8,side:0,rearFootPitch:.3,
+      h:[pelvis[0]-.06+dx*.25,height,1.25-.15*Math.abs(dx)],
+      bd:unit([dx*.9-.12,loft?.86:mix(.30,.90,Math.max(0,1-Math.abs(angle)/100)),.30])};
+    const settle={...finish,h:add(finish.h,[0,-.06,0]),lean:7,rearFootPitch:.18};
     return [[0,start],[impact*.26,load],[impact*.63,slot],[impact,contact],
       [impact+.075,through],[impact+.18,extension],[impact+.42,finish],
       [impact+.95,settle],[impact+1.6,stance]];
@@ -151,49 +153,49 @@
     return [[0,start],[impact*.33,load],[impact*.68,slot],[impact,contact],
       [impact+.075,through],[impact+.17,extension],[impact+.38,finish],[impact+.85,settle],[impact+1.5,stance]];
   }
-  // Back and across, the front leg opening to the leg side: the hips turn
-  // first, the shoulders follow right round, and the batter finishes facing
-  // square leg up on the back toe, the bat high over the leading shoulder.
+  // Pull: a grounded back-foot base, hips leading the shoulders and a level
+  // wrap across the chest. Height adaptation keeps low contacts within reach.
   function pullKeys({start,target,stance,loft=false,impact=.15}) {
-    const shift=clamp(target[0]*.6,-.18,.18),bd=unit([-.96,-.04,.28]);
-    const h=add(target,scale(bd,-.48));
-    const contact={...start,fr:[.98+shift,0,.9],bk:[.46+shift,0,.3],pel:[.68+shift,.83,.56],
-      hy:-40,sy:-30,lean:6,side:0,h,bd,kpL:[.6,0,.8],kpR:[-.5,0,.85],rearFootPitch:0};
-    const load={...contact,pel:start.pel.map((v,i)=>v+(contact.pel[i]-v)*.4),
-      hy:start.hy+(contact.hy-start.hy)*.5,sy:start.sy+(contact.sy-start.sy)*.1,
-      h:start.h.map((v,i)=>v+(h[i]-v)*.25+(i===1?.025:0)),
-      bd:slerp(unit(start.bd),unit([-.9,.25,-.25]),.25)};
-    const slot={...contact,hy:-52,sy:-74,h:add(h,[-.025,.055,-.035]),bd:unit([-.94,.26,-.22])};
-    const through={...contact,pel:[.71+shift,.84,.6],hy:-18,sy:4,
-      h:add(h,[.15,.025,.24]),bd:unit([-.3,-.06,.95])};
-    const extension={...through,pel:[.73+shift,.86,.62],hy:0,sy:32,h:[.87+shift,h[1]+.13,1.12],bd:unit([.6,.22,.77]),rearFootPitch:.18};
-    const finish={...contact,pel:[.75+shift,.87,.63],hy:15,sy:62,lean:5,rearFootPitch:.3,
-      h:[.95+shift,loft?1.64:1.52,.88],bd:unit([.72,loft?.76:.62,.12])};
-    const settle={...finish,hy:8,sy:50,lean:7,h:add(finish.h,[-.04,-.09,0]),bd:unit([.8,.42,.3])};
-    return [[0,start],[impact*.33,load],[impact*.68,slot],[impact,contact],
-      [impact+.075,through],[impact+.18,extension],[impact+.34,finish],[impact+.85,settle],[impact+1.5,stance]];
+    const shift=clamp(target[0]*.8,-.28,.25),low=clamp((1.15-target[1])*.4,0,.18);
+    const bd=unit([-.97,-.09,.22]),h=add(target,scale(bd,-.48));
+    const contact={...start,fr:[1.01+shift,0,1.02],bk:[.48+shift,0,.38],pel:[.69+shift,.84-low,.76],
+      hy:-42,sy:-54,lean:12+low*45,side:0,h,bd,kpL:[.45,0,.9],kpR:[-.65,0,.75],rearFootPitch:0};
+    const load={...contact,pel:start.pel.map((v,i)=>v+(contact.pel[i]-v)*.45),
+      hy:start.hy+(contact.hy-start.hy)*.65,sy:start.sy+(contact.sy-start.sy)*.18,
+      h:start.h.map((v,i)=>v+(h[i]-v)*.3+(i===1?.06:0)),bd:slerp(unit(start.bd),unit([-.7,.5,-.5]),.3)};
+    const slot={...contact,hy:-48,sy:-76,h:add(h,[-.035,.10,-.12]),bd:unit([-.78,.25,-.57])};
+    const through={...contact,hy:-24,sy:-22,lean:10+low*25,
+      h:add(h,[.13,loft?.06:-.04,.17]),bd:unit([-.48,-.12,.87])};
+    const extension={...contact,pel:[.72+shift,.86,.77],hy:-10,sy:6,lean:8,
+      h:[.92+shift,loft?1.36:1.14,1.14],bd:unit([.48,loft?.25:-.12,.87]),rearFootPitch:.12};
+    const finish={...contact,pel:[.73+shift,.87,.77],hy:0,sy:32,lean:6,rearFootPitch:.22,
+      h:[1.01+shift,loft?1.40:1.15,.94],bd:unit([.91,loft?.36:.02,-.4])};
+    const settle={...finish,hy:-8,sy:24,h:add(finish.h,[-.04,-.07,.015]),rearFootPitch:.12};
+    return [[0,start],[impact*.3,load],[impact*.66,slot],[impact,contact],
+      [impact+.08,through],[impact+.20,extension],[impact+.42,finish],[impact+.85,settle],[impact+1.5,stance]];
   }
-  // Head-high on the leg side: swivel on the back foot with the front foot off
-  // the ground, the bat rising across the line and finishing over the shoulder.
+  // Hook: stay tall behind the high ball, open the front foot, swivel through
+  // at shoulder height and carry the blade above the leg-side shoulder. Both
+  // shoes have support; the old fixed airborne front foot hovered until recovery.
   function hookKeys({start,target,stance,loft=false,impact=.15}) {
-    const shift=clamp(target[0]*.6,-.18,.18),bd=unit([-.93,.2,.3]);
+    const shift=clamp(target[0]*.8,-.28,.25),bd=unit([-.96,.06,.27]);
     const h=add(target,scale(bd,-.48));
-    const contact={...start,fr:[.92+shift,.07,.9],bk:[.5+shift,0,.3],pel:[.64+shift,.9,.52],
-      hy:-48,sy:-28,lean:4,side:0,h,bd,kpL:[.3,0,1],kpR:[-.6,0,.7],rearFootPitch:.12};
-    const load={...contact,pel:start.pel.map((v,i)=>v+(contact.pel[i]-v)*.4),
-      hy:start.hy+(contact.hy-start.hy)*.4,sy:start.sy+(contact.sy-start.sy)*.15,
-      h:start.h.map((v,i)=>v+(h[i]-v)*.25+(i===1?.025:0)),
-      bd:slerp(unit(start.bd),unit([-.88,.4,-.25]),.25)};
-    const slot={...contact,hy:-58,sy:-62,h:add(h,[-.03,.05,-.05]),bd:unit([-.92,.34,-.2])};
-    const through={...contact,pel:[.68+shift,.9,.56],hy:-22,sy:8,
-      h:add(h,[.16,.05,.2]),bd:unit([-.25,.14,.96])};
-    const top=Math.min(1.82,h[1]+.14);
-    const extension={...through,hy:-8,sy:34,h:[.9+shift,top-.04,1.04],bd:unit([.65,.4,.65])};
-    const finish={...contact,pel:[.72+shift,.9,.6],hy:4,sy:58,lean:3,
-      h:[.99+shift,loft?top+.04:top,.9],bd:unit([.72,loft?.72:.62,.2])};
-    const settle={...finish,hy:-4,sy:46,lean:5,h:add(finish.h,[-.04,-.1,0]),bd:unit([.8,.45,.32])};
-    return [[0,start],[impact*.33,load],[impact*.68,slot],[impact,contact],
-      [impact+.075,through],[impact+.18,extension],[impact+.34,finish],[impact+.85,settle],[impact+1.5,stance]];
+    const contact={...start,fr:[.98+shift,0,.94],bk:[.5+shift,0,.38],pel:[.68+shift,.93,.74],
+      hy:-40,sy:-48,lean:-7,side:0,h,bd,kpL:[.65,0,.76],kpR:[-.6,0,.8],rearFootPitch:0};
+    const load={...contact,pel:start.pel.map((v,i)=>v+(contact.pel[i]-v)*.45),
+      hy:start.hy+(contact.hy-start.hy)*.6,sy:start.sy+(contact.sy-start.sy)*.15,
+      h:start.h.map((v,i)=>v+(h[i]-v)*.35),bd:slerp(unit(start.bd),unit([-.75,.55,-.35]),.35)};
+    const slot={...contact,hy:-49,sy:-72,h:add(h,[-.035,.06,-.10]),bd:unit([-.86,.3,-.4])};
+    const through={...contact,hy:-18,sy:-10,lean:-5,
+      h:add(h,[.13,.04,.13]),bd:unit([-.45,.16,.88]),rearFootPitch:.08};
+    const top=clamp(h[1]+.12,1.58,1.85);
+    const extension={...contact,pel:[.71+shift,.93,.75],hy:0,sy:20,lean:-3,
+      h:[.94+shift,top,1.06],bd:unit([.52,.38,.76]),rearFootPitch:.18};
+    const finish={...contact,pel:[.73+shift,.92,.75],hy:8,sy:45,lean:0,
+      h:[1.02+shift,top+(loft?.04:0),.88],bd:unit([.7,.68,-.22]),rearFootPitch:.26};
+    const settle={...finish,hy:0,sy:34,h:add(finish.h,[-.04,-.08,.02]),rearFootPitch:.14};
+    return [[0,start],[impact*.3,load],[impact*.66,slot],[impact,contact],
+      [impact+.08,through],[impact+.20,extension],[impact+.42,finish],[impact+.85,settle],[impact+1.5,stance]];
   }
   // Upper cut: make room with the front leg, stay tall, lift the blade
   // through the high ball and extend above the off shoulder.

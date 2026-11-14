@@ -1745,7 +1745,8 @@ function batterPose(sw) {
   const follow=MOTION2 && sw?smooth(clamp((motionTime-SWING_LAG-.04)/.32,0,1)):0;
   const gaze=facing(MOTION2 && sw?clamp(sw.intent||0,-70,70)*follow:0);
   if(MOTION2 && sw?.loft)j.head[2]-=.035*follow;
-  const framed=sw && ((SWEEP_MOTION && /^(r?sweep)$/.test(sw.fam))
+  const framed=sw && ((DRIVE_MOTION && sw.fam==='drive') || (SWEEP_MOTION && /^(r?sweep)$/.test(sw.fam))
+    || (PULL_MOTION && ['pull','hook'].includes(sw.fam))
     || (CUT_MOTION && ['cut','ucut'].includes(sw.fam)) || (NEW_STROKES && sw.fam==='lcut'));
   const width=framed ? CricketMotion.pathWidth(sw.curve,motionTime,bd,k.batRoll||0) : null;
   return { j, hands: k.h.slice(), tip: add(k.h, mul(bd, 0.85)), pose:k,look:gaze,motionTime,width };
