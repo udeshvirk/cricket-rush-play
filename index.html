@@ -2112,6 +2112,10 @@ function swing(loft, pressT, aim, w) {
   const aimed = aim && aim.angle !== undefined && aim.angle !== null;
   if (aimed && !aim.defend && Math.abs(wrapA(aim.angle - natural)) > 75) w *= 0.72;   // playing across the line
   if (aim && aim.defend) w *= 1.35;                                                     // a block is easier to time
+  // each stroke's own difficulty: the reverse sweep and hook are hard to time, the late cut and glance just use the pace
+  const spinB = !!(BOWL_TYPES[ball.type] || {}).turn, isDef = !!(aim && aim.defend);
+  const preFam = aimed ? strokeFamily(wrapA(aim.angle), loft && !isDef, isDef, isDef, ball.short, spinB, atBat) : null;
+  w *= { rsweep: 0.85, hook: 0.9, lcut: 1.1, glance: 1.1 }[preFam] || 1;
   if (ball.charge) w *= high ? 0.8 : 1.15;                                              // down the pitch: a half-volley, unless it's a bouncer
   const okW = 0.1 * w, edgeW = 0.15 * w;
   const visualStart=MOTION2?batterPose(null).pose:null;
@@ -2146,7 +2150,7 @@ function swing(loft, pressT, aim, w) {
   if (kind !== 'hit') {   // beaten: the bat passes the ball (inside the line outside off, outside it at the pads, under a bouncer); an edge just shaves it
     const side = atBat[0] < 0.1 ? 1 : -1, m = kind === 'miss' ? 1 : 0.35;
     ball.swing.target = [atBat[0] + side * 0.16 * m, clamp(atBat[1] + (high ? -0.3 : 0.07) * m, 0.12, 1.9), 1.02]; }
-  ball.decision = { kind, q, angle, loft: ball.swing.loft, defend: ball.swing.defend, push: !!(aim && aim.defend && aimed), dtTiming, power: ((aim && aim.power) || 1) * (ball.charge && !(aim && aim.defend) ? 1.1 : 1) };
+  ball.decision = { kind, q, angle, fam: ball.swing.fam, loft: ball.swing.loft, defend: ball.swing.defend, push: !!(aim && aim.defend && aimed), dtTiming, power: ((aim && aim.power) || 1) * (ball.charge && !(aim && aim.defend) ? 1.1 : 1) };
   // the bat meets the ball in front of the batter (early) or beside the stumps (late), never behind them
   ball.contactT = kind === 'miss' ? Infinity : ball.Tstar + clamp(dtTiming, -0.05, 0.015);
   ball.swing.contactAge = ball.contactT - pressT;
@@ -2393,11 +2397,22 @@ function strike() {
     angle = d.angle; v = (d.push ? rand(6, 11) : rand(3, 7)) * (0.6 + 0.4 * d.q); elev = 0; airborne = false;
   } else if (d.kind === 'hit') {
     angle = d.angle;
-    if (d.loft) {
-      if (d.q < 0.3) { v = rand(15, 21); elev = rand(50, 63); }
-      else { v = 17 + 16 * d.q + rand(-1.2, 1.2); elev = rand(24, 34); }
+    const pace = (ball.kmh / 3.6 - 35) * 0.25;
+    if (d.fam === 'ucut') {   // over the slips with the ball's own pace: a four or a one-bounce four, or a catch at third man
+      if (d.q < 0.3) { v = rand(13, 18); elev = rand(48, 62); }
+      else { v = 15 + 15 * d.q + pace + rand(-1.2, 1.2); elev = rand(28, 40); }
       airborne = true;
-    } else { v = ((15 + 19 * d.q) * rand(0.92, 1.06) + (ball.kmh / 3.6 - 35) * 0.25) * d.power; elev = rand(1.5, 5); airborne = false; }
+    } else if (d.loft) {
+      const sky = d.fam === 'hook' ? 0.4 : 0.3;   // a hook not quite middled goes straight up
+      if (d.q < sky) { v = rand(15, 21); elev = rand(50, 63); }
+      else { v = 17 + 16 * d.q + rand(-1.2, 1.2) + (d.fam === 'hook' ? 2 : 0); elev = rand(24, 34); }
+      airborne = true;
+    } else {
+      const k = { lcut: 0.72, glance: 0.75, rsweep: 0.85, hook: 1.08 }[d.fam] || 1;   // deflections run slower, the hook flies
+      v = ((15 + 19 * d.q) * rand(0.92, 1.06) + pace) * d.power * k; elev = rand(1.5, 5); airborne = false;
+      if (d.fam === 'hook' && d.q < 0.6 && Math.random() < 0.35) { elev = rand(12, 22); airborne = true; }   // not kept down: in the air toward the deep fielder
+      if (d.fam === 'rsweep' && d.q < 0.35 && Math.random() < 0.3) { v = rand(12, 17); elev = rand(30, 50); airborne = true; }   // a top edge
+    }
   } else {   // an edge
     if (atBat[0] < 0.12) { angle = -rand(150, 172); v = rand(12, 25); elev = rand(2, 9); airborne = true; }
     else {
