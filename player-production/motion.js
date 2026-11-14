@@ -164,6 +164,27 @@
     return [[0,start],[impact*.33,load],[impact*.68,slot],[impact,contact],
       [impact+.075,through],[impact+.18,extension],[impact+.34,finish],[impact+.85,settle],[impact+1.5,stance]];
   }
+  function bdriveKeys({start,target,stance,aim=0,loft=false,impact=.15}) {
+    const shift=clamp(target[0],-.3,.3),dy=-clamp((1.72-target[1])/.48,.4,.97),dz=.12;
+    const bd=unit([-Math.sqrt(Math.max(.01,1-dy*dy-dz*dz)),dy,dz]);
+    const h=add(target,scale(bd,-.48));
+    const contact={...start,fr:[.58+shift,0,.91],bk:[.5+shift,0,.24],pel:[.55+shift,.91,.48],
+      hy:-78,sy:-76,lean:8,side:0,h,bd,kpL:[-.85,0,.5],kpR:[-1,0,.05],rearFootPitch:0};
+    const load={...contact,pel:start.pel.map((v,i)=>v+(contact.pel[i]-v)*.4),
+      hy:start.hy+(contact.hy-start.hy)*.3,sy:start.sy+(contact.sy-start.sy)*.2,
+      h:start.h.map((v,i)=>v+(h[i]-v)*.3),bd:slerp(unit(start.bd),bd,.3)};
+    const slot={...contact,hy:-80,sy:-82,h:add(h,[0,.035,-.055]),bd:slerp(unit(start.bd),bd,.65)};
+    const dx=Math.sin(clamp(aim,-45,25)*Math.PI/180);
+    const through={...contact,pel:[.55+shift,.91,.53],hy:-67,sy:-66,lean:12,
+      h:add(h,[dx*.05,.015,.12]),bd:unit([-.18+dx*.1,-.65,.74])};
+    const extension={...through,hy:-59,sy:-53,lean:14,
+      h:add(h,[dx*.09,.055,.18]),bd:unit([-.2+dx*.25,.05,.98])};
+    const finish={...contact,pel:[.55+shift,.93,.55],hy:-57,sy:-42,lean:8,
+      h:[.32+shift,loft?1.72:1.6,.92],bd:unit([-.65,.75,.12])};
+    const settle={...finish,sy:-48,h:add(finish.h,[0,-.08,-.025])};
+    return [[0,start],[impact*.3,load],[impact*.65,slot],[impact,contact],
+      [impact+.075,through],[impact+.18,extension],[impact+.4,finish],[impact+.85,settle],[impact+1.5,stance]];
+  }
   // Transport the impact bat-face frame without projecting one fixed width
   // onto a nearly parallel backlift. That projection can roll the wrists fast.
   function cutWidth(direction,contactDirection) {
@@ -190,6 +211,6 @@
     if(channels.kpR){const w=clamp(u,0,1)**2*(3-2*clamp(u,0,1));pose.kpR=channels.kpR[from].map((v,i)=>v+(channels.kpR[impact][i]-v)*w);}
     return result;
   }
-  const api={prepare,sample,contactTime,sampleDrive,driveKeys,cutKeys,pullKeys,sampleCut,cutWidth,blendDirection:slerp};root.CricketMotion=api;
+  const api={prepare,sample,contactTime,sampleDrive,driveKeys,cutKeys,pullKeys,bdriveKeys,sampleCut,cutWidth,blendDirection:slerp};root.CricketMotion=api;
   if(typeof module!=='undefined')module.exports=api;
 })(typeof window==='undefined'?globalThis:window);

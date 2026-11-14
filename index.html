@@ -612,9 +612,11 @@
 <script async src="vendor/grip-model.js"></script>
 <script src="vendor/fielder-clips.js"></script>
 <script src="player-production/config.js"></script>
+<script src="player-production/locomotion.js"></script>
 <script src="player-production/motion.js"></script>
 <script src="player-production/diagnostics.js"></script>
 <script src="commentary.js"></script>
+<script src="player-production/equipment-preview.js"></script>
 <script src="render3d.js"></script>
 <script>
 (() => {
@@ -626,6 +628,7 @@ const MOTION2 = REFERENCE_VIEW || new URLSearchParams(location.search).get('moti
 const DRIVE_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('drive') !== 'old';
 const CUT_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('cut') !== 'old';
 const PULL_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('pull') !== 'old';
+const BDRIVE_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('bdrive') !== 'old';
 document.body.classList.toggle('reference-view',REFERENCE_VIEW);
 
 // ======================================================================= setup
@@ -1414,7 +1417,7 @@ function strokeFamily(a, loft, defend, push, short, spin, at) {
 function strokeKeys(sw) {
   const T = sw.target, a = sw.intent * deg, dir = [Math.sin(a), 0, Math.cos(a)], loft = sw.loft;
   const R = MOTION2 ? (sw.visualStart || PREPARE) : READY;
-  if((DRIVE_MOTION && sw.fam==='drive') || (CUT_MOTION && sw.fam==='cut') || (PULL_MOTION && sw.fam==='pull')) {
+  if((DRIVE_MOTION && sw.fam==='drive') || (CUT_MOTION && sw.fam==='cut') || (PULL_MOTION && sw.fam==='pull') || (BDRIVE_MOTION && sw.fam==='bdrive')) {
     // Preserve the existing random stream consumption without making the
     // staged strokes' support/contact poses wander on each delivery.
     if(!sw.vary)sw.vary={l:rand(-4,4),y:rand(-7,7),h:[rand(-.08,.08),rand(-.1,.1),rand(-.06,.06)],f:rand(-.03,.05),hold:rand(.8,1.3)};
@@ -1670,7 +1673,7 @@ function batterPose(sw) {
     if (!sw.keys) sw.keys = strokeKeys(sw);
     if(MOTION2) {
       if(!sw.curve)sw.curve=CricketMotion.prepare(sw.keys);
-      if((DRIVE_MOTION && sw.fam==='drive') || (CUT_MOTION && sw.fam==='cut') || (PULL_MOTION && sw.fam==='pull')) {
+      if((DRIVE_MOTION && sw.fam==='drive') || (CUT_MOTION && sw.fam==='cut') || (PULL_MOTION && sw.fam==='pull') || (BDRIVE_MOTION && sw.fam==='bdrive')) {
         const sampled=CricketMotion[sw.fam==='drive'?'sampleDrive':'sampleCut'](sw.curve,sw.t,sw.contactAge,SWING_LAG);
         k=sampled.pose;motionTime=sampled.time;
       } else k=CricketMotion.sample(sw.curve,sw.t);
@@ -3569,7 +3572,22 @@ function slideAct(f, res, t, tc) {
   const J = placeClip(lj, f.pos, face);
   return { face, crouch: 0, handL: J.handL, handR: J.handR, clipJ: J, w: 1, hold: t >= tc ? J.handR : null };
 }
-const fielderBall = res => { const a = res && res.fielder && fielderAct(res.fielder); return a && a.hold; };
+function fielderDisplayPos(f, wi = walkIn()) {
+  const r = Math.hypot(f.home[0], f.home[2]);
+  return wi.w > 0 && !f.keeper && !f.bowler && r > 14
+    ? sub(f.pos, mul([f.home[0] / r, 0, f.home[2] / r], 1.6 * wi.w))
+    : f.pos;
+}
+const fielderBall = res => {
+  const f = res && res.fielder, a = f && fielderAct(f);
+  if (!a) return null;
+  // Match the rendered catch celebration so the ball follows its raised hand.
+  if (res.kind === 'caught' && phase === 'result' && celebrate?.out?.by === f && a.u !== undefined && a.u >= 1 && f.run < 0.3) {
+    const pos = fielderDisplayPos(f), seed = f.bowler ? 0.4 : 1.3;
+    return cheerFig(pos, a.face, phaseT - 0.15, seed).handR;
+  }
+  return a.hold || null;
+};
 // reactions after the ball: a leap with both arms up, hands on the head, a bat raised to the crowd, the walk back
 function cheerFig(pos, face, t, seed) {
   const L = [Math.cos(face), 0, -Math.sin(face)], F = [Math.sin(face), 0, Math.cos(face)];
@@ -3595,19 +3613,9 @@ function livePeople() {
   const out = [], helmet = helmetCol();
   const runT = ball && ball.play && ball.play.res.kind === 'runs' ? ball.play.t - 0.35 : -1;
   const runs = ball && ball.play ? ball.play.res.runs : 0;
-  const runner = (startZ, x) => {
-    if (runT <= 0 || !(ball.play.res.kind === 'runs') || runs === 0) return null;
-    const total = runs, dur = t => t < RUN1 ? t / RUN1 : 1 + (t - RUN1) / RUN_MORE;
-    const prog = Math.min(total, dur(runT));
-    const leg = Math.floor(prog), f = prog - leg;
-    const from = (leg % 2 === 0) ? startZ : (startZ < 10 ? PITCH - 0.6 : 0.6);
-    const to = (leg % 2 === 0) ? (startZ < 10 ? PITCH - 0.6 : 0.6) : startZ;
-    const z = prog >= total ? (total % 2 ? (startZ < 10 ? PITCH - 0.6 : 0.6) : startZ) : lerp(from, to, smooth(f));
-    const turn=MOTION2 && leg<total-1?smooth(clamp((f-.87)/.13,0,1))*Math.PI:0;
-    const speed=prog>=total?0:Math.abs(to-from)*6*f*(1-f)/(runT<RUN1?RUN1:RUN_MORE);
-    return { pos: [x, 0, z], face: (to > from ? 0 : Math.PI)+turn, moving: prog < total,runWeight:smooth(clamp(speed/4,0,1)),
-      distance:Math.min(total,leg+smooth(f))*(PITCH-1.2) };
-  };
+  const runner = (startZ, x) => !ball || ball.play?.res.kind !== 'runs' ? null : CricketLocomotion.runner({
+    time: runT, runs, startZ, x, pitch: PITCH, firstDuration: RUN1, moreDuration: RUN_MORE
+  });
   const pid = k => inn && inn.bat.players[k] ? inn.bat.players[k].name : 'x';
   // the striker: in his stance and swing, or running
   const sr = runner(0.6, 0.55);
@@ -3632,7 +3640,7 @@ function livePeople() {
       hands=lerp3(add(from.hands,offset),hands,turn);
       const direction=CricketMotion.blendDirection(norm(sub(from.tip,from.hands)),norm(sub(tip,hand)),turn);
       tip=add(hands,mul(direction,lerp(len(sub(from.tip,from.hands)),len(sub(tip,hand)),turn)));
-      const sourceWidth=(CUT_MOTION && sw?.fam==='cut') || (PULL_MOTION && sw?.fam==='pull')
+      const sourceWidth=(CUT_MOTION && sw?.fam==='cut') || (PULL_MOTION && sw?.fam==='pull') || (BDRIVE_MOTION && sw?.fam==='bdrive')
         ? CricketMotion.cutWidth(norm(sub(from.tip,from.hands)),sw.keys.find(k=>Math.abs(k[0]-SWING_LAG)<1e-8)[1].bd)
         : MOTION2 && sw && sw.fam!=='drive' && sw.keys ? norm(cross(mul(sw.keys[2][1].bd,-1),[0,0,1])) : [1,0,0];
       width=CricketMotion.blendDirection(sourceWidth,side,turn);
@@ -3646,15 +3654,20 @@ function livePeople() {
     const hR = add(at, add(mul(L, -0.3), [0, lerp(1.0, 2.15, u), 0.05]));
     const j = figure(at, face, { handR: hR, seed: 9 });
     out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look: [Math.sin(face), 0, Math.cos(face)],
-               bat: { carry: true, hands: hR, tip: add(hR, [-0.1 * u, 0.85 * u - 0.6 * (1 - u), 0]) } });
+               bat: { carry: true, carryHand: 'r', hands: hR, tip: add(hR, [-0.1 * u, 0.85 * u - 0.6 * (1 - u), 0]) } });
   } else if (sr) {
     let j = runFig(figure(sr.pos, sr.face, { run: MOTION2?sr.runWeight:sr.moving?1:0, phase: clock * 11,gaitDistance:sr.distance }), sr.pos, sr.face, sr.distance, sr.runWeight);
-    let hand = j.handR, tip = add(hand, [0, -0.7, sr.face ? -0.3 : 0.3]), look = null;
+    const runForward = [Math.sin(sr.face), 0, Math.cos(sr.face)];
+    let hand = j.handR, tip = add(hand, add([0, -0.7, 0], mul(runForward, 0.3))), look = null;
     const sb = MOTION2 && ball.swing ? 1 - smooth(clamp(runT / 0.3, 0, 1)) : 0;
     if (sb > 0) {   // out of the shot's finish into the run, not a snap: the bat comes down to his side as he sets off
-      const p = batterPose(ball.swing), o = [guard, 0, 0], pj = {};
+      const p = batterPose(ball.swing), o = [guard, 0, ball.charge ? STEP * smooth(clamp(ball.charge.t / 0.4, 0, 1)) : 0], pj = {};
       for (const n in p.j) pj[n] = Array.isArray(p.j[n]) && !/^foot(Dir|Pitch)/.test(n) ? add(p.j[n], o) : p.j[n];
-      j = mixJ(j, pj, sb); hand = lerp3(hand, add(p.hands, o), sb); tip = lerp3(tip, add(p.tip, o), sb);
+      j = mixJ(j, pj, sb);
+      const runVector = sub(tip, hand), shotVector = sub(p.tip, p.hands);
+      hand = lerp3(hand, add(p.hands, o), sb);
+      const direction = CricketMotion.blendDirection(norm(runVector), norm(shotVector), sb);
+      tip = add(hand, mul(direction, lerp(len(runVector), len(shotVector), sb)));
     }
     const bp = MOTION2 ? liveBallPos() : null;
     if (bp && runs > 1 && sr.moving) {   // he glances toward the ball while he runs, to judge another run
@@ -3662,7 +3675,7 @@ function livePeople() {
       if (dot(fw, tb) > -0.3) look = norm(lerp3(fw, tb, 0.55));
     }
     out.push({ j, at: sr.pos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look,
-               bat: { carry: true, hands: hand, tip } });
+               bat: { carry: true, carryHand: 'r', hands: hand, tip } });
   } else {
     let { j, hands, tip,look } = batterPose(ball && ball.swing ? ball.swing : null);
     let contact = ball && ball.swing && ball.swing.target ? ball.swing.target.slice() : null;
@@ -3675,7 +3688,7 @@ function livePeople() {
       if (ball.charge.t < 0.4) { const ph = Math.sin(ball.charge.t * 24) * 0.12; j.footL[2] += ph; j.footR[2] -= ph; j.kneeL[2] += ph / 2; j.kneeR[2] -= ph / 2; }
     }
     const stroke=ball && ball.swing;
-    const width=((CUT_MOTION && stroke?.fam==='cut') || (PULL_MOTION && stroke?.fam==='pull')) && stroke.keys
+    const width=((CUT_MOTION && stroke?.fam==='cut') || (PULL_MOTION && stroke?.fam==='pull') || (BDRIVE_MOTION && stroke?.fam==='bdrive')) && stroke.keys
       ? CricketMotion.cutWidth(norm(sub(tip,hands)),stroke.keys.find(k=>Math.abs(k[0]-SWING_LAG)<1e-8)[1].bd)
       : MOTION2 && stroke && stroke.fam!=='drive' && stroke.keys
       ? norm(cross(mul(stroke.keys[2][1].bd,-1),[0,0,1])) : [1,0,0];
@@ -3684,10 +3697,11 @@ function livePeople() {
   // the non-striker
   const ns = runner(PITCH - 0.6, -1.5);
   const nsPos = ns ? ns.pos : [-1.7, 0, PITCH - 0.4];
-  let nj = figure(nsPos, ns ? ns.face : Math.PI, { run: MOTION2?(ns?ns.runWeight:0):(ns&&ns.moving?1:0), phase: clock * 11 + 1,gaitDistance:ns?ns.distance+1.9:undefined, seed: 20 });
+  const nsFace = ns ? ns.face : Math.PI, nsForward = [Math.sin(nsFace), 0, Math.cos(nsFace)];
+  let nj = figure(nsPos, nsFace, { run: MOTION2?(ns?ns.runWeight:0):(ns&&ns.moving?1:0), phase: clock * 11 + 1,gaitDistance:ns?ns.distance+1.9:undefined, seed: 20 });
   if (ns) nj = runFig(nj, nsPos, ns.face, ns.distance + 1.9, ns.runWeight);
   out.push({ j: nj, at: nsPos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.non : 1), look: null,
-             bat: { carry: true, hands: nj.handL, tip: add(nj.handL, [0.1, -0.75, ns && ns.face === 0 ? 0.25 : -0.25]) } });
+             bat: { carry: true, carryHand: 'l', hands: nj.handL, tip: add(nj.handL, add([0.1, -0.75, 0], mul(nsForward, 0.25))) } });
   // the bowler, then the fielders (once the ball is hit, the bowler is one of the fielders)
   const afterHit = !!(ball && ball.play);
   const fid = w => inn && w !== null && w !== undefined && inn.bowl.players[w] ? inn.bowl.players[w].name : 'f' + w;
@@ -3702,10 +3716,9 @@ function livePeople() {
   const wi = walkIn();
   for (const [fi, f] of fielders.entries()) {
     if (f.bowler && !afterHit) continue;
-    let pos = f.pos, run = f.run, ph = f.phase;
+    let pos = fielderDisplayPos(f, wi), run = f.run, ph = f.phase;
     const r = Math.hypot(f.home[0], f.home[2]);
-    if (wi.w > 0 && !f.keeper && !f.bowler && r > 14) {
-      pos = sub(f.pos, mul([f.home[0] / r, 0, f.home[2] / r], 1.6 * wi.w));
+    if (pos !== f.pos) {
       if (wi.moving) { run = Math.max(run, 0.3); ph = clock * 7 + f.phase; }
     }
     const act = fielderAct(f), caughtCel = act && act.u !== undefined && act.u >= 1;
