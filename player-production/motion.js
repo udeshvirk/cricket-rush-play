@@ -103,23 +103,27 @@
     const blend=(a,b,u)=>Object.fromEntries(Object.keys(a).map(k=>[k,
       Array.isArray(a[k])?a[k].map((v,i)=>mix(v,(b[k]||a[k])[i],u))
         :typeof a[k]==='number'?mix(a[k],b[k]??a[k],u):a[k]]));
-    const angle=clamp(aim,-70,35)*Math.PI/180,dx=Math.sin(angle),dz=Math.cos(angle);
-    const fr=[clamp(target[0]+.32,.02,.78),0,1.4];
-    const bd=unit([-.06+dx*.1,-1,-.08]);
+    const angle=clamp(aim,-100,35)*Math.PI/180,dx=Math.sin(angle),dz=Math.max(.12,Math.cos(angle));
+    // One drive per direction: c is 0 straight, 1 through cover, about 1.4 square;
+    // on is 0..1 for the on drive. The stride, the hips and shoulders, the angle of
+    // the bat and the finish all follow it, not just the direction of the hands.
+    const c=clamp(-aim,0,100)/70,on=clamp(aim,0,35)/35,sq=Math.max(0,c-.9);
+    const fr=[clamp(target[0]+.32-.06*c+.05*on,.02,.78),0,1.4-.16*sq];
+    const bd=unit([-.06+dx*.22-.25*sq,-1,-.08]);
     const h=add(target,scale(bd,-.48));
-    const pelvis=[mix(start.pel[0],fr[0],.7),clamp(.78+(target[1]-.5)*.1,.72,.84),1.01];
-    const contact={...start,fr,pel:pelvis,hy:-60,sy:-76,lean:24,side:7,h,bd,
-      kpL:[-.25,0,1],rearFootPitch:.18};
+    const pelvis=[mix(start.pel[0],fr[0],.7),clamp(.78+(target[1]-.5)*.1,.72,.84)-.03*c,1.01-.1*sq];
+    const contact={...start,fr,pel:pelvis,hy:-60-8*c+10*on,sy:-76-10*c+14*on,lean:24+4*c,side:7+3*c,h,bd,
+      kpL:[-.25-.35*c+.15*on,0,1],rearFootPitch:.18};
     const load={...start,pel:add(start.pel,[0,-.015,.025]),hy:start.hy+8,sy:start.sy-4,
       h:add(start.h,[.015,.025,-.035]),bd:slerp(unit(start.bd),unit([-.4,.76,-.51]),.3)};
     const slot={...blend(start,contact,.65),hy:mix(start.hy,contact.hy,.85),sy:mix(start.sy,contact.sy,.45),
       h:[mix(start.h[0],h[0],.7),h[1]+.1,h[2]-.12],bd:unit([-.22,-.32,-.92])};
     const through={...contact,pel:add(pelvis,[0,.025,.025]),hy:-45,sy:-60,lean:20,side:5,
-      h:add(h,[dx*.15,.07,dz*.2]),bd:unit([dx*.25-.07,-.65,.76]),rearFootPitch:.26};
+      h:add(h,[dx*.22,.07,dz*.2]),bd:unit([dx*.45-.07,-.65,.76*dz]),rearFootPitch:.26};
     const extension={...contact,pel:add(pelvis,[0,.06,.06]),hy:-35,sy:-40,lean:14,side:3,
-      h:add(h,[.04+dx*.2,.23+(loft?.08:0),.38*dz]),bd:unit([dx*.6-.12,loft?.28:.08,.99]),rearFootPitch:.32};
-    const finish={...contact,pel:[pelvis[0]+.025,.89,1.07],hy:-28,sy:-12+aim*.12,lean:9,side:0,
-      h:[pelvis[0]-.22+dx*.06,loft?1.72:1.55,1.25],bd:unit([-.58+dx*.15,.79,.18]),rearFootPitch:.34};
+      h:add(h,[.04+dx*.34,.23+(loft?.08:0),.38*dz]),bd:unit([dx*.85-.12,loft?.28:.08,.99*dz]),rearFootPitch:.32};
+    const finish={...contact,pel:[pelvis[0]+.025,.89-.03*c,1.07-.1*sq],hy:-28-10*c+12*on,sy:-12+clamp(aim,-100,35)*.25,lean:9+3*c,side:0,
+      h:[pelvis[0]-.22+dx*.14,loft?1.72:1.55,1.25-.15*c],bd:unit([-.58+dx*.25,.79,.18-.2*c]),rearFootPitch:.34};
     const settle={...finish,h:add(finish.h,[0,-.05,0]),lean:7};
     return [[0,start],[impact*.26,load],[impact*.63,slot],[impact,contact],
       [impact+.075,through],[impact+.18,extension],[impact+.42,finish],
