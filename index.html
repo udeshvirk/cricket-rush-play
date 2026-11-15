@@ -1523,11 +1523,12 @@ function mixJoints(a, b, t) { const o = {}; for (const k in a) o[k] = lerp3(a[k]
 
 // --- the batter (a right-hander at his guard: facing the off side, front shoulder to the bowler). h = hands, bd = the bat's direction
 const STANCE = { fr: [0.58, 0, 1.1], bk: [0.64, 0, 0.42], pel: [0.64, 0.82, 0.76], hy: -90, sy: -88, lean: 22, side: 0,
-  h: [0.22, 0.8, 0.87], bd: norm([-0.2, -0.96, -0.1]), kpL: [-1, 0, 0.35], kpR: [-1, 0, -0.1],rearFootPitch:0 };
+  h: [0.24, 0.72, 0.93], bd: norm([-0.2, -0.3, -0.93]), kpL: [-1, 0, 0.35], kpR: [-1, 0, -0.1],rearFootPitch:0 };
 // Compact guard: the blade stays in front of the legs until the backlift.
 // The previous raised guard ran the blade through the chest/right sleeve.
-const READY = { ...STANCE, bk: [0.6, 0, 0.4], pel: [0.62, 0.84, 0.74], lean: 19, h: [0.18, 0.9, 0.9], bd: norm([-0.15, -0.98, 0.10]) };
+const READY = { ...STANCE, bk: [0.6, 0, 0.4], pel: [0.62, 0.84, 0.74], lean: 19, h: [0.22, 0.86, 0.88], bd: norm([-0.25, -0.42, -0.87]) };
 const PREPARE = {...READY,lean:14,fr:[.42,0,1.18],pel:[.58,.88,.80],h:[.24,1.3,.86],bd:norm([-.3,.8,-.52])};   // a high backlift as the ball comes
+const GRIP_TURN = +(new URLSearchParams(location.search).get('gturn') ?? 1.2);   // how far the bat is turned in the hands at the guard (radians)
 const LEAVE = { ...READY, lean: 6, h: [0.6, 1.5, 0.66], bd: norm([0.12, 0.95, -0.28]) };
 const DUCK = { ...LEAVE, pel: [0.66, 0.56, 0.7], lean: 48, h: [0.62, 1.0, 0.62], kpL: [-1, 0.2, 0.3], kpR: [-1, 0.2, 0] };
 // which stroke the batter plays (it shapes the swing, not where the ball goes)
@@ -1688,7 +1689,7 @@ const ROLL_K = +(new URLSearchParams(location.search).get('roll') ?? 1);   // ?r
 const WHIP = +(new URLSearchParams(location.search).get('whip') ?? 0.45);   // ?whip=0 for the swing as authored
 const CHAIN = { hips: +(new URLSearchParams(location.search).get('hips') || 0.04), shoulders: 0.025 };
 function batterPose(sw) {
-  let k, motionTime = sw ? sw.t : 0;
+  let k, motionTime = sw ? sw.t : 0, gripTurn = 0;
   if (sw) {
     if (!sw.keys) sw.keys = strokeKeys(sw);
     if(!sw.curve)sw.curve=CricketMotion.prepare(sw.keys);
@@ -1747,6 +1748,7 @@ function batterPose(sw) {
     const ready = phase === 'runup' ? smooth(clamp((phaseT - RUNUP + 0.4) / 0.35, 0, 1)) : (phase === 'flight' || phase === 'result') && ball ? 1 : 0;
     const st = batStyle();
     k = ready ? mixPose(styled(STANCE, st), styled(READY, st), ready) : styled(STANCE, st);
+    gripTurn = (1 - ready) * GRIP_TURN;   // at his guard the bat's face looks to the off side: the gloves stack on the handle and the arms hang together
     // alive at the crease: breathing, and a tap of the bat until the bowler is well into his run
     const br = Math.sin(clock * 1.7);
     const tapOn = phase === 'runup' ? clamp((RUNUP - 0.5 - phaseT) / 0.25, 0, 1) : ['flight', 'play', 'result'].includes(phase) ? 0 : 1;
@@ -1773,6 +1775,7 @@ function batterPose(sw) {
   }
   if(sw?.loft)j.head[2]-=.035*follow;
   let width=sw ? CricketMotion.pathWidth(sw.curve,motionTime,bd,k.batRoll||0) : null;
+  if (!sw && gripTurn) { const n = mul(bd, -1), w0 = norm(sub([1, 0, 0], mul(n, n[0]))); width = norm(add(mul(w0, Math.cos(gripTurn)), mul(cross(n, w0), Math.sin(gripTurn)))); }
   // the wrists roll over after contact to keep the ball down (strokes whose keys don't roll the bat themselves): the face
   // (cross(bd, width), as the renderer builds the bat) turns toward the ground, and comes back as he lets the finish go
   const roll = sw && !sw.loft && ROLL[sw.fam];

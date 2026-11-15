@@ -847,7 +847,29 @@ window.Cricket3D = function (G) {
   // each arm is re-solved (two-bone IK) so its wrist lands where its glove needs it, and each wrist turns to match its glove.
   // A glove's fixed place on its hand bone follows from that, so the gloves ride on the hand bones and nothing is duplicated.
   const GRIP_OLD = renderQuery.get('grip') === 'old';
-  const GRIP3 = { tried: false, ready: false, side: {}, palmK: 0.5, twist: 0, handScale: 0.08, size: 1.45 };   // size: the gloves are scaled up to fit this player's forearms   // the bare hand shrinks away inside its closed glove (the glove shows the hand)
+  const GRIP3 = { tried: false, ready: false, side: {}, palmK: 0.5, twist: +(renderQuery.get('gtwist') || 0), handScale: 0.08, size: 1.45, cuffBend: +(renderQuery.get('cbend') ?? 0.6), align: +(renderQuery.get('galign') ?? 1e-3), alignKeep: 4e-5, cuffMax: +(renderQuery.get('cmax') ?? 0.5), elbowUp: +(renderQuery.get('gup') ?? 0.1) };   // size: the gloves are scaled up to fit this player's forearms   // the bare hand shrinks away inside its closed glove (the glove shows the hand)
+  // Soften a low-poly mesh: each corner's normal averages the faces that meet there, except across a crease (finger rolls stay distinct)
+  function smoothNormals(geo, creaseDeg = 55) {
+    if (geo.userData.smoothed) return; geo.userData.smoothed = true;
+    const g = geo.index ? geo.toNonIndexed() : geo, P = g.attributes.position, n = P.count, cos = Math.cos(creaseDeg * Math.PI / 180);
+    const fn = new Float32Array(n * 3), a = new T.Vector3(), b = new T.Vector3(), c = new T.Vector3();
+    for (let i = 0; i < n; i += 3) {
+      a.fromBufferAttribute(P, i); b.fromBufferAttribute(P, i + 1); c.fromBufferAttribute(P, i + 2);
+      c.sub(b); b.sub(a); b.cross(c); const w = b.length() || 1;   // area-weighted
+      for (let k = 0; k < 3; k++) { fn[(i + k) * 3] = b.x; fn[(i + k) * 3 + 1] = b.y; fn[(i + k) * 3 + 2] = b.z; }
+    }
+    const key = i => P.getX(i).toFixed(4) + ',' + P.getY(i).toFixed(4) + ',' + P.getZ(i).toFixed(4), groups = new Map();
+    for (let i = 0; i < n; i++) { const k = key(i); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(i); }
+    const out = new Float32Array(n * 3), u = new T.Vector3(), v = new T.Vector3(), s = new T.Vector3();
+    for (const ids of groups.values()) for (const i of ids) {
+      u.fromArray(fn, i * 3).normalize(); s.set(0, 0, 0);
+      for (const j of ids) { v.fromArray(fn, j * 3); if (u.dot(v.clone().normalize()) >= cos) s.add(v); }
+      s.normalize(); out[i * 3] = s.x; out[i * 3 + 1] = s.y; out[i * 3 + 2] = s.z;
+    }
+    g.setAttribute('normal', new T.BufferAttribute(out, 3));
+    return g;
+  }
+  const GLOVE_CUFF = renderQuery.get('gcuff') || 'model';   // 'model': the glove's own padded cuff (part of the glove); 'tube': the old forearm sleeve
   function loadGrip() {
     if (GRIP3.tried || !window.GRIP_GLB || !window.GRIP || !T.GLTFLoader || !RIG.restQ) return;
     GRIP3.tried = true;
@@ -857,10 +879,11 @@ window.Cricket3D = function (G) {
       new T.GLTFLoader().parse(bin, '', g => {
         let cuff = null;
         g.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; o.material.side = T.DoubleSide;
+          if (renderQuery.get('gsmooth') !== '0') { const sg = smoothNormals(o.geometry); if (sg && sg !== o.geometry) o.geometry = sg; o.material.flatShading = false; o.material.needsUpdate = true; }
           if (LOOK_REFINED) o.material.roughness = Math.min(0.96, o.material.roughness + 0.035); // matte leather/fabric under stadium lights
           if (o.material.color && !o.material.userData.toned) { o.material.userData.toned = true; const c = o.material.color; if (c.r + c.g + c.b > 2.4) c.multiplyScalar(0.86); }   // whites a touch darker (floodlights)
           if (/cuff/.test(o.name) || /cuff/.test(o.material.name)) { o.geometry.computeBoundingBox(); cuff = o.geometry.boundingBox.getCenter(new T.Vector3()); }
-          if (/cuff|accent/.test(o.name)) o.visible = false; } });   // the model's rigid cuff can't follow the forearm; Person draws its own (cuffG)
+          if (GLOVE_CUFF === 'tube' ? /cuff|accent/.test(o.name) : /accent/.test(o.name)) o.visible = false; } });   // the loose strap flap ('accent') floats off a bent wrist   // the model's rigid cuff can't follow the forearm; Person draws its own (cuffG)
         const r = RIG.rest, anchor = new T.Vector3().fromArray(s === 'l' ? window.GRIP.top : window.GRIP.bottom);
         // the hand inside the glove: wrist to knuckles runs from the cuff through the palm; knuckle line (index - pinky) toward the blade
         const dB = cuff ? cuff.clone().negate().normalize() : new T.Vector3(s === 'l' ? 1 : -1, -1, 0).normalize();
@@ -888,7 +911,8 @@ window.Cricket3D = function (G) {
   // Keep both cuff targets fixed while choosing a natural elbow bend that
   // clears the blade. Moving only the bat would detach the hands again.
   const bladeEnvelope = new T.Box3(new T.Vector3(-.054,-.86,-.052),new T.Vector3(.054,-.30,.0124));
-  function elbowForBat(S, wrist, elbow0, L1, L2, O, Bq) {
+  // palm (optional): also prefer the bend whose forearm runs into the glove (a folded-back wrist looked like a stuck-on glove)
+  function elbowForBat(S, wrist, elbow0, L1, L2, O, Bq, palm) {
     const base=elbowFor(S,wrist,elbow0,L1,L2),axis=wrist.clone().sub(S).normalize();
     const along=base.clone().sub(S).dot(axis),centre=S.clone().addScaledVector(axis,along),radial=base.clone().sub(centre);
     const iq=Bq.clone().invert(),a=S.clone().sub(O).applyQuaternion(iq),c=wrist.clone().sub(O).applyQuaternion(iq);
@@ -900,6 +924,17 @@ window.Cricket3D = function (G) {
       }
       return score;
     };
+    if(palm && GRIP3.align>0) {
+      const line=wrist.clone().sub(palm).normalize(),pen=angle=>penetrationAt(angle);
+      let bestA=0,bestS=Infinity;
+      for(let angle=-2.1;angle<=2.1001;angle+=.1) {
+        const elbow=radial.clone().applyAxisAngle(axis,angle).add(centre),fa=elbow.clone().sub(wrist).normalize();
+        const up=Math.max(0,elbow.y-(S.y+wrist.y)/2);   // an elbow raised above the arm's mid-height reads as a chicken wing
+        const sc=pen(angle)+angle*angle*GRIP3.alignKeep+GRIP3.align*(1-fa.dot(line))+GRIP3.elbowUp*up*up;
+        if(sc<bestS){bestS=sc;bestA=angle;}
+      }
+      return radial.clone().applyAxisAngle(axis,bestA).add(centre);
+    }
     for(const angle of [0,-.3,.3,-.6,.6,-.9,.9,-1.2,1.2,-1.5,1.5,-1.8,1.8]) {
       const elbow=radial.clone().applyAxisAngle(axis,angle).add(centre),b=elbow.clone().sub(O).applyQuaternion(iq);
       let score=angle*angle*1e-6;
@@ -1023,6 +1058,13 @@ window.Cricket3D = function (G) {
       this.gripG = {}; this.gripRel = {};
       for (const s of ['l', 'r']) {
         const o = GRIP3.side[s].glove.clone(); o.matrixAutoUpdate = false; o.visible = false; this.g.add(o); this.gripG[s] = o;
+        if (GLOVE_CUFF === 'model') {   // the glove's padded cuff, taken off so it can bend with the wrist (placed each frame)
+          o.updateMatrixWorld(true); const inv = o.matrixWorld.clone().invert(), cg = new T.Group(); cg.matrixAutoUpdate = false; cg.visible = false;
+          const parts = []; o.traverse(m => { if (m.isMesh && m.visible && (/cuff/.test(m.name) || /cuff/.test(m.material.name))) parts.push(m); });
+          for (const m of parts) { const c = new T.Mesh(m.geometry, m.material); c.castShadow = true; c.frustumCulled = false; c.matrixAutoUpdate = false;
+            c.matrix.multiplyMatrices(inv, m.matrixWorld); cg.add(c); m.visible = false; }
+          if (parts.length) { this.g.add(cg); (this.gloveCuff || (this.gloveCuff = {}))[s] = cg; }
+        }
       }
       // a padded cuff on each forearm, running into the glove (y = along the forearm, 0 at the wrist)
       if (!GRIP3.cuffGeo) {
@@ -1135,7 +1177,7 @@ window.Cricket3D = function (G) {
           const S3 = GRIP3.side[s];
           const wrist = S3.cuffB.clone().applyQuaternion(Bq).add(O), palm = S3.anchor.clone().applyQuaternion(Bq).add(O);
           const sh = pos['upperarm_' + s], L1 = r['lowerarm_' + s].distanceTo(r['upperarm_' + s]), L2 = r['hand_' + s].distanceTo(r['lowerarm_' + s]);
-          pos['lowerarm_' + s] = elbowForBat(sh, wrist, pos['lowerarm_' + s], L1, L2, O, Bq);
+          pos['lowerarm_' + s] = elbowForBat(sh, wrist, pos['lowerarm_' + s], L1, L2, O, Bq, palm);
           pos['hand_' + s] = pos['lowerarm_' + s].clone().add(v1.subVectors(wrist, pos['lowerarm_' + s]).normalize().multiplyScalar(L2));
           this.gripResidual[s] = pos['hand_' + s].distanceTo(wrist);
           // the (hidden, shrunk) hand points from the wrist into the glove, knuckles along the handle
@@ -1156,7 +1198,7 @@ window.Cricket3D = function (G) {
         clearBat(O,Bq,pos,r,pr.team==='bat' || pr.keeper,[s]);
         const wrist=S3.cuffB.clone().applyQuaternion(Bq).add(O),palm=S3.anchor.clone().applyQuaternion(Bq).add(O),sh=pos['upperarm_'+s];
         const L1=r['lowerarm_'+s].distanceTo(r['upperarm_'+s]),L2=r['hand_'+s].distanceTo(r['lowerarm_'+s]);
-        pos['lowerarm_'+s]=elbowForBat(sh,wrist,pos['lowerarm_'+s],L1,L2,O,Bq);
+        pos['lowerarm_'+s]=elbowForBat(sh,wrist,pos['lowerarm_'+s],L1,L2,O,Bq,palm);
         pos['hand_'+s]=pos['lowerarm_'+s].clone().add(wrist.clone().sub(pos['lowerarm_'+s]).normalize().multiplyScalar(L2));
         pos['handTip_'+s]=pos['hand_'+s].clone().add(palm.clone().sub(pos['hand_'+s]).multiplyScalar(2));
         gripQ={[s]:new T.Quaternion().setFromRotationMatrix(frame(palm.clone().sub(pos['hand_'+s]),new T.Vector3(0,-1,0).applyQuaternion(Bq),new T.Matrix4()).multiply(rig.grip[s].rest.clone().transpose()))};
@@ -1197,7 +1239,16 @@ window.Cricket3D = function (G) {
           const gp = this['glovePose_' + s], o = this.gripG[s];
           o.visible = gloved3; o.matrix.compose(gp.p, gp.q, v3.setScalar(GRIP3.size)); o.matrixWorldNeedsUpdate = true;
           B['hand_' + s].scale.setScalar(gloved3 ? GRIP3.handScale : 1);
-          const cf = this.cuffG[s]; cf.visible = gloved3;
+          const gc = this.gloveCuff && this.gloveCuff[s];
+          if (gc) { gc.visible = gloved3;
+            if (gloved3) {   // turn the cuff about the wrist, part of the way from the glove's line to the forearm's
+              const dg = v1.subVectors(hp, gp.p).normalize(), df = v2.subVectors(pos['lowerarm_' + s], hp).normalize();
+              (this.lastHand || (this.lastHand = {}))[s] = Math.acos(Math.min(1, Math.max(-1, dg.dot(df)))) * 180 / Math.PI;
+              const tgt = v4.copy(dg).lerp(df, GRIP3.cuffBend).normalize(); qa.setFromUnitVectors(dg, tgt);
+              const ang = 2 * Math.acos(Math.min(1, Math.abs(qa.w))), cap = GRIP3.cuffMax; if (ang > cap) qa.slerp(qb.identity(), 1 - cap / ang);   // never so far it leaves the glove
+              m4b.makeTranslation(-hp.x, -hp.y, -hp.z); m4a.makeRotationFromQuaternion(qa).premultiply(m4b.clone().invert()).multiply(m4b);
+              gc.matrix.multiplyMatrices(m4a, o.matrix); gc.matrixWorldNeedsUpdate = true; } }
+          const cf = this.cuffG[s]; cf.visible = gloved3 && GLOVE_CUFF === 'tube';
           if (gloved3) { cf.matrix.compose(hp, qb.setFromUnitVectors(v1.set(0, 1, 0), v2.subVectors(hp, pos['lowerarm_' + s]).normalize()), v3.set(1, 1, 1)); cf.matrixWorldNeedsUpdate = true; }
         }
       }
@@ -1461,6 +1512,9 @@ window.Cricket3D = function (G) {
     grip: p.bat3 ? { origin: p.bat3.O.toArray(), quaternion: p.bat3.Bq.toArray(), wristGapMetres: p.gripResidual } : null,
     collisions: PRODUCTION.audit ? auditPerson(p) : undefined
   }));
+  window.CR_CUFFANG = () => pool.filter(p => p.bat3 && p.gloveCuff && p.gripG).map(p => Object.fromEntries(['l', 'r'].map(s => {   // angle (deg) between each forearm and its glove's line
+    const hp = p.lastHand && p.lastHand[s]; return [s, hp ? +hp.toFixed(1) : null]; })));
+  window.CR_GRIPGAP = () => pool.filter(p => p.bat3 && p.gripResidual).map(p => Object.fromEntries(Object.entries(p.gripResidual).map(([k, v]) => [k, +v.toFixed(3)])));   // how far each wrist is from its glove (m), for checking poses
   if(PRODUCTION)PRODUCTION.cameraAudit=()=>{
     const invalid=[];scene.traverse(o=>{if(o.visible && o.matrixWorld.elements.some(x=>!Number.isFinite(x)))invalid.push(o.name||o.type);});
     return {position:camera.position.toArray(),target:cam.tgt.slice(),near:camera.near,fov:camera.fov,invalid,

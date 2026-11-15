@@ -138,20 +138,22 @@
   function cutKeys({start,target,stance,impact=.15}) {
     const bd=unit([-.94,-.15,-.3]),h=add(target,scale(bd,-.48));
     const shift=clamp(target[0],-.35,.25),dip=clamp((1-target[1])*.35,0,.22);
-    const contact={...start,fr:[.88+shift,0,1.12],bk:[.54+shift,0,.4],pel:[.68+shift,.79-dip,.85],
-      hy:-80,sy:-92,lean:20+dip*40,side:8,h,bd,kpL:[-.65,0,.65],kpR:[-1,0,.05],rearFootPitch:0};
-    const load={...contact,pel:start.pel.map((v,i)=>v+(contact.pel[i]-v)*.4),
+    const contact={...start,fr:[.88+shift,0,1.12],bk:[.54+shift,0,.4],pel:[.66+shift,.75-dip,.85],
+      hy:-80,sy:-92,lean:21+dip*40,side:8,h,bd,kpL:[-.65,0,.65],kpR:[-1,0,.05],rearFootPitch:0};   // low, leaning out over the ball
+    const upPel=[.68+shift,.79-dip,.85],upLean=20+dip*40;   // the body stays up until the bat comes through
+    const load={...contact,pel:start.pel.map((v,i)=>v+(upPel[i]-v)*.4),
       hy:start.hy+(contact.hy-start.hy)*.4,sy:start.sy+(contact.sy-start.sy)*.25,
-      lean:start.lean+(contact.lean-start.lean)*.4,
+      lean:start.lean+(upLean-start.lean)*.4,
       h:start.h.map((v,i)=>v+(h[i]-v)*.3+(i===1?.03:0)),
       bd:slerp(unit(start.bd),unit([-.4,.75,-.5]),.3)};
-    const slot={...contact,sy:-105,h:add(h,[.025,.09,-.12]),bd:unit([-.7,.32,-.64])};
+    const slot={...contact,pel:upPel,lean:upLean,sy:-105,h:add(h,[.025,.09,-.12]),bd:unit([-.7,.32,-.64])};   // drops into the shot only as the bat comes through
     const through={...contact,hy:-72,sy:-72,h:add(h,[-.08,-.07,.13]),bd:unit([-.96,-.2,.2])};
     const extension={...contact,hy:-64,sy:-52,lean:16,
       h:[.52+shift,h[1]-.1,1.3],bd:unit([-.7,-.15,.7])};
-    const finish={...contact,pel:[.68+shift,.83,.84],hy:-60,sy:-40,lean:12,side:3,
-      h:[.58+shift,1.16,1.23],bd:unit([-.86,.3,.4])};
-    const settle={...finish,sy:-46,h:add(finish.h,[0,-.07,-.02])};
+    // held out toward point, arms long, the face rolled over (reads from the bowler's end)
+    const finish={...contact,pel:[.66+shift,.79,.85],hy:-62,sy:-46,lean:18,side:4,
+      h:[.4+shift,1.17,1.16],bd:unit([-.9,.22,.36])};
+    const settle={...finish,sy:-50,lean:14,h:add(finish.h,[.04,-.08,-.02])};
     return [[0,start],[impact*.33,load],[impact*.68,slot],[impact,contact],
       [impact+.075,through],[impact+.17,extension],[impact+.38,finish],[impact+.85,settle],[impact+1.5,stance]];
   }
@@ -160,8 +162,8 @@
   function pullKeys({start,target,stance,loft=false,impact=.15}) {
     const shift=clamp(target[0]*.8,-.28,.25),low=clamp((1.15-target[1])*.4,0,.18);
     const bd=unit([-.97,-.09,.22]),h=add(target,scale(bd,-.48));
-    const contact={...start,fr:[1.01+shift,0,1.02],bk:[.48+shift,0,.38],pel:[.69+shift,.84-low,.76],
-      hy:-42,sy:-54,lean:12+low*45,side:0,h,bd,kpL:[.45,0,.9],kpR:[-.65,0,.75],rearFootPitch:0};
+    const contact={...start,fr:[1.06+shift,0,1.06],bk:[.46+shift,0,.36],pel:[.66+shift,.77-low*.8,.74],
+      hy:-42,sy:-54,lean:16+low*40,side:-3,h,bd,kpL:[.6,0,.8],kpR:[-.65,0,.75],rearFootPitch:0};   // down on the back leg, front foot opened
     const load={...contact,pel:start.pel.map((v,i)=>v+(contact.pel[i]-v)*.45),
       hy:start.hy+(contact.hy-start.hy)*.65,sy:start.sy+(contact.sy-start.sy)*.18,
       h:start.h.map((v,i)=>v+(h[i]-v)*.3+(i===1?.06:0)),bd:slerp(unit(start.bd),unit([-.7,.5,-.5]),.3)};
@@ -170,9 +172,10 @@
       h:add(h,[.13,loft?.06:-.04,.17]),bd:unit([-.48,-.12,.87])};
     const extension={...contact,pel:[.72+shift,.86,.77],hy:-10,sy:6,lean:8,
       h:[.92+shift,loft?1.36:1.14,1.14],bd:unit([.48,loft?.25:-.12,.87]),rearFootPitch:.12};
-    const finish={...contact,pel:[.73+shift,.87,.77],hy:0,sy:32,lean:6,rearFootPitch:.22,
-      h:[1.01+shift,loft?1.40:1.15,.94],bd:unit([.91,loft?.36:.02,-.4])};
-    const settle={...finish,hy:-8,sy:24,h:add(finish.h,[-.04,-.07,.015]),rearFootPitch:.12};
+    // the bat wraps right round: hands up by the front shoulder, blade over its back toward the keeper (reads from the bowler's end)
+    const finish={...contact,pel:[.72+shift,.82,.76],hy:4,sy:42,lean:8,rearFootPitch:.3,
+      h:[.95+shift,loft?1.3:1.16,.72],bd:unit([.75,loft?.6:.45,-.5])};   // (stays well below the hook's finish)
+    const settle={...finish,hy:-4,sy:34,h:add(finish.h,[-.03,-.06,.03]),rearFootPitch:.15};
     return [[0,start],[impact*.3,load],[impact*.66,slot],[impact,contact],
       [impact+.08,through],[impact+.20,extension],[impact+.42,finish],[impact+.85,settle],[impact+1.5,stance]];
   }
