@@ -447,6 +447,7 @@
   #btnRun small { font: 600 11px var(--ui); letter-spacing: 0.08em; color: var(--muted); }
   @keyframes runPulse { to { background: rgba(255, 176, 46, 0.62); } }
   @media (max-width: 720px) and (orientation: portrait) { #btnRun { bottom: calc(160px + env(safe-area-inset-bottom, 0px)); width: 100px; height: 60px; } }
+  #game:has(#banner.show) #delivery { visibility: hidden; }   /* the ball's speed steps aside for OUT, FOUR, SIX... (it overlapped on phones) */
   @media (max-width: 720px) and (orientation: portrait) { #game:has(#bowlpad:not([hidden])) #delivery { bottom: calc(146px + env(safe-area-inset-bottom, 0px)); } }   /* clear of the three rows of bowling buttons */
   @media (min-height: 461px) and (min-width: 721px) { #game:has(#bowlpad:not([hidden])) #tvcard { bottom: calc(146px + env(safe-area-inset-bottom, 0px)); } }
   @media (max-height: 460px) { #btnRun { right: calc(8px + env(safe-area-inset-right, 0px)); bottom: calc(112px + env(safe-area-inset-bottom, 0px)); width: 92px; height: 44px; font-size: 18px; } }
@@ -3775,7 +3776,7 @@ function update(dt) {
     const mv = canMove();
     if ($('moveL').disabled === mv) { $('moveL').disabled = !mv; $('moveR').disabled = !mv; }
   }
-  const hint = $('swipeHint'), showHint = inn && inn.userBats && (M.batBalls || 0) < 4 && ['wait', 'runup', 'flight'].includes(phase) && !(ball && (ball.swing || ball.left));
+  const hint = $('swipeHint'), showHint = !touch && inn && inn.userBats && (M.batBalls || 0) < 4 && ['wait', 'runup', 'flight'].includes(phase) && !(ball && (ball.swing || ball.left));
   if (showHint) {
     const t = shotType === 'defend' ? 'DEFEND' : shotType === 'loft' ? 'LOFT' : 'SHOT';
     const txt = touch ? t + ' chosen · swipe where you want it as the ball arrives' + (runOwn ? ' · RUN, CANCEL, DIVE to run' : '')
