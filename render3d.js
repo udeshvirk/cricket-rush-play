@@ -815,10 +815,10 @@ window.Cricket3D = function (G) {
     } catch (e) { console.warn('player model', e); }
   }
 
-  // ---------------------------------------------------------------- equipment models (vendor/equipment-model.js: bat, helmet, cap, pad; CC0)
+  // ---------------------------------------------------------------- equipment model (vendor/equipment-model.js: the open batting glove; CC0)
   const EQ = { tried: false, ready: false };
-  // which helmet and gloves to show: 'model' = the equipment models, 'built' = the shape-built helmet and gloved fingers
-  const EQUIP_OPT = Object.assign({ helmet: PRODUCTION?.reference?'model':'built', gloves: 'built' }, window.CR_EQUIP || {});
+  // which gloves to show: 'model' = the glove model, 'built' = the gloved fingers painted on the player
+  const EQUIP_OPT = Object.assign({ gloves: 'built' }, window.CR_EQUIP || {});
   const EQMAT = { padding: mat('#1a1d24'), strap: mat('#b9bcc2'), sticker: mat('#c9302c') };
   for (const m of Object.values(EQMAT)) m.side = T.DoubleSide;
   const EQMAT_USES = { shell: M3.helmet, grille: M3.grille, cap: M3.cap, pad: M3.pads, willow: M3.blade, grip: M3.grip };
@@ -838,11 +838,7 @@ window.Cricket3D = function (G) {
           EQ[k] = g.scene;
           if (--left === 0) { EQ.ready = true; if(PRODUCTION)PRODUCTION.equipmentReady=true; pool.forEach(p => p.attachEquipment()); }
         };
-        if(k==='helmet' && PRODUCTION?.reference) {
-          new T.GLTFLoader().load('player-production/cricket_helmet_'+(presentationSlice?'slice':'reference')+'.glb',g=>{PRODUCTION.helmetReady=true;accept(g);},undefined,e=>{
-            console.warn('Reference helmet failed',e);new T.GLTFLoader().parse(bin,'',accept,e=>console.warn('equipment',k,e));
-          });
-        } else new T.GLTFLoader().parse(bin,'',accept,e=>console.warn('equipment',k,e));
+        new T.GLTFLoader().parse(bin, '', accept, e => console.warn('equipment', k, e));
       } catch (e) { console.warn('equipment', k, e); }
     }
   }
@@ -1016,14 +1012,11 @@ window.Cricket3D = function (G) {
       this.handle = P(cyl, M3.grip); this.blade = P(box, M3.blade); this.spine = P(box, M3.blade);
     }
     attachEquipment() {
-      const C = k => { const o = EQ[k].clone(); o.matrixAutoUpdate = false; return o; };
       const K = o => { const c = o.clone(); c.matrixAutoUpdate = false; return c; };
       this.eqBat = K(BATGEAR); this.eqPadL = K(PADGEAR); this.eqPadR = K(PADGEAR); this.g.add(this.eqBat, this.eqPadL, this.eqPadR);   // the bat and pads are built in code
-      this.eqHelmet = EQ.helmet.clone(); this.eqCap = EQ.cap.clone(); this.headG.add(this.eqHelmet, this.eqCap);
       if (EQ.glove_left) { this.eqGl = EQ.glove_left.clone(); this.eqGr = EQ.glove_left.clone(); }
       this.eqKl = KEEPGLOVE.clone(); this.eqKr = KEEPGLOVE.clone();   // (built in code; the old model was a batting glove)
       for (const o of [this.eqGl, this.eqGr, this.eqKl, this.eqKr]) if (o) { o.visible = false; this.g.add(o); }
-      this.eqHelmet.scale.setScalar(1.0); this.eqCap.scale.setScalar(1.0);
     }
     attachGrip() {
       if (!this.bones || this.gripG || !GRIP3.ready) return;
@@ -1240,10 +1233,6 @@ window.Cricket3D = function (G) {
       this.helmet.position.set(0,fittedHeadgear ? -.025 : 0,fittedHeadgear ? .012 : 0);
       this.helmet.scale.set(fittedHeadgear ? .94 : 1,fittedHeadgear ? .80 : 1,fittedHeadgear ? .90 : 1);
       B.head.scale.setScalar(HEAD_SIZE); this.headG.scale.setScalar(HEAD_SIZE);   // a slightly bigger head, so faces read from the match camera
-      // the equipment helmet and cap ride on the head bone itself (its rest frame is the world frame, so the offset is simple)
-      if (this.eqHelmet && this.eqHelmet.parent !== B.head) {
-        for (const o of [this.eqHelmet, this.eqCap]) { B.head.add(o); o.position.set(0, o===this.eqHelmet && PRODUCTION?.reference ? .035 : .075, -0.008); }
-      }
       // fingers: a fist round the bat handle (gloves), relaxed otherwise
       const curl = rig.curl[(pr.team === 'bat' && pr.gloves) || pr.keeper ? 'grip' : 'relax'];
       for (const k in curl) if (B[k]) B[k].quaternion.copy(curl[k]);
@@ -1349,10 +1338,7 @@ window.Cricket3D = function (G) {
       // the bat: handle, a flat blade and the ridge down its back
       if (this.model) this.fit(pr, fwd, side, hs, shirt, pants);
       const hasBat = !!pr.bat, eq = !!this.eqBat;
-      if (eq) {   // the equipment models replace the shape-built bat, pads, helmet and cap
-        const mh = EQUIP_OPT.helmet === 'model';
-        this.helmet.visible = helm && !mh; this.cap.visible = !helm && !mh && !ump && !pr.bare;
-        this.eqHelmet.visible = helm && mh; this.eqCap.visible = !helm && mh && !ump && !pr.bare;
+      if (eq) {   // the code-built bat and pads replace the simple shapes
         this.padL.visible = this.padR.visible = false;
         for (const [o, knee, foot, sx] of [[this.eqPadL, j.kneeL, j.footL, 1], [this.eqPadR, j.kneeR, j.footR, -1]]) {
           o.visible = padded;

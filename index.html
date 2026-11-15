@@ -447,6 +447,8 @@
   #btnRun small { font: 600 11px var(--ui); letter-spacing: 0.08em; color: var(--muted); }
   @keyframes runPulse { to { background: rgba(255, 176, 46, 0.62); } }
   @media (max-width: 720px) and (orientation: portrait) { #btnRun { bottom: calc(160px + env(safe-area-inset-bottom, 0px)); width: 100px; height: 60px; } }
+  @media (max-width: 720px) and (orientation: portrait) { #game:has(#bowlpad:not([hidden])) #delivery { bottom: calc(146px + env(safe-area-inset-bottom, 0px)); } }   /* clear of the three rows of bowling buttons */
+  @media (min-height: 461px) and (min-width: 721px) { #game:has(#bowlpad:not([hidden])) #tvcard { bottom: calc(146px + env(safe-area-inset-bottom, 0px)); } }
   @media (max-height: 460px) { #btnRun { right: calc(8px + env(safe-area-inset-right, 0px)); bottom: calc(112px + env(safe-area-inset-bottom, 0px)); width: 92px; height: 44px; font-size: 18px; } }
   /* the running strip: where the batters are (keeper's end on the left), what the ball is doing, and whether another run is on */
   #runStrip { position: absolute; right: calc(12px + env(safe-area-inset-right, 0px)); bottom: calc(194px + env(safe-area-inset-bottom, 0px));
@@ -479,45 +481,6 @@
   @media (max-height: 460px) {
     #btnDive, #btnCancel { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); width: 76px; height: 44px; font-size: 14px; }
     #btnDive { right: calc(106px + env(safe-area-inset-right, 0px)); } #btnCancel { right: calc(188px + env(safe-area-inset-right, 0px)); } }
-</style>
-<style>
-  /* Development presentation review: keep the pitch clear above a lower score ribbon. */
-  body.reference-view { margin: 0; }
-  body.reference-view #tvbar { top: auto; bottom: env(safe-area-inset-bottom,0px); left: 0; right: 0; max-width: none;
-    display: grid; grid-template-columns: minmax(170px,auto) 1fr; grid-template-rows: 36px 26px;
-    background: rgba(5,15,22,.92); border-top: 1px solid rgba(255,255,255,.25); }
-  body.reference-view #tvbar #scorebar { grid-column: 1 / -1; }
-  body.reference-view #tvbar #scorebar > div { background: transparent; padding: 2px 16px; }
-  body.reference-view #tvbar #scorebar .team { min-width: 62px; font-size: 16px; justify-content: center; }
-  body.reference-view #tvbar #scorebar .runs { font-size: 30px; line-height: 1; }
-  body.reference-view #tvbar #scorebar .overs { font-size: 15px; }
-  body.reference-view #tvbar #scorebar .need { margin-left: auto; font-size: 15px; }
-  body.reference-view #tvbar #batline { grid-column: 2; grid-row: 2; background: transparent; justify-content: space-between;
-    gap: 18px; padding: 0 16px; font-size: 16px; line-height: 24px; }
-  body.reference-view #tvbar #overchips { grid-column: 1; grid-row: 2; padding: 0 12px; align-items: center; }
-  body.reference-view #tvbar .chip { min-width: 15px; height: 15px; font-size: 10px; }
-  body.reference-view #delivery { top: auto; bottom: calc(76px + env(safe-area-inset-bottom,0px)); left: auto; right: 16px; transform: none; background: rgba(5,15,22,.7); font-size: 14px; }
-  @media (max-width: 720px) and (orientation: portrait) { #game:has(#bowlpad:not([hidden])) #delivery { bottom: calc(146px + env(safe-area-inset-bottom, 0px)); } }   /* clear of the three rows of bowling buttons */
-  @media (min-height: 461px) and (min-width: 721px) { #game:has(#bowlpad:not([hidden])) #tvcard { bottom: calc(146px + env(safe-area-inset-bottom, 0px)); } }
-  body.reference-view #swipeHint { bottom: calc(74px + env(safe-area-inset-bottom,0px)); }
-  body.reference-view #tvcard { bottom: calc(78px + env(safe-area-inset-bottom,0px)); }
-  body.reference-view.reference-touch #tvbar { bottom: calc(100px + env(safe-area-inset-bottom,0px)); }
-  body.reference-view.reference-touch #delivery { bottom: calc(176px + env(safe-area-inset-bottom,0px)); }
-  @media (max-width:900px) {
-    body.reference-view #tvbar #scorebar > div { padding: 2px 8px; }
-    body.reference-view #tvbar #batline { font-size: 12px; gap: 8px; padding: 0 8px; }
-    body.reference-view #bowlerLine { display: none; }
-    body.reference-view #tvbar #scorebar .need { font-size: 12px; }
-  }
-  @media (max-height:460px) {
-    body.reference-view #tvbar { grid-template-rows: 24px 18px; }
-    body.reference-view #tvbar #scorebar .runs { font-size: 20px; }
-    body.reference-view #tvbar #scorebar .team, body.reference-view #tvbar #scorebar .overs { font-size: 11px; }
-    body.reference-view #tvbar #batline { font-size: 10px; line-height: 18px; }
-    body.reference-view.reference-touch #tvbar { bottom: 38px; }
-    body.reference-view.reference-touch .shotsel { flex-direction: row; }
-    body.reference-view.reference-touch #delivery { bottom: 90px; }
-  }
 </style>
 </head>
 <body>
@@ -765,21 +728,9 @@
 <script>
 (() => {
 'use strict';
-const REFERENCE_VIEW = !!(window.CR_PLAYER_PRODUCTION && window.CR_PLAYER_PRODUCTION.reference);
-const PRESENTATION_SLICE = !!window.CR_PLAYER_PRODUCTION?.slice;
 // the smoother movement (curved pose blending, a real running stride, feet that plant and roll); ?motion=old shows the earlier one
-const MOTION2 = REFERENCE_VIEW || new URLSearchParams(location.search).get('motion') !== 'old';
-const DRIVE_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('drive') !== 'old';
-const CUT_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('cut') !== 'old';
-const PULL_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('pull') !== 'old';
-const BDRIVE_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('bdrive') !== 'old';
-// Dedicated staged strokes (player-production/motion.js), sampled against the gameplay contact clock.
-const NEW_STROKES = CUT_MOTION && PULL_MOTION;   // reverse sweep, late cut, leg glance
-const SWEEP_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('sweep') !== 'old';
-const LEG_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('leg') !== 'old';
-const REMAINING_MOTION = MOTION2 && !REFERENCE_VIEW && new URLSearchParams(location.search).get('strokes') !== 'old';
-const stagedStroke = f => (REMAINING_MOTION && ['fdef','bdef','push','slog'].includes(f)) || (LEG_MOTION && f==='flick') || (SWEEP_MOTION && f==='sweep') || (NEW_STROKES && (f==='rsweep'||f==='lcut'||f==='glance')) || (CUT_MOTION && (f==='cut'||f==='ucut')) || (PULL_MOTION && (f==='pull'||f==='hook')) || (BDRIVE_MOTION && f==='bdrive');
-document.body.classList.toggle('reference-view',REFERENCE_VIEW);
+// Every stroke but the drive has staged key poses sampled like the cut (player-production/motion.js); the drive has its own sampler.
+const stagedStroke = f => !!f && f !== 'drive';
 
 // ======================================================================= setup
 const canvas = document.getElementById('view');
@@ -938,11 +889,10 @@ const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
 
 // ======================================================================= camera and projection
 // Long broadcast lens: comparable player size at both ends, without enlarging meshes.
-const BOWL_CAM = REFERENCE_VIEW ? { pos:[0,14.5,87],tgt:[0,.5,8],fov:5.7 }
-  : (() => { const q = (new URLSearchParams(location.search).get('cam') || '').split(':').map(Number); return q.length === 7 ? { pos: q.slice(0, 3), tgt: q.slice(3, 6), fov: q[6] } : { pos:[0,8.5,52],tgt:[0,.8,4],fov:11 }; })();
+const BOWL_CAM = (() => { const q = (new URLSearchParams(location.search).get('cam') || '').split(':').map(Number); return q.length === 7 ? { pos: q.slice(0, 3), tgt: q.slice(3, 6), fov: q[6] } : { pos:[0,8.5,52],tgt:[0,.8,4],fov:11 }; })();
 // the 2D view frames tighter, so the batter at the far end is bigger
 const BOWL_CAM_2D = { pos: [0, 6.2, 46], tgt: [0, 0.7, 10], fov: 11.5 };
-const homeCam = () => { try { return REFERENCE_VIEW || (R3D && R3D.active()) ? BOWL_CAM : BOWL_CAM_2D; } catch (e) { return BOWL_CAM; } };
+const homeCam = () => { try { return R3D && R3D.active() ? BOWL_CAM : BOWL_CAM_2D; } catch (e) { return BOWL_CAM; } };
 const cam = { pos: BOWL_CAM.pos.slice(), tgt: BOWL_CAM.tgt.slice(), fov: BOWL_CAM.fov };
 let cr, cu, cf, focal;
 const NEAR = 0.3;
@@ -955,14 +905,11 @@ function setupCamera() {
   cf = norm(sub(cam.tgt, cam.pos));
   cr = norm(cross(cf, [0, 1, 0]));
   cu = cross(cr, cf);
-  const ribbon=REFERENCE_VIEW && !$('tvbar').hidden ? $('tvbar').getBoundingClientRect() : null;
-  const pictureH=ribbon && ribbon.top>0 ? Math.min(H,Math.max(H*.55,ribbon.top-6)) : H;
-  let f = (pictureH / 2) / Math.tan(cam.fov * deg / 2);
-  if (!REFERENCE_VIEW) f *= viewZoom(W / H);
+  const f = (H / 2) / Math.tan(cam.fov * deg / 2) * viewZoom(W / H);
   const aspect = W / H;
   focal = f;
   // an upright screen: the picture's centre sits higher, so the field fills the middle instead of the stands
-  camShift = REFERENCE_VIEW ? (H-pictureH)/2 : aspect < 0.8 ? H * 0.06 : 0; cy = H / 2 - camShift;
+  camShift = aspect < 0.8 ? H * 0.06 : 0; cy = H / 2 - camShift;
 }
 let camShift = 0, cy = 0;
 function toCam(p) { const d = sub(p, cam.pos); return [dot(d, cr), dot(d, cu), dot(d, cf)]; }
@@ -1128,7 +1075,7 @@ function figure(pos, face, o = {}) {
   j.handL = o.handL || P(lean - arm + crouch * 0.35, 0.24, hip + 0.02 + crouch * 0.2);
   j.handR = o.handR || P(lean + arm + crouch * 0.35, -0.24, hip + 0.02 + crouch * 0.2);
   j.elL = add(lerp3(j.shL, j.handL, 0.5), mul(L, 0.05)); j.elR = add(lerp3(j.shR, j.handR, 0.5), mul(L, -0.05));
-  if(MOTION2) {
+  {
     j.footPitchL=[0,0,0];j.footPitchR=[0,0,0];
     if(run>.05) {
       const resting=Object.fromEntries(Object.entries(j).map(([key,value])=>[key,value.slice()]));
@@ -1542,9 +1489,9 @@ function buildBody(k) {
   const sc = sub(j.neck, mul(sp, 0.05));
   j.shL = add(sc, mul(s, 0.19)); j.shR = add(sc, mul(s, -0.19));
   j.head = add(add(j.neck, mul(sp, 0.18)), add(mul(n, 0.035), k.headOff || [0, 0, 0]));
-  if(MOTION2 && k.headOff) j.head=add(j.neck,[0,.18,.025]); // batsman keeps his eyes level while the trunk leans
+  if(k.headOff) j.head=add(j.neck,[0,.18,.025]); // batsman keeps his eyes level while the trunk leans
   j.footL = k.fr.slice(); j.footR = k.bk.slice();
-  if(MOTION2) {
+  {
     j.footDirL=norm(k.kpL||nH);j.footDirR=norm(k.kpR||nH);
     const pitch=k.rearFootPitch||0;j.footPitchR=[pitch,0,0];j.footPitchL=[0,0,0];
     j.footR[1]+=.14*Math.sin(pitch)+.06*(Math.cos(pitch)-1);
@@ -1560,7 +1507,7 @@ function mixPose(a, b, t) {
   const o = {};
   for (const key in a) {
     const x = a[key], y = b[key] === undefined ? x : b[key];
-    if(MOTION2 && key==='bd') {
+    if(key==='bd') {
       // A normalised linear blend rushes through almost-opposite backlift
       // directions. Interpolate the blade on the unit sphere instead.
       const cosine=clamp(dot(x,y),-1,1),angle=Math.acos(cosine),sine=Math.sin(angle);
@@ -1570,15 +1517,6 @@ function mixPose(a, b, t) {
   }
   for (const key in b) if (o[key] === undefined) o[key] = b[key];
   return o;
-}
-const easeIn = t => t * t, easeOut = t => 1 - (1 - t) * (1 - t);
-function keyed(keys, t) {   // keys: [[time, pose, easing?], ...]; the easing shapes the move into that key (smooth by default)
-  if (t <= keys[0][0]) return keys[0][1];
-  for (let i = 1; i < keys.length; i++) if (t < keys[i][0]) {
-    const [t0, a] = keys[i - 1], [t1, b, ease] = keys[i];
-    return mixPose(a, b, (ease || smooth)((t - t0) / (t1 - t0)));
-  }
-  return keys[keys.length - 1][1];
 }
 function mixJoints(a, b, t) { const o = {}; for (const k in a) o[k] = lerp3(a[k], b[k] || a[k], t); return o; }
 
@@ -1599,19 +1537,19 @@ function strokeFamily(a, loft, defend, push, short, spin, at) {
   const h = at ? at[1] : 0.5, wide = at ? at[0] < -0.12 : false;
   if (short || h > 1.05) {   // short, or chest high off a good length: a back-foot shot
     const off = short ? -45 : -40, leg = short ? 25 : 20;
-    if (a < off) return CUT_MOTION && (loft || h > 1.4 || (a < -115 && h > 1.05)) ? 'ucut'   // lofted, shoulder high, or steered fine: the upper cut
-      : NEW_STROKES && a < -115 && a >= -155 ? 'lcut' : 'cut';
-    if (a > leg) return PULL_MOTION && h > 1.4 ? 'hook' : 'pull';   // shoulder high or above: the hook
+    if (a < off) return (loft || h > 1.4 || (a < -115 && h > 1.05)) ? 'ucut'   // lofted, shoulder high, or steered fine: the upper cut
+      : a < -115 && a >= -155 ? 'lcut' : 'cut';
+    if (a > leg) return h > 1.4 ? 'hook' : 'pull';   // shoulder high or above: the hook
     return 'bdrive';
   }
   const sweepableSpin = spin && h <= 1.05; // full/good-length spin through waist height; short/high handled above
   if (a > 35) {
     if (a >= 115 && a <= 155 && sweepableSpin) return 'sweep'; // Up + leg side; Shift lifts the same sweep
-    if (NEW_STROKES && !loft && a > 115 && a <= 155 && !(spin && h < 0.75)) return 'glance';   // fine on the leg side: the leg glance (spin, low: the fine sweep)
+    if (!loft && a > 115 && a <= 155 && !(spin && h < 0.75)) return 'glance';   // fine on the leg side: the leg glance (spin, low: the fine sweep)
     if (loft) return a < 120 ? 'slog' : 'flick';
     return 'flick'; // side-only leg aim stays a standing stroke
   }
-  if (NEW_STROKES && a < -115 && a >= -155) {   // fine on the off side: the reverse sweep to a low ball from a spinner, else the late cut
+  if (a < -115 && a >= -155) {   // fine on the off side: the reverse sweep to a low ball from a spinner, else the late cut
     if (!loft && sweepableSpin) return 'rsweep';
     if (!loft) return 'lcut';
   }
@@ -1619,202 +1557,10 @@ function strokeFamily(a, loft, defend, push, short, spin, at) {
   return 'drive';
 }
 // key poses for a stroke: ready, backlift, the bat meeting the ball at sw.target, the follow-through, then back to the stance
-function strokeKeys(sw) {
-  const T = sw.target, a = sw.intent * deg, dir = [Math.sin(a), 0, Math.cos(a)], loft = sw.loft;
-  const R = MOTION2 ? (sw.visualStart || PREPARE) : READY;
-  if((DRIVE_MOTION && sw.fam==='drive') || stagedStroke(sw.fam)) {
-    // Preserve the existing random stream consumption without making the
-    // staged strokes' support/contact poses wander on each delivery.
-    if(!sw.vary)sw.vary={l:rand(-4,4),y:rand(-7,7),h:[rand(-.08,.08),rand(-.1,.1),rand(-.06,.06)],f:rand(-.03,.05),hold:rand(.8,1.3)};
-    return CricketMotion[sw.fam+'Keys']({start:R,target:T,aim:sw.intent,loft,stance:STANCE,impact:SWING_LAG});
-  }
-  const B = MOTION2 ? {...PREPARE,h:[.22,1.22,.94],bd:norm([-.28,.88,-.38]),lean:12}
-    : {...READY,h:[.52,1.3,.56],bd:norm([.2,.85,-.5]),lean:12};
-  const at = (bd, d = 0.58) => sub(T, mul(bd, d));   // grip, so the middle of the bat meets the ball
-  const tx = clamp(T[0], -0.9, 0.9), front = (x, z) => [clamp(tx + x, 0.05, 0.72), 0, z];
-  let C, F, tF = 0.5;
-  switch (sw.fam) {
-    case 'drive': {
-      const fr = front(0.3, 1.32), bd = norm([-0.05 + dir[0] * 0.12, -1, -0.12]);
-      C = { ...R, fr, pel: [lerp(0.63, fr[0], 0.45), 0.8, 0.98], hy: -70, sy: -78, lean: 28, side: 14, h: at(bd), bd, kpL: [-0.4, 0, 1] };
-      F = { ...C, hy: -55, sy: -45 + sw.intent * 0.25, lean: 16, side: 6,
-            h: [0.4 + dir[0] * 0.25, loft ? 1.78 : 1.55, 1.08 + dir[2] * 0.12], bd: norm(loft ? [0.3, 0.9, -0.3] : [0.45, 0.5, -0.75]) };
-      if(MOTION2) F={...F,pel:[.45,.91,1.0],hy:-40,sy:-20,lean:8,side:2,rearFootPitch:.4,h:[.42,loft?1.86:1.76,1.3],bd:norm(loft?[.3,.8,-.52]:[.32,.72,-.62])};   // high finish: hands up in front, the bat over the front shoulder   // the finish leans out beside the head, so the bat doesn't stand up out of the helmet
-      if(PRESENTATION_SLICE) F={...F,pel:[.45,.91,1.04],hy:-32,sy:8,lean:7,side:0,h:[.36,loft?1.86:1.74,1.34],bd:norm(loft?[.12,.82,-.56]:[.12,.66,-.74])};
-      break; }
-    case 'fdef': case 'push': {
-      const fr = front(0.3, 1.26), bd = norm([0, -1, -0.28]);
-      C = { ...R, fr, pel: [lerp(0.63, fr[0], 0.45), 0.8, 0.95], hy: -75, sy: -82, lean: 30, side: 14, h: at(bd, 0.5), bd, kpL: [-0.4, 0, 1] };
-      F = sw.fam === 'push' ? { ...C, h: add(C.h, mul(dir, 0.2)), bd: norm([dir[0] * 0.5, -1, dir[2] * 0.3 - 0.1]) } : { ...C };
-      B.h = [0.2, 1.12, 0.9]; B.bd = norm([-0.45, 0.75, -0.3]); tF = 0.35; break; }   // a short backlift out on the off side, where the camera sees it (it used to go behind the body)
-    case 'bdef': case 'bdrive': {
-      const bd = norm(sw.fam === 'bdef' ? [-.20,-1,.30] : [-.15,-1,.20]);
-      // Shorten along the blade axis, rather than clamping only hand Y and
-      // pulling the bat face away from the ball's contact point.
-      const h = at(bd, Math.min(.45, Math.max(.20, (1.4-T[1])/-bd[1])));
-      C = { ...R, fr: [0.5, 0, 0.94], bk: [0.38, 0, 0.36], pel: [0.47, 0.9, 0.64], hy: -80, sy: -84, lean: 10, side: 4, h, bd, kpL: [-1, 0, 0.3], kpR: [-1, 0, 0] };
-      F = sw.fam === 'bdef' ? { ...C } : { ...C, sy: -60, h: [0.15 + dir[0] * 0.2, 1.45, 1.05 + dir[2] * 0.1], bd: norm([-0.6, 0.72, 0.35]) };   // finishes up in front of the off shoulder, not standing up behind the helmet
-      if (sw.fam === 'bdef') tF = 0.35; break; }
-    case 'cut': {
-      const bd = norm([-0.95, -0.3, 0.15]);
-      C = { ...R, fr: [0.52, 0, 1.08], bk: [0.3, 0, 0.6], pel: [0.42, 0.88, 0.70], hy: -95, sy: -92, lean: 22, side: -4, h: at(bd), bd, kpL: [-1, 0, 0.3], kpR: [-1, 0, 0] };
-      F = { ...C, hy: -105, sy: -125, lean: 18, h: [0.1, 1.22, 0.7], bd: norm([-0.7, 0.35, -0.6]) };   // the blade carries on down and round toward point, out on the off side where it's seen
-      B.h = [0.28, 1.34, 0.72]; B.bd = norm([-0.5, 0.8, -0.3]); break; }   // backlift on the off side, not straight up behind the helmet
-    case 'pull': {
-      const bd = norm([-0.95, 0.05, 0.2]);
-      C = { ...R, fr: [0.78, 0, 0.98], bk: [0.48, 0, 0.36], pel: [0.6, 0.9, 0.66], hy: -50, sy: -35, lean: 12, side: 0, h: at(bd), bd, kpL: [-0.3, 0, 1], kpR: [-1, 0, 0] };
-      F = { ...C, hy: -5, sy: 40, h: [1.0, 1.62, 1.0], bd: norm([0.6, 0.75, -0.25]) };   // finishes high over the leg-side shoulder, not wrapped round behind the back
-      B.h = [0.3, 1.32, 0.68]; B.bd = norm([-0.45, 0.82, -0.36]); break; }
-    case 'flick': {
-      const fr = front(0.4, 1.28), bd = norm([0.12, -1, -0.05]);
-      C = { ...R, fr, pel: [lerp(0.63, fr[0], 0.45), 0.82, 0.97], hy: -70, sy: -72, lean: 24, side: 10, h: at(bd), bd, kpL: [-0.4, 0, 1] };
-      F = { ...C, hy: -40, sy: -20, lean: 14, h: [0.42, 1.22, 1.3], bd: norm([0.8, 0.3, 0.35 + dir[2] * 0.2]) };   // wrists roll; the bat ends out in front, pointing to the leg side
-      break; }
-    case 'slog': {
-      const bd = norm([-0.9, -0.3, 0.25]);
-      C = { ...R, fr: [0.75, 0, 1.25], pel: [0.66, 0.74, 0.86], hy: -45, sy: -30, lean: 28, side: 6, h: at(bd,.50), bd, kpL: [-0.2, 0, 1] };
-      F = { ...C, hy: 10, sy: 50, lean: 8, h: [0.9, 1.75, 0.95], bd: norm([0.45, 0.85, -0.2]) };   // a high finish, in view
-      B.h = [0.3, 1.35, 0.66]; B.bd = norm([-0.4, 0.85, -0.35]); break; }
-    case 'sweep': {
-      const bd = norm([-0.9, -0.35, 0.25]);
-      C = { ...R, fr: [0.42, 0, 1.22], bk: [0.78, 0, 0.22], pel: [0.62, 0.6, 0.82], hy: -70, sy: -60, lean: 30, side: 8, h: at(bd), bd,
-            kpL: [-0.3, 0.6, 1], kpR: [-0.2, -1, 0.3] };
-      F = { ...C, pel: [0.62, 0.52, 0.82], sy: -20, h: [1.05, 0.85, 1.25], bd: norm([0.8, 0.45, 0.1]) };   // most of the way down by the ball, the knee settles after   // the sweep finishes round on the leg side, low and in front, not behind the head
-      B.h = [0.22, 1.2, 0.90]; B.bd = norm([-0.2, 0.8, -0.55]); break; }
-  }
-  // no two strokes quite alike: a little variety in the finish, and a held finish that settles instead of freezing
-  const v = sw.vary || (sw.vary = { l: rand(-4, 4), y: rand(-7, 7), h: [rand(-0.08, 0.08), rand(-0.1, 0.1), rand(-0.06, 0.06)], f: rand(-0.03, 0.05), hold: rand(0.8, 1.3) });
-  const firm = /def/.test(sw.fam) ? 0.3 : 1;
-  C = { ...C, lean: C.lean + v.l * 0.4 };
-  F = { ...F, lean: F.lean + v.l * firm, hy: F.hy + v.y * firm, sy: F.sy + v.y * firm, h: add(F.h, mul(v.h, firm)) };
-  tF += v.f;
-  if(MOTION2 && ['drive','fdef','push','flick','slog'].includes(sw.fam)) B.fr=add(lerp3(R.fr,C.fr,.65),[0,.035,0]);
-  const S = { ...F, lean: F.lean - 4, h: add(F.h, [0, -0.06 * firm, 0]) };
-  // the bat accelerates into the ball and decelerates through the follow-through
-  if (MOTION2 && !PRESENTATION_SLICE && sw.defend) return straightSwing(R, C, F, S, tF, v.hold, [0, 0, 1], 'def');   // defence: a straight bat down from the backlift
-  if (MOTION2 && !PRESENTATION_SLICE && SWING_PATHS[sw.fam]) return pathSwing(R, C, F, S, tF, v.hold, SWING_PATHS[sw.fam]);
-  if (MOTION2 && !PRESENTATION_SLICE && STRAIGHT_FAMS.includes(sw.fam)) return straightSwing(R, C, F, S, tF, v.hold, dir, sw.fam);
-  if (MOTION2 && !PRESENTATION_SLICE) return swingArc(R, C, F, S, tF, v.hold, sw.fam === 'cut' ? norm([0, -0.55, -0.85]) : dir);   // the cut comes down and across, behind square
-  if(MOTION2 && sw.fam==='drive') {
-    // Extend through the ball before folding over the shoulder. A direct
-    // contact-to-finish arc cuts across the upper chest immediately after impact.
-    const extension={...C,hy:-60,sy:-55,lean:20,side:8,h:[.55,1.24,1.54],bd:norm([.32,-.12,.94])};
-    if(PRESENTATION_SLICE) Object.assign(extension,{pel:[.45,.86,1.1],hy:-55,sy:-25,lean:12,side:4,rearFootPitch:.22,h:[.14,1.25,1.58],bd:norm([-.06,-.12,.99])});
-    return [[0,R],[.07,B],[SWING_LAG,C,easeIn],[.24,extension],[tF,F,easeOut],[tF+v.hold,S],[tF+v.hold+.7,STANCE]];
-  }
-  return [[0, R], [0.07, B], [SWING_LAG, C, easeIn], [tF, F, easeOut], [tF + v.hold, S], [tF + v.hold + 0.7, STANCE]];
-}
-// One smooth swing (MOTION2): the bat comes down from the waiting backlift on an arc through the ball and carries on up
-// into the finish. The arc lies in the plane of the blade at contact and the shot's direction, with the hands circling a
-// point above the contact grip; the wrists stay cocked early and release late, so the bat speeds up into the ball and
-// slows through the follow-through. Whatever part of the start and finish poses lies outside that plane fades in or out
-// smoothly, so the swing starts and ends exactly on the authored poses.
-function swingArc(R, C, F, S, tF, hold, dir) {
-  const a = norm(C.bd); let s = sub(dir, mul(a, dot(dir, a)));
-  if (len(s) < 0.2) s = sub([0, 0, 1], mul(a, a[2]));
-  s = norm(s);
-  const r = 0.42, O = sub(C.h, mul(a, r)), L = SWING_LAG;
-  const arcH = th => add(O, add(mul(a, r * Math.cos(th)), mul(s, r * Math.sin(th))));
-  const arcB = ph => add(mul(a, Math.cos(ph)), mul(s, Math.sin(ph)));
-  const coords = (P, after) => {
-    const rel = sub(P.h, O); let th = Math.atan2(dot(rel, s), dot(rel, a)), ph = Math.atan2(dot(P.bd, s), dot(P.bd, a));
-    if (after) { if (ph < -0.3) ph += 2 * Math.PI; if (th < -0.3) th += 2 * Math.PI; }   // a finish is reached going forward
-    else { if (ph > 0.3) ph -= 2 * Math.PI; if (th > 0.3) th -= 2 * Math.PI; }           // a backlift is behind the ball
-    return { th, ph, dh: sub(P.h, arcH(th)), db: sub(P.bd, arcB(ph)) };
-  };
-  const key = (from, to, P0, P1, u, thU, phU, fade) => {
-    const th = lerp(from.th, to.th, thU), ph = lerp(from.ph, to.ph, phU);
-    const h = add(arcH(th), add(mul(from.dh, 1 - fade), mul(to.dh, fade)));
-    const bd = norm(add(arcB(ph), add(mul(from.db, 1 - fade), mul(to.db, fade))));
-    return { ...mixPose(P0, P1, smooth(u)), h, bd };
-  };
-  const c0 = { th: 0, ph: 0, dh: [0, 0, 0], db: [0, 0, 0] }, cR = coords(R, false), cF = coords(F, true);
-  const keys = [[0, R]];
-  // downswing: hands steady, wrists release late (the bat accelerates into the ball)
-  // the bat loops down from the off side (toward gully), as real batters' do, so the camera behind the bowler sees it
-  // come down beside the body instead of end-on behind it
-  for (const u of [0.2, 0.4, 0.6, 0.8, 0.92]) {
-    const k = key(cR, c0, R, C, u, u * (2 - u), Math.pow(u, 1.6), 1 - (1 - u) * (1 - u)), loop = Math.sin(Math.PI * Math.pow(u, 0.8));
-    keys.push([u * L, { ...k, h: add(k.h, [-0.07 * loop, 0, 0]), bd: norm(add(k.bd, [-0.75 * loop, 0, 0])) }]);
-  }
-  keys.push([L, C]);
-  // follow-through: quick at first, settling into the finish
-  if (tF > L + 0.05) for (const u of [0.18, 0.4, 0.65]) keys.push([lerp(L, tF, u), key(c0, cF, C, F, u, 1 - (1 - u) * (1 - u), 1 - Math.pow(1 - u, 2.4), u * u)]);
-  keys.push([tF, F], [tF + hold, S], [tF + hold + 0.7, STANCE]);
-  return keys;
-}
-// A straight bat (drives and the flick): the bat comes down from a high backlift in the upright plane of the shot, through
-// the line of the ball, and carries on through the ball and up into a high finish over the front shoulder. Bat angle th in
-// that plane: 0 = straight down, + = back toward the keeper (the backlift), - = forward along the shot and on up and over.
-// Hands lead and the wrists release late, so the bat speeds into the ball; anything outside the plane (the backlift's
-// angle, the finish's lean) fades in and out.
-const STRAIGHT_FAMS = ['drive', 'bdrive', 'flick'];   // and the defensive shots (fam 'def', called from strokeKeys)
-function straightSwing(R, C, F, S, tF, hold, dir, fam) {
-  const L = SWING_LAG, dn = [0, -1, 0];
-  let sd = norm([dir[0], 0, dir[2]]); if (sd[2] < 0.3) sd = norm([sd[0], 0, 0.3]);   // the swing plane faces up the pitch
-  // the bat comes down nearly straight whatever the shot (a straight bat); it follows the shot's direction after the ball
-  const sdD = norm([sd[0] * 0.3, 0, 1]);
-  const inPlane = (bd, d) => Math.atan2(-dot(bd, d), dot(bd, dn));
-  const plane = (th, d) => add(mul(dn, Math.cos(th)), mul(d, -Math.sin(th)));
-  let thR = inPlane(R.bd, sdD); if (thR < 0.4) thR += 2 * Math.PI;
-  const thCD = inPlane(C.bd, sdD), thC = inPlane(C.bd, sd); let thF = inPlane(F.bd, sd); while (thF > thC - 0.3) thF -= 2 * Math.PI;
-  if (fam === 'flick') thF = Math.max(thF, thC - 1.9);   // the flick rolls the wrists rather than finishing high
-  const oR = sub(R.bd, plane(thR, sdD)), oCD = sub(C.bd, plane(thCD, sdD)), oC = sub(C.bd, plane(thC, sd)), oF = sub(F.bd, plane(thF, sd));   // the parts outside the plane
-  const bez = (a, m, b, u) => add(add(mul(a, (1 - u) * (1 - u)), mul(m, 2 * u * (1 - u))), mul(b, u * u));
-  const keys = [[0, R]];
-  // downswing: hands drop and move forward to the contact grip (a gentle curve, just in front of the hip), the bat follows late
-  const hm = [lerp(R.h[0], C.h[0], 0.7), Math.max(R.h[1], C.h[1]) + 0.04, lerp(R.h[2], C.h[2], 0.45)];
-  for (const u of [0.25, 0.5, 0.72, 0.88]) {
-    const th = lerp(thR, thCD, Math.pow(u, 1.7)), off = add(mul(oR, 1 - u), mul(oCD, u));
-    keys.push([u * L, { ...mixPose(R, C, smooth(u)), h: bez(R.h, hm, C.h, Math.pow(u, 1.15)), bd: norm(add(plane(th, sdD), off)) }]);
-  }
-  keys.push([L, C]);
-  if (fam === 'def') {   // defence: soft hands give a little after the ball, then the pose is held (push: eased out along the shot)
-    keys.push([L + 0.07, { ...C, h: add(C.h, [0, -0.02, -0.04]) }], [tF, F], [tF + hold, S], [tF + hold + 0.7, STANCE]);
-    return keys; }
-  // through the ball and up: hands go out along the shot first (extension), then up to the finish
-  const hx = add(C.h, add(mul(sd, 0.42), [0, 0.12, 0]));
-  for (const u of [0.15, 0.35, 0.6, 0.82]) {
-    const th = lerp(thC, thF, 1 - Math.pow(1 - u, 1.6)), w = smooth(u), off = add(mul(oC, 1 - w), mul(oF, w));
-    keys.push([lerp(L, tF, u), { ...mixPose(C, F, smooth(u)), h: bez(C.h, hx, F.h, u), bd: norm(add(plane(th, sd), off)) }]);
-  }
-  keys.push([tF, F], [tF + hold, S], [tF + hold + 0.7, STANCE]);
-  return keys;
-}
-// The cross-bat strokes: the bat follows set positions on its way down to the ball (down) and on through to the finish
-// (through), with the hands on a curve through hDown / hThrough. Bat directions are in the batter's frame: +x leg side,
-// +y up, +z toward the bowler (right-hander; left-handers are mirrored later).
-const SWING_PATHS = {
-  // a chop: the bat comes down from high over the off side, meets the ball beside the body, and the wrists roll it on
-  // round toward third man
-  cut: { down: [[-0.55, 0.8, 0.1], [-0.9, 0.38, 0.2]], hDown: [0.35, 1.5, 0.95], through: [[-0.85, -0.5, -0.15], [-0.8, -0.1, -0.6]], hThrough: [0.22, 1.15, 0.85] },
-  // cocked high behind on the off side, round flat in front of the chest, and over the leg-side shoulder
-  pull: { down: [[-0.6, 0.65, -0.45], [-0.95, 0.3, -0.1]], hDown: [0.45, 1.35, 0.8], through: [[-0.2, 0.1, 0.97], [0.75, 0.25, 0.6]], hThrough: [0.85, 1.3, 1.2] },
-  // a big heave: high backlift, down and round through the line, up into a high finish
-  slog: { down: [[-0.5, 0.75, -0.45], [-0.9, 0.25, -0.2]], hDown: [0.4, 1.15, 0.85], through: [[-0.1, 0.05, 0.99], [0.7, 0.45, 0.55]], hThrough: [0.8, 1.15, 1.25] },
-  // down on one knee, the bat sweeps flat across in front of the pad and finishes low on the leg side
-  sweep: { down: [[-0.6, 0.6, -0.4], [-0.95, 0.1, -0.1]], hDown: [0.35, 0.95, 0.9], through: [[-0.1, -0.35, 0.93], [0.75, -0.15, 0.6]], hThrough: [0.8, 0.5, 1.15] },
-};
-function slerpDir(a, b, t) {
-  const c = clamp(dot(a, b), -1, 1), th = Math.acos(c);
-  if (th < 1e-4) return a.slice();
-  const s = Math.sin(th); return norm(add(mul(a, Math.sin((1 - t) * th) / s), mul(b, Math.sin(t * th) / s)));
-}
-function alongDirs(list, s) {   // evenly through a list of directions
-  const n = list.length - 1, x = clamp(s, 0, 1) * n, i = Math.min(n - 1, Math.floor(x));
-  return slerpDir(norm(list[i]), norm(list[i + 1]), x - i);
-}
-function pathSwing(R, C, F, S, tF, hold, P) {
-  const L = SWING_LAG, bez = (a, m, b, u) => add(add(mul(a, (1 - u) * (1 - u)), mul(m, 2 * u * (1 - u))), mul(b, u * u));
-  const down = [R.bd, ...P.down, C.bd], thr = [C.bd, ...P.through, F.bd];
-  const keys = [[0, R]];
-  for (const u of [0.2, 0.4, 0.6, 0.8, 0.92])   // hands lead, the bat comes late and fast
-    keys.push([u * L, { ...mixPose(R, C, smooth(u)), h: bez(R.h, P.hDown, C.h, Math.pow(u, 1.15)), bd: alongDirs(down, Math.pow(u, 1.5)) }]);
-  keys.push([L, C]);
-  for (const u of [0.15, 0.3, 0.5, 0.7, 0.85])   // quick through the ball, slowing into the finish
-    keys.push([lerp(L, tF, u), { ...mixPose(C, F, smooth(u)), h: bez(C.h, P.hThrough, F.h, u), bd: alongDirs(thr, 1 - Math.pow(1 - u, 1.6)) }]);
-  keys.push([tF, F], [tF + hold, S], [tF + hold + 0.7, STANCE]);
-  return keys;
+function strokeKeys(sw) {   // every stroke family has staged key poses in player-production/motion.js
+  // (keep the random stream as it was, so deliveries play out the same)
+  if (!sw.vary) sw.vary = { l: rand(-4, 4), y: rand(-7, 7), h: [rand(-0.08, 0.08), rand(-0.1, 0.1), rand(-0.06, 0.06)], f: rand(-0.03, 0.05), hold: rand(0.8, 1.3) };
+  return CricketMotion[sw.fam + 'Keys']({ start: sw.visualStart || PREPARE, target: sw.target, aim: sw.intent, loft: sw.loft, stance: STANCE, impact: SWING_LAG });
 }
 // The bat must never pass through the batter. Body parts as capsules (from, to, radius in metres, with pads, shirt and
 // helmet); if the blade would be inside one, it turns about the hands just far enough to pass outside it.
@@ -1841,7 +1587,7 @@ function bladeClear(j, h, bd) {
   }
   return bd;
 }
-// Before the shot (MOTION2), the batter moves like a real one: as the bowler jumps into his delivery, a small trigger step
+// Before the shot, the batter moves like a real one: as the bowler jumps into his delivery, a small trigger step
 // back and across with the bat going back toward the slips; the bat at the top of the backlift as the ball is released;
 // then, once he sees the length, a stride forward to a full ball or back and across to a short one. The stroke starts
 // from wherever this has got to (swing() keeps it as visualStart).
@@ -1864,7 +1610,7 @@ function waitMove(k) {
         ? { ...P, bk: [0.42, 0, 0.3], fr: [0.5, 0, 0.96], pel: [0.5, 0.92, 0.62], lean: 8, h: [0.3, 1.38, 0.74] }
         : { ...P, fr: [clamp(tx + 0.32, 0.1, 0.72), 0, lerp(1.08, 1.32, front)], pel: [lerp(0.6, 0.55, front), 0.85 - 0.04 * front, lerp(0.78, 0.94, front)],
             lean: 20 + 8 * front, rearFootPitch: 0.25 * front, kpL: [-0.4, 0, 1] };
-      if (SWEEP_MOTION && !back && ball.atBat[1]<=1.05 && (BOWL_TYPES[ball.type]||{}).turn) {
+      if (!back && ball.atBat[1]<=1.05 && (BOWL_TYPES[ball.type]||{}).turn) {
         to.pel=[to.pel[0],.72,to.pel[2]-.06];
         to.lean=30; to.h=[.25,1.12,.85];
       }
@@ -1880,25 +1626,20 @@ function batterPose(sw) {
   let k, motionTime = sw ? sw.t : 0;
   if (sw) {
     if (!sw.keys) sw.keys = strokeKeys(sw);
-    if(MOTION2) {
-      if(!sw.curve)sw.curve=CricketMotion.prepare(sw.keys);
-      if((DRIVE_MOTION && sw.fam==='drive') || stagedStroke(sw.fam)) {
-        const sampled=CricketMotion[sw.fam==='drive'?'sampleDrive':'sampleCut'](sw.curve,sw.t,sw.contactAge,SWING_LAG);
-        k=sampled.pose;motionTime=sampled.time;
-      } else k=CricketMotion.sample(sw.curve,sw.t);
-    }
-    else k=keyed(sw.keys,sw.t);
+    if(!sw.curve)sw.curve=CricketMotion.prepare(sw.keys);
+    const sampled=CricketMotion[sw.fam==='drive'?'sampleDrive':'sampleCut'](sw.curve,sw.t,sw.contactAge,SWING_LAG);
+    k=sampled.pose;motionTime=sampled.time;
   }
   else {
     const ready = phase === 'runup' ? smooth(clamp((phaseT - RUNUP + 0.4) / 0.35, 0, 1)) : (phase === 'flight' || phase === 'result') && ball ? 1 : 0;
     k = ready ? mixPose(STANCE, READY, ready) : STANCE;
     // alive at the crease: breathing, and a tap of the bat until the bowler is well into his run
     const br = Math.sin(clock * 1.7);
-    const tapOn = phase === 'runup' ? (MOTION2 ? clamp((RUNUP - 0.5 - phaseT) / 0.25, 0, 1) : clamp(1 - phaseT / 0.6, 0, 1)) : ['flight', 'play', 'result'].includes(phase) ? 0 : 1;
+    const tapOn = phase === 'runup' ? clamp((RUNUP - 0.5 - phaseT) / 0.25, 0, 1) : ['flight', 'play', 'result'].includes(phase) ? 0 : 1;
     const tp = (clock * 0.75) % 1, tap = tapOn * (tp < 0.2 ? Math.sin(tp / 0.2 * Math.PI) : 0);
     k = { ...k, pel: add(k.pel, [0, br * 0.008, 0]), lean: k.lean + br * 1.2,
           h: add(k.h, [0, 0.06 * tap, 0]), bd: norm(add(k.bd, [0, 0.35 * tap, -0.15 * tap])) };
-    if (MOTION2 && (phase === 'runup' || (phase === 'flight' && ball))) k = waitMove(k);   // a leave blends from here too
+    if ((phase === 'runup' || (phase === 'flight' && ball))) k = waitMove(k);   // a leave blends from here too
     if (ball && ball.left) {   // bat up out of the way; duck under a bouncer
       const lk = smooth(clamp((ball.t - ball.left) / 0.2, 0, 1));
       k = mixPose(k, ball.atBat[1] > 1.45 ? DUCK : LEAVE, lk);
@@ -1906,14 +1647,11 @@ function batterPose(sw) {
   }
   let bd = norm(k.bd);
   const j = buildBody({ ...k, hL: sub(k.h, mul(bd, 0.045)), hR: add(k.h, mul(bd, 0.045)), headOff: [0, 0, 0.04] });
-  if (MOTION2) bd = bladeClear(j, k.h, bd);
-  const follow=MOTION2 && sw?smooth(clamp((motionTime-SWING_LAG-.04)/.32,0,1)):0;
-  const gaze=facing(MOTION2 && sw?clamp(sw.intent||0,-70,70)*follow:0);
-  if(MOTION2 && sw?.loft)j.head[2]-=.035*follow;
-  const framed=sw && ((REMAINING_MOTION && ['fdef','bdef','push','slog'].includes(sw.fam)) || (BDRIVE_MOTION && sw.fam==='bdrive') || (DRIVE_MOTION && sw.fam==='drive') || (SWEEP_MOTION && /^(r?sweep)$/.test(sw.fam))
-    || (PULL_MOTION && ['pull','hook'].includes(sw.fam))
-    || (CUT_MOTION && ['cut','ucut'].includes(sw.fam)) || (NEW_STROKES && ['lcut','glance'].includes(sw.fam)) || (LEG_MOTION && sw.fam==='flick'));
-  const width=framed ? CricketMotion.pathWidth(sw.curve,motionTime,bd,k.batRoll||0) : null;
+  bd = bladeClear(j, k.h, bd);
+  const follow=sw?smooth(clamp((motionTime-SWING_LAG-.04)/.32,0,1)):0;
+  const gaze=facing(sw?clamp(sw.intent||0,-70,70)*follow:0);
+  if(sw?.loft)j.head[2]-=.035*follow;
+  const width=sw ? CricketMotion.pathWidth(sw.curve,motionTime,bd,k.batRoll||0) : null;
   return { j, hands: k.h.slice(), tip: add(k.h, mul(bd, 0.85)), pose:k,look:gaze,motionTime,width };
 }
 
@@ -1982,8 +1720,8 @@ function bowlerState() {
     return runner([lerp(1.1, BOWLER_LANE_X, smooth(Math.min(1, u / 0.9))), 0, lerp(start, bound, ease(u))], Math.PI, lerp(0.55, 1, pace(u)), phaseT * (spin ? 9 : 12));
   }
   if (tr < 0.5) {
-    if(MOTION2 && !keys.curve)keys.curve=CricketMotion.prepare(keys);
-    const sample = t => MOTION2 ? CricketMotion.sample(keys.curve, t) : keyed(keys, t);
+    if(!keys.curve)keys.curve=CricketMotion.prepare(keys);
+    const sample = t => CricketMotion.sample(keys.curve, t);
     const j = bowlArm(buildBody(sample(tr)), tr, keys, sample);
     if (tr < -0.26) {   // from the last running stride into the bound
       const r = runner([BOWLER_LANE_X, 0, bound - speed * (tr + 0.38)], Math.PI, 1, phaseT * (spin ? 9 : 12));
@@ -2198,7 +1936,6 @@ const marker = { x: -0.04, z: 5.2 };
 let varIdx = 0, effort = 0, meter = null, varStreak = { vi: 0, n: 0 };
 
 const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-document.body.classList.toggle('reference-touch',REFERENCE_VIEW && touch);
 const ACTIVE = new Set(['pick', 'aim', 'wait', 'runup', 'flight', 'play', 'result']);
 const btype = p => (p && p.type) || 'M';
 const bowlerP = () => inn.bowl.players[inn.bowler];
@@ -2395,7 +2132,7 @@ function swing(loft, pressT, aim, w) {
   w *= { rsweep: 0.85, hook: 0.9, lcut: 1.1, glance: 1.1 }[preFam] || 1;
   if (ball.charge) w *= high ? 0.8 : 1.15;                                              // down the pitch: a half-volley, unless it's a bouncer
   const okW = 0.1 * w, edgeW = 0.15 * w;
-  const visualStart=MOTION2?batterPose(null).pose:null;
+  const visualStart=batterPose(null).pose;
   ball.swing = { t: ball.t - pressT, startClock: clock - (ball.t - pressT), loft: loft && !(aim && aim.defend), angle: 0, tc, defend: !!(aim && aim.defend),...(visualStart?{visualStart}:{}) };
   let kind;
   const a = Math.abs(dtTiming) * (low ? 1.35 : 1);
@@ -4038,7 +3775,7 @@ function update(dt) {
     const mv = canMove();
     if ($('moveL').disabled === mv) { $('moveL').disabled = !mv; $('moveR').disabled = !mv; }
   }
-  const hint = $('swipeHint'), showHint = inn && inn.userBats && (M.batBalls || 0) < 4 && ['wait', 'runup', 'flight'].includes(phase) && !(ball && (ball.swing || ball.left)) && (!REFERENCE_VIEW || phase==='wait');
+  const hint = $('swipeHint'), showHint = inn && inn.userBats && (M.batBalls || 0) < 4 && ['wait', 'runup', 'flight'].includes(phase) && !(ball && (ball.swing || ball.left));
   if (showHint) {
     const t = shotType === 'defend' ? 'DEFEND' : shotType === 'loft' ? 'LOFT' : 'SHOT';
     const txt = touch ? t + ' chosen · swipe where you want it as the ball arrives' + (runOwn ? ' · RUN, CANCEL, DIVE to run' : '')
@@ -4052,7 +3789,7 @@ function update(dt) {
 
   // camera
   const HC = homeCam(); let tp = HC.pos, tt = HC.tgt, tf = HC.fov, rate = 2.5;
-  const followDelay=REFERENCE_VIEW ? (ball?.decision?.loft||ball?.swing?.loft ? .12 : .45) : .3;
+  const followDelay=.3;
   if (camMode === 'chase' && ball && ball.play && ball.play.t > followDelay) {
     // like TV: a camera high in the stands pans and zooms with the ball; it cuts to the other end when the ball goes behind
     const bp = RP ? RP.ball : liveBallPos(), end = bp[2] < -8 ? -1 : 1;   // unmirrored: render() mirrors the camera for a left-hander
@@ -4069,21 +3806,6 @@ function update(dt) {
         const fp = add(f.pos, [0, 0.95, 0]), ft = lerp3(tt, fp, w), fd = len(sub(ft, tp));
         tt = ft; tf = lerp(tf, clamp(2 * Math.atan(3.8 / fd) / deg, 3, 50), w); rate = 4 + 2 * w;
       }
-    }
-    if(REFERENCE_VIEW) {
-      // Broadcast coverage of the play rather than a 40 m high field overview.
-      // Keep a nearby fielder readable and leave room for an airborne ball.
-      const near=fielders.reduce((best,f)=>dist2(bp,f.pos)<dist2(bp,best.pos)?f:best,fielders[0]);
-      const gap=dist2(bp,near.pos),context=clamp((gap-4)/20,0,.35);
-      tt=lerp3(bp,add(near.pos,[0,.9,0]),context);tt[1]=Math.max(.8,tt[1]*.65);
-      // Keep the airborne ball in frame; the old height multiplier aimed
-      // well below its apex. Retain the existing ground-play framing.
-      if(bp[1]>8)tt[1]=bp[1]-Math.min(2,(bp[1]-8)*.12);
-      // At z=87 the seating surface is about 12.53 m high. The old
-      // 12.5 m camera sat inside that mesh and could render a black stand.
-      tp=[bp[0]*.06,14.5,end>0?87:-79];
-      const span=clamp(Math.max(8,Math.abs(bp[1]-.9)+4,gap*.55+4),8,18);
-      tf=clamp(2*Math.atan(span*.5/len(sub(tt,tp)))/deg,4,28);rate=4;
     }
     if (cam.end !== end) { cam.end = end; cam.pos = tp.slice(); cam.tgt = tt.slice(); cam.fov = tf; }
   } else cam.end = 0;
@@ -4524,8 +4246,7 @@ function livePeople() {
       const direction=CricketMotion.blendDirection(norm(sub(from.tip,from.hands)),norm(sub(tip,hand)),turn);
       tip=add(hands,mul(direction,lerp(len(sub(from.tip,from.hands)),len(sub(tip,hand)),turn)));
       const sourceWidth=from.width || (stagedStroke(sw?.fam)
-        ? CricketMotion.cutWidth(norm(sub(from.tip,from.hands)),sw.keys.find(k=>Math.abs(k[0]-SWING_LAG)<1e-8)[1].bd)
-        : MOTION2 && sw && sw.fam!=='drive' && sw.keys ? norm(cross(mul(sw.keys[2][1].bd,-1),[0,0,1])) : [1,0,0]);
+        ? CricketMotion.cutWidth(norm(sub(from.tip,from.hands)),sw.keys.find(k=>Math.abs(k[0]-SWING_LAG)<1e-8)[1].bd) : [1,0,0]);
       width=CricketMotion.blendDirection(sourceWidth,side,turn);
       look=norm(lerp3(from.look||[0,0,1],look,turn));
     }
@@ -4540,10 +4261,10 @@ function livePeople() {
                bat: { carry: true, carryHand: 'r', hands: hR, tip: add(hR, [-0.1 * u, 0.85 * u - 0.6 * (1 - u), 0]) } });
   } else if (sr) {
     const dw = diveW(sr); if (dw > 0) sr.face = diveFace(sr);
-    let j = runFig(figure(sr.pos, sr.face, { run: MOTION2?sr.runWeight:sr.moving?1:0, phase: clock * 11,gaitDistance:sr.distance }), sr.pos, sr.face, sr.distance, sr.runWeight);
+    let j = runFig(figure(sr.pos, sr.face, { run: sr.runWeight, phase: clock * 11,gaitDistance:sr.distance }), sr.pos, sr.face, sr.distance, sr.runWeight);
     const runForward = [Math.sin(sr.face), 0, Math.cos(sr.face)];
     let hand = j.handR, tip = add(hand, add([0, -0.7, 0], mul(runForward, 0.3))), look = null;
-    const sb = MOTION2 && ball.swing ? 1 - smooth(clamp(runT / 0.3, 0, 1)) : 0;
+    const sb = ball.swing ? 1 - smooth(clamp(runT / 0.3, 0, 1)) : 0;
     if (sb > 0) {   // out of the shot's finish into the run, not a snap: the bat comes down to his side as he sets off
       const p = batterPose(ball.swing), o = [guard, 0, ball.charge ? STEP * smooth(clamp(ball.charge.t / 0.4, 0, 1)) : 0], pj = {};
       for (const n in p.j) pj[n] = Array.isArray(p.j[n]) && !/^foot(Dir|Pitch)/.test(n) ? add(p.j[n], o) : p.j[n];
@@ -4553,7 +4274,7 @@ function livePeople() {
       const direction = CricketMotion.blendDirection(norm(runVector), norm(shotVector), sb);
       tip = add(hand, mul(direction, lerp(len(runVector), len(shotVector), sb)));
     }
-    const bp = MOTION2 ? liveBallPos() : null;
+    const bp = liveBallPos();
     if (bp && runs > 1 && sr.moving) {   // he glances toward the ball while he runs, to judge another run
       const fw = [Math.sin(sr.face), 0, Math.cos(sr.face)], tb = norm([bp[0] - sr.pos[0], 0, bp[2] - sr.pos[2]]);
       if (dot(fw, tb) > -0.3) look = norm(lerp3(fw, tb, 0.55));
@@ -4574,16 +4295,14 @@ function livePeople() {
     }
     const stroke=ball && ball.swing;
     const width=authoredWidth || (stagedStroke(stroke?.fam) && stroke.keys
-      ? CricketMotion.cutWidth(norm(sub(tip,hands)),stroke.keys.find(k=>Math.abs(k[0]-SWING_LAG)<1e-8)[1].bd)
-      : MOTION2 && stroke && stroke.fam!=='drive' && stroke.keys
-      ? norm(cross(mul(stroke.keys[2][1].bd,-1),[0,0,1])) : [1,0,0]);
-    out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look, bat: { carry: false, hands, tip, contact,...(MOTION2?{width}:{}) } });
+      ? CricketMotion.cutWidth(norm(sub(tip,hands)),stroke.keys.find(k=>Math.abs(k[0]-SWING_LAG)<1e-8)[1].bd) : [1,0,0]);
+    out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look, bat: { carry: false, hands, tip, contact,width } });
   }
   // the non-striker
   const ns = runner(PITCH - 0.6, -1.5), ndw = diveW(ns);
   const nsPos = ns ? ns.pos : [-1.7, 0, PITCH - 0.4];
   const nsFace = ndw > 0 ? diveFace(ns) : ns ? ns.face : Math.PI, nsForward = [Math.sin(nsFace), 0, Math.cos(nsFace)];
-  let nj = figure(nsPos, nsFace, { run: MOTION2?(ns?ns.runWeight:0):(ns&&ns.moving?1:0), phase: clock * 11 + 1,gaitDistance:ns?ns.distance+1.9:undefined, seed: 20 });
+  let nj = figure(nsPos, nsFace, { run: ns ? ns.runWeight : 0, phase: clock * 11 + 1,gaitDistance:ns?ns.distance+1.9:undefined, seed: 20 });
   if (ns) nj = runFig(nj, nsPos, nsFace, ns.distance + 1.9, ns.runWeight);
   let nHand = nj.handL, nTip = add(nj.handL, add([0.1, -0.75, 0], mul(nsForward, 0.25)));
   if (ndw > 0) { const s = stretchFig(nsPos, nsFace, 'l'); nj = mixJ(nj, s.j, ndw); nHand = lerp3(nHand, s.hand, ndw); nTip = lerp3(nTip, s.tip, ndw); }
@@ -4643,9 +4362,9 @@ function livePeople() {
       const kj = keeperTake(f, pos);
       if (kj) { out.push({ j: kj, at: pos, team: 'bowl', keeper: true, bowler: false, pid: fid(f.who), look: null }); continue; }
     }
-    const startBlend=MOTION2 && f.target && ball?.play?smooth(clamp((ball.play.t-(f.keeper ? .12 : .32))/.18,0,1)):1;
-    let j = rj || figure(pos, f.face, { run:MOTION2?run*startBlend:run, phase: ph,
-      gaitDistance:MOTION2 && f.run>.9?f.phase*f.speed/11:undefined,crouch: CLIPS ? f.crouch * (1 - (wi.walk || 0)) : wi.moving ? 0 : f.crouch, seed: fi + 1 });
+    const startBlend=f.target && ball?.play?smooth(clamp((ball.play.t-(f.keeper ? .12 : .32))/.18,0,1)):1;
+    let j = rj || figure(pos, f.face, { run:run*startBlend, phase: ph,
+      gaitDistance:f.run>.9?f.phase*f.speed/11:undefined,crouch: CLIPS ? f.crouch * (1 - (wi.walk || 0)) : wi.moving ? 0 : f.crouch, seed: fi + 1 });
     if (CLIPS && !rj && !f.keeper) {   // motion capture: sprinting to the ball, walking in with the bowler, standing between balls
       const runW = clamp(run * startBlend, 0, 1), still = () => figure(pos, f.face, { crouch: f.crouch, seed: fi + 1 });
       if (f.run > 0.05 && runW > 0.02) j = mixJ(still(), placeClip(clipAt('sprint', (f.dist || 0) / CLIPS.sprint.cycle * CLIPS.sprint.dur), pos, f.face), runW);
