@@ -187,6 +187,11 @@
   .group-tables { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px; }
   .group-tables .lbl2 { margin-bottom:4px; }
   @media (max-width: 560px) { .group-tables { grid-template-columns:1fr; } }
+  .trate { display:block;margin-top:4px;font-size:14px;color:var(--muted); }
+  .trate b { color:var(--chalk); }
+  .squad td:first-child { text-align:left; }
+  .squad td.r { width:3.2em; }
+  .squad .hi { color:var(--teal); }
   .team-select { width:100%;padding:10px 8px;background:#18233a;color:var(--chalk);border:1px solid var(--line);border-radius:4px;font:600 16px var(--ui); }
   #setup details summary { cursor:pointer;color:var(--muted);font-size:16px; }
   #setup details .how { margin-top:10px; }
@@ -601,9 +606,10 @@
       <div><div class="lbl2">Teams</div><div class="opts" id="leaguePick"></div></div>
       <div><div class="lbl2">Format</div><div class="opts" id="formatPick"></div></div>
       <div class="setup-grid">
-        <label><span class="lbl2">Your team</span><select class="team-select" id="teamA"></select></label>
-        <label id="opponentField"><span class="lbl2">Opponent</span><select class="team-select" id="teamB"></select></label>
+        <label><span class="lbl2">Your team</span><select class="team-select" id="teamA"></select><span class="trate" id="rateA"></span></label>
+        <label id="opponentField"><span class="lbl2">Opponent</span><select class="team-select" id="teamB"></select><span class="trate" id="rateB"></span></label>
       </div>
+      <details id="squadsBox"><summary>Squads &amp; player ratings</summary><div class="group-tables" id="squads"></div></details>
       <p class="how" id="competitionInfo" hidden></p>
       <div><div class="lbl2">Overs per side</div><div class="opts" id="oversPick"></div></div>
       <div class="setup-grid"><div><div class="lbl2">Difficulty</div><div class="opts" id="diffPick"></div></div>
@@ -853,6 +859,13 @@ const TEAMS = [
     ['F. Farooqee', 12, 'F', 82], ['N. Ulhaq', 15, 'F', 78]] },
 ];
 TEAMS.push(...(window.CricketFranchises || []));
+// A side's ratings (0-100): batting = its top seven batters, bowling = its top five bowlers, overall = the two together.
+function teamRating(t) {
+  const top = (xs, n) => { const v = xs.filter(x => x > 0).sort((a, b) => b - a).slice(0, n); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; };
+  const bat = top(t.players.map(p => p.bat), 7), bowl = top(t.players.map(p => p.bowl), 5);
+  return { bat: Math.round(bat), bowl: Math.round(bowl), overall: Math.round((bat + bowl) / 2) };
+}
+const cupRatings = ids => Object.fromEntries(ids.map(id => { const r = teamRating(TEAMS[id]); return [id, { bat: r.bat, bowl: r.bowl }]; }));
 // text colour that reads on a team colour
 const onCol = c => { const n = parseInt(c.slice(1), 16), l = (0.299 * (n >> 16) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255; return l > 0.55 ? '#0a1024' : '#f3efe4'; };
 // the left-handed batters
@@ -2097,6 +2110,10 @@ const ACTIVE = new Set(['pick', 'aim', 'wait', 'runup', 'flight', 'play', 'resul
 const btype = p => (p && p.type) || 'M';
 const bowlerP = () => inn.bowl.players[inn.bowler];
 const batterP = k => inn.bat.players[k];
+// how much the bowler's rating makes batting harder: 0 for a typical frontline bowler (82), up to +0.12 for the best,
+// down to -0.3 for a part-timer. Not in quick chases (their levels are balanced on their own).
+const BOWL_EDGE = { mid: 82, ai: 0.6, you: 0.6 };   // ai: the computer batter's timing error; you: your timing window
+const bowlEdge = () => !M || M.mode !== 'match' || !inn || inn.bowler === null ? 0 : clamp((bowlerP().bowl - BOWL_EDGE.mid) / 100, -0.3, 0.12);
 const userBowling = () => !!(M && M.mode === 'match' && inn && !inn.userBats && !M.autoBowl);
 const autoBowling = () => !!(M && M.mode === 'match' && inn && !inn.userBats && M.autoBowl);
 let shotType = touch ? 'loft' : 'shot', swipeVis = null;   // on phones and tablets LOFT is the starting choice (the owner asked)
@@ -2269,7 +2286,7 @@ function userSpec(bp, e) {
 // ----------------------------------------------------------------------- the shot
 const naturalAngle = (atBat, short) => clamp(-atBat[0] * 120, -70, 70) + (short ? 35 : 0);
 // your timing window: difficulty, and in a match the batter's skill
-const userWin = () => M.diff.win * (M.mode === 'chase' ? 1 : 0.78 + 0.32 * batterP(inn.striker).bat / 100);
+const userWin = () => M.diff.win * (M.mode === 'chase' ? 1 : (0.78 + 0.32 * batterP(inn.striker).bat / 100) * (1 - BOWL_EDGE.you * bowlEdge()));
 
 // aim: null (timing decides the direction, as in Stick Cricket), { angle } (degrees, + = leg side) or { defend: true }
 function swing(loft, pressT, aim, w) {
@@ -2442,7 +2459,7 @@ function aiPlanInner(b, s, aggr) {
   const loft = !defend && Math.random() < clamp(aggr * 0.6 * loftL + b.trick.loft * aggr + (onTo ? 0.15 : 0), 0, 0.9);
   const read = Math.random() < s * 0.45 + b.trick.streak * 0.25;   // picked the variation
   const lineL = atBat[0] > 0.2 ? 0.85 : atBat[0] < -0.45 ? 1.1 : 1;   // easy on the legs, hard well outside off
-  const sig = (0.105 - 0.06 * s) * sigL * lineL * habit * (read ? 1 : b.trick.sig);
+  const sig = (0.105 - 0.06 * s) * sigL * lineL * habit * (read ? 1 : b.trick.sig) * (1 + BOWL_EDGE.ai * bowlEdge());   // a better bowler is harder to time
   const err = (read ? 0 : b.trick.mu) + gauss() * sig;
   const aim = defend ? { defend: true } : { angle: findGap(naturalAngle(atBat, b.short), loft) };
   if (!defend && !loft && Math.random() < 0.55 - aggr * 0.4) aim.power = rand(0.55, 0.85);   // placed for a single
@@ -2785,6 +2802,10 @@ function recordBall(o) {
     // no wicket, and the new batter comes in at that end, on strike
     const ro = o.out.how === 'run out', ok = ro && o.runs % 2 === 0 ? i.non : i.striker, stay = ok === i.striker ? i.non : i.striker;
     i.wkts++; if (!ro) bw.wkts++;
+    if (o.out.how !== 'bowled') {   // the fielder's part, for the player awards (a caught-and-bowled goes to the bowler)
+      const f = o.out.by, who = o.out.how === 'caught' && (!f || f.bowler) ? k : f && f.who;
+      if (who !== null && who !== undefined) { const kind = o.out.how === 'caught' ? 'ct' : o.out.how === 'run out' ? 'ro' : 'st'; i.fld = i.fld || {}; const e = i.fld[who] || (i.fld[who] = {}); e[kind] = (e[kind] || 0) + 1; }
+    }
     i.cards[ok].out = dismissal(o.out);
     o.batter = ok;
     i.fow.push({ w: i.wkts, r: i.runs, k: ok, b: i.balls });
@@ -3449,12 +3470,17 @@ function renderSetup() {
   $('toToss').textContent=setup.tournament?'Start tournament':setup.series?'Start series':'Go to toss';
   $('setupTitle').innerHTML=(setup.tournament?'TOURNAMENT':setup.series?'SERIES':'MATCH')+' <span>SETUP</span>';
   for(const [id,key,other] of [['teamA','a','b'],['teamB','b','a']]){
-    const el=$(id);el.innerHTML=pool.map(({t,id})=>'<option value="'+id+'">'+esc(t.name)+'</option>').join('');el.value=setup[key];
+    const el=$(id);el.innerHTML=pool.map(({t,id})=>'<option value="'+id+'">'+esc(t.name)+' · '+teamRating(t).overall+'</option>').join('');el.value=setup[key];
+    const r=teamRating(TEAMS[setup[key]]);$(id==='teamA'?'rateA':'rateB').innerHTML='Rating <b>'+r.overall+'</b> · batting '+r.bat+' · bowling '+r.bowl;
     el.onchange=()=>{const next=+el.value;if(next===setup[other])setup[other]=setup[key];setup[key]=next;saveSetup();renderSetup();};
   }
   $('opponentField').hidden=!!setup.tournament;
+  // both XIs with each player's batting and bowling ratings (a bowler's only if he bowls); 85 and over stand out
+  const squad=t=>'<table class="sc squad"><thead><tr><th>'+esc(t.name)+'</th><th>Bat</th><th>Bowl</th></tr></thead><tbody>'+t.players.map(p=>
+    '<tr><td class="nm">'+esc(p.name)+'</td><td class="r'+(p.bat>=85?' hi':'')+'">'+p.bat+'</td><td class="r'+(p.bowl>=85?' hi':'')+'">'+(p.bowl||'–')+'</td></tr>').join('')+'</tbody></table>';
+  $('squads').innerHTML='<div>'+squad(TEAMS[setup.a])+'</div>'+(setup.tournament?'':'<div>'+squad(TEAMS[setup.b])+'</div>');
   $('competitionInfo').hidden=!setup.tournament&&setup.league!=='ipl';
-  $('competitionInfo').textContent=(setup.tournament?'10 teams · play each opponent once · '+(setup.league==='ipl'?'top four playoffs.':'semifinals and final.')+' Shortened game format. ':'')+(setup.league==='ipl'?'Original kits and fictional squads.':'');
+  $('competitionInfo').textContent=(setup.tournament?(setup.league==='ipl'?'10 teams · play each opponent once · top four playoffs.':'10 teams in two groups of five · top two in each group to the semifinals, then the final.')+' Stronger teams win more often. ':'')+(setup.league==='ipl'?'Original kits and fictional squads.':'');
   optButtons('oversPick',[2,5,10,20,50].map(v=>({v,html:v===20?'T20':v===50?'ODI (50)':v+' overs'})),it=>it.v===setup.overs,it=>{setup.overs=it.v;saveSetup();renderSetup();});
   optButtons('diffPick',DIFFS.map(d=>({html:d.name})),(it,k)=>k===setup.diff,(it,k)=>{setup.diff=k;saveSetup();renderSetup();});
   optButtons('bowlPick',[{v:true,html:'Computer bowls'},{v:false,html:"I'll bowl"}],it=>it.v===setup.autoBowl,it=>{setup.autoBowl=it.v;saveSetup();renderSetup();});
@@ -3465,6 +3491,7 @@ const CUP_KEY='cricket-rush-tournament';
 let tournament=null,cupReplaceArmed=false;
 try { const saved=JSON.parse(localStorage.getItem(CUP_KEY)||'null');
   if(saved?.v===1&&['world','ipl'].includes(saved.kind)&&Array.isArray(saved.teamIds)&&saved.teamIds.every(id=>TEAMS[id])&&Array.isArray(saved.fixtures))tournament=saved;
+  if(tournament&&!tournament.ratings)tournament.ratings=cupRatings(tournament.teamIds);   // saved before ratings: the rest of it follows them now
 } catch(e) {}
 function saveTournament(){try{localStorage.setItem(CUP_KEY,JSON.stringify(tournament));}catch(e){}renderTournamentLine();}
 function renderTournamentLine(){const el=$('tournamentLine');if(el)el.textContent=tournament&&!tournament.finished?'Continue '+(tournament.kind==='ipl'?'IPL':'World Cup')+' · '+TEAMS[tournament.userId].short:'';}
@@ -3479,7 +3506,7 @@ function tournamentNext(){
 function newTournament(){
   if(tournament&&!tournament.finished&&!cupReplaceArmed){cupReplaceArmed=true;$('toToss').textContent='Replace saved tournament? Tap again';return;}
   if(tournament&&loadMatch()?.tournamentId===tournament.id)clearMatch();
-  tournament=CricketTournament.create({kind:setup.league==='ipl'?'ipl':'world',teamIds:teamPool(setup.league).map(x=>x.id),userId:setup.a,overs:setup.overs,diff:setup.diff,seed:Date.now()>>>0});
+  tournament=CricketTournament.create({kind:setup.league==='ipl'?'ipl':'world',teamIds:teamPool(setup.league).map(x=>x.id),userId:setup.a,overs:setup.overs,diff:setup.diff,seed:Date.now()>>>0,ratings:cupRatings(teamPool(setup.league).map(x=>x.id))});
   cupReplaceArmed=false;saveTournament();showTournament();
 }
 function fixtureLabel(f){return f.stage==='league'?(f.group!==undefined?'Group '+'AB'[f.group]:'League')+' · Round '+f.round:({sf1:'Semifinal 1',sf2:'Semifinal 2',q1:'Qualifier 1',eliminator:'Eliminator',q2:'Qualifier 2',final:'Final'}[f.stage]||f.stage);}
@@ -3493,7 +3520,7 @@ function showTournament(){
   const saved=loadMatch();$('tournamentPlay').textContent=f&&saved?.tournamentId===tournament.id&&saved?.fixtureId===f.id?'Resume match':'Play next match';
   const grouped=!!tournament.groups;
   $('tournamentRules').textContent=(grouped?'Two groups of five: you play each team in your group once. The top two in each group reach the semifinals (A1 v B2, B1 v A2), then the final.':'Each team plays every opponent once. '+(tournament.kind==='ipl'?'Top four: Qualifier 1, Eliminator, Qualifier 2 and final.':'Top four: semifinals and final.'))+' Win: 2 points. Your tied matches go to a Super Over. Other fixtures are simulated (a tie there: 1 point each; in a knockout the higher-placed team advances). Progress saves on this device.';
-  const table=rows=>'<table class="sc"><thead><tr><th>Team</th><th>P</th><th>W</th><th>L</th><th>Pts</th><th>NRR</th></tr></thead><tbody>'+rows.map((r,i)=>'<tr'+(r.id===tournament.userId?' style="color:var(--teal)"':'')+'><td>'+(i+1)+'. '+esc(TEAMS[r.id].short)+'</td><td>'+r.p+'</td><td>'+r.w+'</td><td>'+r.l+'</td><td><b>'+r.pts+'</b></td><td>'+r.nrr.toFixed(2)+'</td></tr>').join('')+'</tbody></table>';
+  const table=rows=>'<table class="sc"><thead><tr><th>Team</th><th title="Team rating">Rtg</th><th>P</th><th>W</th><th>L</th><th>Pts</th><th>NRR</th></tr></thead><tbody>'+rows.map((r,i)=>'<tr'+(r.id===tournament.userId?' style="color:var(--teal)"':'')+'><td>'+(i+1)+'. '+esc(TEAMS[r.id].short)+'</td><td class="how">'+teamRating(TEAMS[r.id]).overall+'</td><td>'+r.p+'</td><td>'+r.w+'</td><td>'+r.l+'</td><td><b>'+r.pts+'</b></td><td>'+r.nrr.toFixed(2)+'</td></tr>').join('')+'</tbody></table>';
   $('tournamentTable').innerHTML=grouped?'<div class="group-tables">'+[0,1].map(g=>'<div><div class="lbl2">Group '+'AB'[g]+'</div>'+table(CricketTournament.standings(tournament,g))+'</div>').join('')+'</div>':table(CricketTournament.standings(tournament));
   $('tournamentKO').innerHTML=knockoutHTML();
   const koOn=tournament.fixtures.some(x=>x.stage!=='league');$('tournamentTable')[koOn?'before':'after']($('tournamentKO'));   // the knockouts first once they've started
@@ -3613,18 +3640,49 @@ function seriesState(sr) {
 }
 // runs and wickets across the series, for the player of the series
 const seriesAddStats = sr => addMatchStats(sr.stats);
-function addMatchStats(stats) {   // this match's runs, balls and wickets by player name, added to a running table
-  const sr = { stats };
-  for (const i of M.innings) {
-    i.cards.forEach((c, k) => { if (!c.in) return; const p = i.bat.players[k], e = sr.stats[p.name] || (sr.stats[p.name] = { t: i.bat.short, r: 0, b: 0, w: 0 }); e.r += c.runs; e.b += c.balls; });
-    for (const k of i.bowlOrder) { const p = i.bowl.players[k], e = sr.stats[p.name] || (sr.stats[p.name] = { t: i.bowl.short, r: 0, b: 0, w: 0 }); e.w += i.bowlers[k].wkts; }
+// Player awards: an impact score for each player in the match, measured against how the match went, so a quick 30 in a
+// five-over game counts for more than a slow one. par = runs a legal ball in this match; a wicket is worth 6 runs plus
+// AWARD.wkt of a par innings (about 8 runs in a 2-over match, 11 in 5 overs, 22 in a T20, 28 in an ODI: wickets matter more
+// the longer the innings); runs scored faster (or conceded slower) than par count AWARD.pace each; a catch, run-out or
+// stumping AWARD.fld; the winning side's players get AWARD.win more (for a series or tournament award, where it adds up).
+// The player of the match always comes from the side that won (either side after a tie; the owner asked).
+const AWARD = { pace: 0.7, wkt: 0.08, fld: 5, win: 1.15 };
+function matchImpact() {   // {name: {t, r, b, w, rc, bb, ct, v}} for this match
+  const I = M.innings.filter(Boolean), runs = I.reduce((a, i) => a + i.runs, 0), balls = I.reduce((a, i) => a + i.balls, 0), wk = I.reduce((a, i) => a + i.wkts, 0);
+  const par = balls ? runs / balls : 1.3, perW = 6 + AWARD.wkt * par * I[0].maxBalls;
+  const winner = matchWinner(), out = {};
+  const E = (p, t) => out[p.name] || (out[p.name] = { t: t.short, r: 0, b: 0, w: 0, rc: 0, bb: 0, ct: 0, ro: 0, st: 0, v: 0, won: t === winner });
+  for (const i of I) {
+    i.cards.forEach((c, k) => { if (!c.in) return; const e = E(i.bat.players[k], i.bat); e.r += c.runs; e.b += c.balls; e.v += c.runs + AWARD.pace * (c.runs - c.balls * par); });
+    for (const k of i.bowlOrder) { const w = i.bowlers[k], e = E(i.bowl.players[k], i.bowl); e.w += w.wkts; e.rc += w.runs; e.bb += w.balls; e.v += w.wkts * perW + AWARD.pace * (w.balls * par - w.runs); }
+    for (const [k, f] of Object.entries(i.fld || {})) { const e = E(i.bowl.players[k], i.bowl); for (const x of ['ct', 'ro', 'st']) { e[x] += f[x] || 0; e.v += (f[x] || 0) * AWARD.fld; } }
+  }
+  for (const e of Object.values(out)) if (e.won && e.v > 0) e.v *= AWARD.win;
+  return out;
+}
+function matchWinner() {   // the side that won the two real innings (or the Super Over), null for a tie
+  const [a, b] = M.innings;
+  if (!a || !b) return null;
+  if (b.runs >= b.target) return b.bat;
+  if (b.runs < b.target - 1) return a.bat;
+  if (M.so && M.so.length > 1) { const [x, y] = M.so.slice(-2); return y.runs >= y.target ? y.bat : x.bat; }
+  return null;
+}
+function addMatchStats(stats) {   // this match's figures and impact by player name, added to a running table (series, tournament)
+  for (const [n, m] of Object.entries(matchImpact())) {
+    const e = stats[n] || (stats[n] = { t: m.t, r: 0, b: 0, w: 0 });
+    if (e.v === undefined) e.v = e.r + 18 * e.w;   // a table started before impact scores: a fair guess for what's there
+    for (const key of ['r', 'b', 'w', 'rc', 'bb', 'ct', 'ro', 'st', 'v']) e[key] = (e[key] || 0) + m[key];
   }
 }
 function awardWinner(stats) {
   let best = null;
-  // Same transparent all-round contribution rule for match and series awards.
+  // The same rule for match, series and tournament awards: the biggest impact (see matchImpact()). In a single match only
+  // the winning side's players can have it (matchImpact() marks them `won`).
+  const winners = Object.values(stats || {}).some(e => e.won);
   for (const [n, e] of Object.entries(stats || {})) {
-    const v = e.r + 22 * e.w;
+    if (winners && !e.won) continue;
+    const v = e.v ?? e.r + 18 * e.w;
     if (!best || v > best.v || (v === best.v && e.w > best.e.w)) best = { n, e, v };
   }
   return best;
@@ -3633,13 +3691,15 @@ function awardDetail(best) {
   if (!best) return '';
   const e = best.e;
   const contributions = [];
-  if (e.r || e.b) contributions.push('Scored ' + plural(e.r, 'run') + (e.b ? ' off ' + plural(e.b, 'ball') : ''));
-  if (e.w) contributions.push('Took ' + plural(e.w, 'wicket'));
-  return e.t + ' · ' + (contributions.join('. ') || 'No runs or wickets') + '.';
+  if (e.r || e.b) contributions.push('Scored ' + plural(e.r, 'run') + (e.b ? ' off ' + plural(e.b, 'ball') + (e.b >= 4 ? ' (strike rate ' + Math.round(e.r / e.b * 100) + ')' : '') : ''));
+  if (e.w || e.bb) contributions.push(e.bb ? 'Took ' + e.w + ' for ' + e.rc + ' in ' + ovStr(e.bb) + ' overs' : 'Took ' + plural(e.w, 'wicket'));
+  const fl = [e.ct && (e.ct === 1 ? '1 catch' : e.ct + ' catches'), e.ro && plural(e.ro, 'run-out'), e.st && plural(e.st, 'stumping')].filter(Boolean);
+  if (fl.length) contributions.push(fl.join(', '));
+  return e.t + ' · ' + (contributions.join(' · ') || 'No runs or wickets') + '.';
 }
 function renderEndOptions() {
   const sr = M?.series, st = sr && seriesState(sr), match = {stats:{}};
-  seriesAddStats(match);
+  addMatchStats(match.stats);
   const awards = [['Player of the Match', awardWinner(match.stats)]];
   if (st?.done) awards.push(['Player of the Series', awardWinner(sr.stats)]);
   $('endAwards').innerHTML = awards.filter(([,p])=>p).map(([title,p])=>

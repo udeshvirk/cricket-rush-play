@@ -31,6 +31,7 @@
     var s = {v: 1, id: o.kind + '-' + hash(JSON.stringify([ids, o.userId, o.overs, diff, seed])).toString(16),
       kind: o.kind, teamIds: ids.slice(), userId: o.userId, overs: o.overs, diff: diff,
       fixtures: [], finished: false, winner: null, rng: hash(String(seed))};
+    if (o.ratings) s.ratings = JSON.parse(JSON.stringify(o.ratings));   // {teamId: {bat, bowl}}: simulated fixtures follow them
     if (o.kind === 'world') {
       // Two groups of five. Teams are drawn in pairs by list order (roughly strength), one of each pair to each group.
       var draw = hash('groups' + String(seed)), groups = [[], []];
@@ -171,6 +172,18 @@
     if (f.stage === 'final') { s.finished = true; s.winner = normalized.advance; }
     return normalized;
   }
+  // A fixture you don't play. With team ratings (s.ratings[id] = {bat, bowl}, 0-100, set by the game) the score follows them:
+  // the scoring rate and how often wickets fall come from the batting side's batting against the other side's bowling,
+  // fitted to whole matches the game's own engine plays between computer sides. Without ratings (old saves), plain chance.
+  var RATE = [[1, 12], [2, 12], [5, 12.9], [20, 10.4], [50, 9.3]];          // runs an over between two average sides
+  var WKT = [[1, 0.078], [5, 0.077], [20, 0.058], [50, 0.058]];             // wickets a ball
+  var MID = {bat: 79, bowl: 81};
+  function table(t, x) {
+    for (var i = 1; i < t.length; i++) if (x <= t[i][0]) {
+      var u = (x - t[i - 1][0]) / (t[i][0] - t[i - 1][0]); return t[i - 1][1] + Math.max(0, u) * (t[i][1] - t[i - 1][1]);
+    }
+    return t[t.length - 1][1];
+  }
   function simulate(s, fixture) {
     var f = s.fixtures.find(function (item) { return fixture && item.id === fixture.id; });
     if (!f || f.a !== fixture.a || f.b !== fixture.b) throw new Error('Unknown fixture');
@@ -183,13 +196,36 @@
       return ((t ^ t >>> 14) >>> 0) / 4294967296;
     }
     var balls = s.overs * 6;
-    var a = {runs: Math.floor(balls * (0.65 + random() * 1.8)),
-      wkts: Math.min(balls, Math.floor(random() * 10)), balls: balls};
-    var targetRuns = Math.floor(balls * (0.65 + random() * 1.8));
-    var b = {runs: targetRuns > a.runs ? a.runs + 1 + Math.floor(random() * 6) : targetRuns,
-      wkts: Math.min(balls, Math.floor(random() * 10)), balls: balls};
-    if (b.runs > a.runs) b.balls = Math.max(b.wkts, 1, Math.ceil(balls * (0.55 + random() * 0.45)));
-    return {a: a, b: b, winner: a.runs === b.runs ? null : a.runs > b.runs ? f.a : f.b};
+    var R = s.ratings, ra = R && R[f.a], rb = R && R[f.b];
+    if (!ra || !rb) {
+      var a = {runs: Math.floor(balls * (0.65 + random() * 1.8)),
+        wkts: Math.min(balls, Math.floor(random() * 10)), balls: balls};
+      var targetRuns = Math.floor(balls * (0.65 + random() * 1.8));
+      var b = {runs: targetRuns > a.runs ? a.runs + 1 + Math.floor(random() * 6) : targetRuns,
+        wkts: Math.min(balls, Math.floor(random() * 10)), balls: balls};
+      if (b.runs > a.runs) b.balls = Math.max(b.wkts, 1, Math.ceil(balls * (0.55 + random() * 0.45)));
+      return {a: a, b: b, winner: a.runs === b.runs ? null : a.runs > b.runs ? f.a : f.b};
+    }
+    function gauss() { return Math.sqrt(-2 * Math.log(1 - random())) * Math.cos(2 * Math.PI * random()); }
+    function innings(bat, bowl, target) {
+      var dB = bat.bat - MID.bat, dW = bowl.bowl - MID.bowl;
+      var perBall = table(RATE, s.overs) / 6 * Math.exp(0.0075 * dB - 0.006 * dW + 0.12 * gauss());
+      var wkPerBall = table(WKT, s.overs) * Math.exp(-0.017 * dB + 0.008 * dW);
+      var allOut = Math.max(10, Math.round(10 / wkPerBall * Math.exp(0.3 * gauss())));   // balls until the tenth wicket
+      var last = Math.min(balls, allOut);
+      if (target !== undefined) {
+        var need = Math.ceil(target / perBall);
+        if (need <= last) {   // got there: the winning hit can go past the target
+          return {runs: target + (random() < 0.3 ? Math.floor(random() * 5) : 0), balls: Math.max(1, need),
+            wkts: Math.min(9, Math.floor(10 * need / allOut + random()))};
+        }
+      }
+      var runs = Math.floor(perBall * last);
+      if (target !== undefined && runs >= target) runs = target - 1;
+      return {runs: runs, balls: last, wkts: allOut <= balls ? 10 : Math.min(9, Math.floor(10 * balls / allOut + random()))};
+    }
+    var first = innings(ra, rb), second = innings(rb, ra, first.runs + 1);
+    return {a: first, b: second, winner: first.runs === second.runs ? null : first.runs > second.runs ? f.a : f.b};
   }
   return {create: create, next: next, record: record, standings: standings, simulate: simulate};
 });
