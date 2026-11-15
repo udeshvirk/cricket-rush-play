@@ -31,6 +31,31 @@
     var s = {v: 1, id: o.kind + '-' + hash(JSON.stringify([ids, o.userId, o.overs, diff, seed])).toString(16),
       kind: o.kind, teamIds: ids.slice(), userId: o.userId, overs: o.overs, diff: diff,
       fixtures: [], finished: false, winner: null, rng: hash(String(seed))};
+    if (o.kind === 'world') {
+      // Two groups of five. Teams are drawn in pairs by list order (roughly strength), one of each pair to each group.
+      var draw = hash('groups' + String(seed)), groups = [[], []];
+      for (var k = 0; k < 10; k += 2) {
+        var flip = (draw >>> (k / 2)) & 1;
+        groups[flip].push(ids[k]); groups[1 - flip].push(ids[k + 1]);
+      }
+      s.groups = groups;
+      // Five rounds of a five-team circle (one team rests each round); both groups play in every round.
+      var rings = groups.map(function (five) { return five.concat([null]); });
+      for (var gr = 1; gr <= 5; gr++) {
+        for (var g = 0; g < 2; g++) {
+          var slot = rings[g];
+          for (var pr = 0; pr < 3; pr++) {
+            var x = slot[pr], y = slot[5 - pr];
+            if (x === null || y === null) continue;
+            if (gr % 2 === 0) { var t = x; x = y; y = t; }
+            s.fixtures.push({id: 'group-' + 'AB'[g] + '-' + gr + '-' + (pr + 1), a: x, b: y,
+              stage: 'league', group: g, round: gr, result: null});
+          }
+          slot.splice(1, 0, slot.pop());
+        }
+      }
+      return s;
+    }
     var ring = ids.slice();
     for (var round = 1; round <= 9; round++) {
       for (var pair = 0; pair < 5; pair++) {
@@ -43,14 +68,17 @@
     }
     return s;
   }
-  function standings(s) {
-    var rows = s.teamIds.map(function (id) {
+  // Pass a group number (0 = A, 1 = B) for one group's table; without it, every team ranked together.
+  function standings(s, group) {
+    var ids = group === undefined || !s.groups ? s.teamIds : s.groups[group];
+    var rows = ids.map(function (id) {
       return {id: id, p: 0, w: 0, l: 0, t: 0, pts: 0, nrr: 0,
         runs: 0, balls: 0, against: 0, faced: 0};
     });
     s.fixtures.forEach(function (f) {
       if (f.stage !== 'league' || !f.result) return;
-      var a = rows[s.teamIds.indexOf(f.a)], b = rows[s.teamIds.indexOf(f.b)], r = f.result;
+      var a = rows[ids.indexOf(f.a)], b = rows[ids.indexOf(f.b)], r = f.result;
+      if (!a || !b) return;
       a.p++; b.p++;
       if (r.winner === null) { a.t++; b.t++; a.pts++; b.pts++; }
       else {
@@ -83,7 +111,15 @@
       s.fixtures.push(f); return f;
     }
     function winner(f) { return f.result.advance; }
-    if (s.kind === 'world') {
+    if (s.kind === 'world' && s.groups) {
+      if (!find('sf1')) {
+        var A = standings(s, 0), B = standings(s, 1);
+        var top = add('sf1', A[0].id, B[1].id);
+        add('sf2', B[0].id, A[1].id); return top;
+      }
+      if (!find('final')) return add('final', winner(find('sf1')), winner(find('sf2')));
+    } else if (s.kind === 'world') {
+      // A World Cup saved before groups: everyone played everyone, top four.
       if (!find('sf1')) {
         var first = add('sf1', ranks[0], ranks[3]);
         add('sf2', ranks[1], ranks[2]); return first;

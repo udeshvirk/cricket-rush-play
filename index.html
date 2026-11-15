@@ -184,6 +184,9 @@
   .setup-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px; }
   .setup-grid:has(#opponentField[hidden]) > label:first-child { grid-column: 1 / -1; }
   #tournamentTable td:first-child { text-align:left; }
+  .group-tables { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px; }
+  .group-tables .lbl2 { margin-bottom:4px; }
+  @media (max-width: 560px) { .group-tables { grid-template-columns:1fr; } }
   .team-select { width:100%;padding:10px 8px;background:#18233a;color:var(--chalk);border:1px solid var(--line);border-radius:4px;font:600 16px var(--ui); }
   #setup details summary { cursor:pointer;color:var(--muted);font-size:16px; }
   #setup details .how { margin-top:10px; }
@@ -3459,7 +3462,7 @@ function newTournament(){
   tournament=CricketTournament.create({kind:setup.league==='ipl'?'ipl':'world',teamIds:teamPool(setup.league).map(x=>x.id),userId:setup.a,overs:setup.overs,diff:setup.diff,seed:Date.now()>>>0});
   cupReplaceArmed=false;saveTournament();showTournament();
 }
-function fixtureLabel(f){return f.stage==='league'?'League · Round '+f.round:({sf1:'Semifinal 1',sf2:'Semifinal 2',q1:'Qualifier 1',eliminator:'Eliminator',q2:'Qualifier 2',final:'Final'}[f.stage]||f.stage);}
+function fixtureLabel(f){return f.stage==='league'?(f.group!==undefined?'Group '+'AB'[f.group]:'League')+' · Round '+f.round:({sf1:'Semifinal 1',sf2:'Semifinal 2',q1:'Qualifier 1',eliminator:'Eliminator',q2:'Qualifier 2',final:'Final'}[f.stage]||f.stage);}
 function showTournament(){
   if(!tournament){setup.tournament=true;setup.series=0;renderSetup();showScreen('setup');return;}
   RP=null;toMenu();const f=tournamentNext(),name=tournament.kind==='ipl'?'IPL':'WORLD CUP';
@@ -3468,9 +3471,10 @@ function showTournament(){
     'You: '+TEAMS[tournament.userId].name+' · Next: '+TEAMS[f.a].short+' v '+TEAMS[f.b].short+' · '+fixtureLabel(f);
   $('tournamentPlay').hidden=!f;
   const saved=loadMatch();$('tournamentPlay').textContent=f&&saved?.tournamentId===tournament.id&&saved?.fixtureId===f.id?'Resume match':'Play next match';
-  $('tournamentRules').textContent='Each team plays every opponent once. '+(tournament.kind==='ipl'?'Top four: Qualifier 1, Eliminator, Qualifier 2 and final.':'Top four: semifinals and final.')+' Win: 2 points. Your tied matches go to a Super Over. Other fixtures are simulated (a tie there: 1 point each; in a knockout the higher league position advances). Progress saves on this device.';
-  const rows=CricketTournament.standings(tournament);
-  $('tournamentTable').innerHTML='<table class="sc"><thead><tr><th>Team</th><th>P</th><th>W</th><th>L</th><th>Pts</th><th>NRR</th></tr></thead><tbody>'+rows.map((r,i)=>'<tr'+(r.id===tournament.userId?' style="color:var(--teal)"':'')+'><td>'+(i+1)+'. '+esc(TEAMS[r.id].short)+'</td><td>'+r.p+'</td><td>'+r.w+'</td><td>'+r.l+'</td><td><b>'+r.pts+'</b></td><td>'+r.nrr.toFixed(2)+'</td></tr>').join('')+'</tbody></table>';
+  const grouped=!!tournament.groups;
+  $('tournamentRules').textContent=(grouped?'Two groups of five: you play each team in your group once. The top two in each group reach the semifinals (A1 v B2, B1 v A2), then the final.':'Each team plays every opponent once. '+(tournament.kind==='ipl'?'Top four: Qualifier 1, Eliminator, Qualifier 2 and final.':'Top four: semifinals and final.'))+' Win: 2 points. Your tied matches go to a Super Over. Other fixtures are simulated (a tie there: 1 point each; in a knockout the higher-placed team advances). Progress saves on this device.';
+  const table=rows=>'<table class="sc"><thead><tr><th>Team</th><th>P</th><th>W</th><th>L</th><th>Pts</th><th>NRR</th></tr></thead><tbody>'+rows.map((r,i)=>'<tr'+(r.id===tournament.userId?' style="color:var(--teal)"':'')+'><td>'+(i+1)+'. '+esc(TEAMS[r.id].short)+'</td><td>'+r.p+'</td><td>'+r.w+'</td><td>'+r.l+'</td><td><b>'+r.pts+'</b></td><td>'+r.nrr.toFixed(2)+'</td></tr>').join('')+'</tbody></table>';
+  $('tournamentTable').innerHTML=grouped?'<div class="group-tables">'+[0,1].map(g=>'<div><div class="lbl2">Group '+'AB'[g]+'</div>'+table(CricketTournament.standings(tournament,g))+'</div>').join('')+'</div>':table(CricketTournament.standings(tournament));
   $('tournamentFixtures').innerHTML=tournament.fixtures.map(x=>{
     const r=x.result;return '<div class="fixture">'+esc(fixtureLabel(x))+' · '+esc(TEAMS[x.a].short)+' v '+esc(TEAMS[x.b].short)+'<br><small>'+
       (r?esc(TEAMS[x.a].short)+' '+r.a.runs+'/'+r.a.wkts+' · '+esc(TEAMS[x.b].short)+' '+r.b.runs+'/'+r.b.wkts+(r.winner!==null?' · '+esc(TEAMS[r.winner].short)+' won'+(r.superOver?' the Super Over':''):' · Tied'+(r.advance!==undefined?' · '+esc(TEAMS[r.advance].short)+' advance':'')):'Upcoming')+'</small></div>';
@@ -4806,9 +4810,11 @@ function renderMap(bp) {
   mctx.fillStyle = 'rgba(10,16,36,0.78)'; mctx.beginPath(); mctx.arc(c, c, S / 2 - 2, 0, Math.PI * 2); mctx.fill();
   mctx.fillStyle = '#2a7a36'; mctx.beginPath(); mctx.arc(c, c, BOARDS * k, 0, Math.PI * 2); mctx.fill();
   mctx.strokeStyle = 'rgba(243,239,228,0.85)'; mctx.lineWidth = 2; mctx.beginPath(); mctx.arc(c, c, ROPE * k, 0, Math.PI * 2); mctx.stroke();
-  const M2 = p => [c + p[0] * k * MIR, c - (p[2] - PITCH / 2) * k];   // bowler's end at the top, off side on the left (on the right for a left-hander)
-  const a = M2([-1.5, 0, PITCH + 1]), b = M2([1.5, 0, -1]);
-  mctx.fillStyle = '#c9b48a'; mctx.fillRect(a[0], a[1], b[0] - a[0], b[1] - a[1]);
+  // seen from above the way the match camera sees it (from behind the bowler): the batter at the top, the bowler's end at the
+  // bottom, off side on the left (on the right for a left-hander), so a dot moves the same way as the ball on screen
+  const M2 = p => [c + p[0] * k * MIR, c + (p[2] - PITCH / 2) * k];
+  const a = M2([-1.5, 0, -1]), b = M2([1.5, 0, PITCH + 1]);
+  mctx.fillStyle = '#c9b48a'; mctx.fillRect(Math.min(a[0], b[0]), a[1], Math.abs(b[0] - a[0]), b[1] - a[1]);
   const dotAt = (p, r, col) => { const m = M2(p); mctx.fillStyle = col; mctx.beginPath(); mctx.arc(m[0], m[1], r, 0, Math.PI * 2); mctx.fill(); };
   const fc = fieldCol();
   for (const f of fielders) dotAt(f.bowler && !(ball && ball.play) ? [0.6, 0, PITCH] : f.pos, 5, f.keeper ? '#f3efe4' : fc);
