@@ -108,11 +108,11 @@
       [0,.34,1.43,-62,-78,1.62,-18],[35,.50,1.34,-44,-60,1.53,20]];
     let i=0;while(i<profiles.length-2&&angle>profiles[i+1][0])i++;
     const a=profiles[i],b=profiles[i+1],u=clamp((angle-a[0])/(b[0]-a[0]),0,1),p=a.map((v,k)=>mix(v,b[k],u));
-    const low=clamp((.5-target[1])*.35,0,.10),fr=[clamp(target[0]+p[1],-.18,.9),0,p[2]];
+    const low=clamp((.5-target[1])*.35,0,.10),fr=[clamp(target[0]+p[1],-.18,.9),0,p[2]+.12];   // a long stride that reads from the bowler's end
     const bd=unit([-.04+dx*.30,-1,-.08]),h=add(target,scale(bd,-.48));
-    const pelvis=[mix(start.pel[0],fr[0],.65),.79-low,1.0-.14*Math.max(0,(-angle-45)/55)];
-    const contact={...start,fr,pel:pelvis,hy:p[3],sy:p[4],lean:24+low*70,side:4,h,bd,
-      kpL:[dx*.65-.10,0,1],rearFootPitch:.14};
+    const pelvis=[mix(start.pel[0],fr[0],.7),.65-low*.5,1.08-.14*Math.max(0,(-angle-45)/55)];   // deep into the front knee
+    const contact={...start,fr,pel:pelvis,hy:p[3],sy:p[4],lean:29+low*50,side:4,h,bd,...(start.bk?{bk:add(start.bk,[0,0,.16])}:{}),
+      kpL:[dx*.65-.10,0,1],rearFootPitch:.45};   // the back toe drags after the front foot
     const load={...start,pel:add(start.pel,[0,-.015,.025]),hy:start.hy+6,sy:start.sy-5,
       h:add(start.h,[.01,.025,-.025]),bd:slerp(unit(start.bd),unit([-.4,.76,-.51]),.3)};
     const slot={...blend(start,contact,.65),hy:mix(start.hy,contact.hy,.85),sy:mix(start.sy,contact.sy,.45),
@@ -124,7 +124,7 @@
     // along the ground the drive is checked: the bat stops pointing up in front, at the shoulders; lofted, it goes right through
     const height=loft?Math.max(1.60,p[5]+.15):p[5]-.1;
     // weight stays on the bent front knee, head and front shoulder over it (a lofted drive comes up taller)
-    const finish={...contact,pel:[pelvis[0]+.015,loft?.86:.82,1.1-.12*Math.max(0,(-angle-45)/55)],
+    const finish={...contact,pel:[pelvis[0]+.015,loft?.80:.70,1.1-.12*Math.max(0,(-angle-45)/55)],
       hy:p[3]+30,sy:p[6],lean:loft?10:16,side:loft?2:5,rearFootPitch:.38,
       h:[pelvis[0]-.06+dx*.25,height,1.25-.15*Math.abs(dx)],
       bd:loft?unit([dx*.9-.12,.86,.30]):unit([dx*.55-.1,mix(.55,.95,Math.max(0,1-Math.abs(angle)/100)),.55])};

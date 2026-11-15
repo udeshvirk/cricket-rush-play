@@ -847,7 +847,7 @@ window.Cricket3D = function (G) {
   // each arm is re-solved (two-bone IK) so its wrist lands where its glove needs it, and each wrist turns to match its glove.
   // A glove's fixed place on its hand bone follows from that, so the gloves ride on the hand bones and nothing is duplicated.
   const GRIP_OLD = renderQuery.get('grip') === 'old';
-  const GRIP3 = { tried: false, ready: false, side: {}, palmK: 0.5, twist: 0, handScale: 0.08, size: 1.3 };   // size: the gloves are scaled up to fit this player's forearms   // the bare hand shrinks away inside its closed glove (the glove shows the hand)
+  const GRIP3 = { tried: false, ready: false, side: {}, palmK: 0.5, twist: 0, handScale: 0.08, size: 1.45 };   // size: the gloves are scaled up to fit this player's forearms   // the bare hand shrinks away inside its closed glove (the glove shows the hand)
   function loadGrip() {
     if (GRIP3.tried || !window.GRIP_GLB || !window.GRIP || !T.GLTFLoader || !RIG.restQ) return;
     GRIP3.tried = true;
@@ -1030,10 +1030,10 @@ window.Cricket3D = function (G) {
         // A short open sleeve follows the wrist; capped cylinders looked like solid blocks across the gloves.
         const body = legacyCuff
           ? new T.CylinderGeometry(0.041, 0.048, 0.115, 14, 1, false).translate(0, -0.0275, 0)
-          : new T.CylinderGeometry(0.034, 0.041, 0.085, 20, 1, true).translate(0, -0.035, 0);
+          : new T.CylinderGeometry(0.036, 0.042, 0.095, 20, 1, true).translate(0, -0.022, 0);   // reaches into the glove's opening
         const band = legacyCuff
           ? new T.CylinderGeometry(0.0495, 0.0495, 0.026, 14, 1, true).translate(0, -0.062, 0)
-          : new T.CylinderGeometry(0.042, 0.0425, 0.012, 20, 1, true).translate(0, -0.071, 0);
+          : new T.CylinderGeometry(0.0435, 0.044, 0.012, 20, 1, true).translate(0, -0.063, 0);
         GRIP3.cuffGeo = [body, band];
         GRIP3.cuffMat = [new T.MeshStandardMaterial({ color: 0xd6d4cc, roughness: 0.85, side: T.DoubleSide }), new T.MeshStandardMaterial({ color: 0x23262c, roughness: 0.7, side: T.DoubleSide })];
       }

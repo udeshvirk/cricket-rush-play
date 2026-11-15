@@ -1522,12 +1522,12 @@ function mixPose(a, b, t) {
 function mixJoints(a, b, t) { const o = {}; for (const k in a) o[k] = lerp3(a[k], b[k] || a[k], t); return o; }
 
 // --- the batter (a right-hander at his guard: facing the off side, front shoulder to the bowler). h = hands, bd = the bat's direction
-const STANCE = { fr: [0.58, 0, 1.06], bk: [0.64, 0, 0.44], pel: [0.63, 0.88, 0.75], hy: -90, sy: -88, lean: 16, side: 0,
-  h: [0.38, 0.9, 0.78], bd: norm([-0.26, -0.95, 0.15]), kpL: [-1, 0, 0.35], kpR: [-1, 0, -0.1],rearFootPitch:0 };
+const STANCE = { fr: [0.58, 0, 1.1], bk: [0.64, 0, 0.42], pel: [0.64, 0.82, 0.76], hy: -90, sy: -88, lean: 22, side: 0,
+  h: [0.22, 0.8, 0.87], bd: norm([-0.2, -0.96, -0.1]), kpL: [-1, 0, 0.35], kpR: [-1, 0, -0.1],rearFootPitch:0 };
 // Compact guard: the blade stays in front of the legs until the backlift.
 // The previous raised guard ran the blade through the chest/right sleeve.
-const READY = { ...STANCE, bk: [0.6, 0, 0.4], pel: [0.62, 0.89, 0.73], lean: 14, h: [0.24, 0.97, 0.88], bd: norm([-0.15, -0.98, 0.10]) };
-const PREPARE = {...READY,fr:[.42,0,1.18],pel:[.58,.88,.80],h:[.24,1.3,.86],bd:norm([-.3,.8,-.52])};   // a high backlift as the ball comes
+const READY = { ...STANCE, bk: [0.6, 0, 0.4], pel: [0.62, 0.84, 0.74], lean: 19, h: [0.18, 0.9, 0.9], bd: norm([-0.15, -0.98, 0.10]) };
+const PREPARE = {...READY,lean:14,fr:[.42,0,1.18],pel:[.58,.88,.80],h:[.24,1.3,.86],bd:norm([-.3,.8,-.52])};   // a high backlift as the ball comes
 const LEAVE = { ...READY, lean: 6, h: [0.6, 1.5, 0.66], bd: norm([0.12, 0.95, -0.28]) };
 const DUCK = { ...LEAVE, pel: [0.66, 0.56, 0.7], lean: 48, h: [0.62, 1.0, 0.62], kpL: [-1, 0.2, 0.3], kpR: [-1, 0.2, 0] };
 // which stroke the batter plays (it shapes the swing, not where the ball goes)
@@ -1592,7 +1592,7 @@ function bladeClear(j, h, bd) {
 // back and across with the bat going back toward the slips; the bat at the top of the backlift as the ball is released;
 // then, once he sees the length, a stride forward to a full ball or back and across to a short one. The stroke starts
 // from wherever this has got to (swing() keeps it as visualStart).
-const TRIGGER = { ...READY, bk: [0.54, 0, 0.38], fr: [0.55, 0, 1.08], pel: [0.6, 0.87, 0.74], lean: 16, h: [0.34, 1.05, 0.66], bd: norm([-0.3, -0.35, -0.89]) };
+const TRIGGER = { ...READY, bk: [0.54, 0, 0.38], fr: [0.55, 0, 1.08], pel: [0.6, 0.83, 0.75], lean: 16, h: [0.34, 1.02, 0.66], bd: norm([-0.3, -0.35, -0.89]) };
 const TOPLIFT = { ...TRIGGER, h: [0.27, 1.3, 0.8], bd: norm([-0.3, 0.8, -0.52]) };
 // Each batter's own way of standing and picking the bat up, from his name (so it stays the same all match): wider or
 // narrower, crouched or upright, a slightly open or closed stance, a higher or lower backlift taken earlier or later, and his
