@@ -1748,7 +1748,7 @@ function batterPose(sw) {
     const ready = phase === 'runup' ? smooth(clamp((phaseT - RUNUP + 0.4) / 0.35, 0, 1)) : (phase === 'flight' || phase === 'result') && ball ? 1 : 0;
     const st = batStyle();
     k = ready ? mixPose(styled(STANCE, st), styled(READY, st), ready) : styled(STANCE, st);
-    gripTurn = (1 - ready) * GRIP_TURN;   // at his guard the bat's face looks to the off side: the gloves stack on the handle and the arms hang together
+    gripTurn = (1 - ready) * GRIP_TURN * MIR;   // a left-hander is drawn mirrored, which would turn it the other way   // at his guard the bat's face looks to the off side: the gloves stack on the handle and the arms hang together
     // alive at the crease: breathing, and a tap of the bat until the bowler is well into his run
     const br = Math.sin(clock * 1.7);
     const tapOn = phase === 'runup' ? clamp((RUNUP - 0.5 - phaseT) / 0.25, 0, 1) : ['flight', 'play', 'result'].includes(phase) ? 0 : 1;
