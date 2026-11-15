@@ -64,5 +64,37 @@
     };
   }
 
-  return { runner };
+  // The same running, but each run (leg) has its own start time and length: legs = [{ s, d, abort? }], times in
+  // seconds since the hit. Between legs he waits at the crease, turned for the next one. A leg with `abort` set is
+  // given up at that time: he turns and gets back to the crease he left, in `back` seconds (default BACK). Null before the
+  // first leg starts.
+  const BACK = 0.7;
+  function legsRunner(options) {
+    const legs = options && options.legs;
+    if (!Array.isArray(legs) || !legs.length) return null;
+    const time = Number(options.time), startZ = Number(options.startZ), x = Number(options.x);
+    const pitch = options.pitch === undefined ? DEFAULT_PITCH : Number(options.pitch);
+    if (![time, startZ, x, pitch].every(Number.isFinite) || pitch <= 1.2 || !(time >= legs[0].s)) return null;
+    const otherEnd = startZ < pitch / 2 ? pitch - 0.6 : 0.6, length = Math.abs(otherEnd - startZ);
+    if (length === 0) return null;
+    let k = 0;
+    while (k < legs.length - 1 && time >= legs[k + 1].s) k++;
+    const leg = legs[k], from = k % 2 === 0 ? startZ : otherEnd, to = k % 2 === 0 ? otherEnd : startZ;
+    const heading = (otherEnd > startZ ? 0 : Math.PI) + k * Math.PI;
+    if (leg.abort !== undefined && time >= leg.abort) {   // sent back: turn and get back in
+      const pa = clamp01((leg.abort - leg.s) / leg.d), zA = from + (to - from) * smoothstep(pa);
+      const T = leg.back > 0 ? leg.back : BACK;
+      const b = clamp01((time - leg.abort) / T), z = zA + (from - zA) * smoothstep(b), moving = b < 1;
+      const speed = moving ? Math.abs(from - zA) * 6 * b * (1 - b) / T : 0;
+      return { pos: [x, 0, z], face: heading + Math.PI * smoothstep(clamp01(b / 0.35)), moving,
+               runWeight: smoothstep(clamp01(speed / 4)), distance: (k + smoothstep(pa)) * length + Math.abs(z - zA), speed,
+               leg: k, u: pa, toZ: from, end: leg.abort + T };
+    }
+    const u = clamp01((time - leg.s) / leg.d), moving = time < leg.s + leg.d;
+    const speed = moving ? length * 6 * u * (1 - u) / leg.d : 0;
+    return { pos: [x, 0, from + (to - from) * smoothstep(u)], face: heading + Math.PI * smoothstep(clamp01((u - 0.87) / 0.13)), moving,
+             runWeight: smoothstep(clamp01(speed / 4)), distance: (k + smoothstep(u)) * length, speed, leg: k, u, toZ: to, end: leg.s + leg.d };
+  }
+
+  return { runner, legsRunner, BACK };
 });

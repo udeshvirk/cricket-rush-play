@@ -437,6 +437,48 @@
     #swipeHint { top: calc(30px + env(safe-area-inset-top, 0px)); bottom: auto; font-size: 10px; }
     .autopad button { height: 28px; font-size: 11px; }
   }
+  /* RUN (when the player calls the runs): big, amber, above the move buttons on the right */
+  #btnRun { position: absolute; right: calc(12px + env(safe-area-inset-right, 0px)); bottom: calc(118px + env(safe-area-inset-bottom, 0px));
+            width: 112px; height: 66px; border-radius: 14px; border: 2px solid var(--amber); background: rgba(255, 176, 46, 0.38);
+            color: var(--chalk); font: 900 24px var(--display); letter-spacing: 0.06em; cursor: pointer; padding: 0;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            touch-action: manipulation; -webkit-tap-highlight-color: transparent; animation: runPulse 0.9s ease-in-out infinite alternate; }
+  #btnRun[hidden] { display: none; }
+  #btnRun small { font: 600 11px var(--ui); letter-spacing: 0.08em; color: var(--muted); }
+  @keyframes runPulse { to { background: rgba(255, 176, 46, 0.62); } }
+  @media (max-width: 720px) and (orientation: portrait) { #btnRun { bottom: calc(160px + env(safe-area-inset-bottom, 0px)); width: 100px; height: 60px; } }
+  @media (max-height: 460px) { #btnRun { right: calc(8px + env(safe-area-inset-right, 0px)); bottom: calc(112px + env(safe-area-inset-bottom, 0px)); width: 92px; height: 44px; font-size: 18px; } }
+  /* the running strip: where the batters are (keeper's end on the left), what the ball is doing, and whether another run is on */
+  #runStrip { position: absolute; right: calc(12px + env(safe-area-inset-right, 0px)); bottom: calc(194px + env(safe-area-inset-bottom, 0px));
+              width: 304px; padding: 7px 10px 6px; box-sizing: border-box; border-radius: 12px; background: rgba(8, 16, 26, 0.72); pointer-events: none; }
+  #runStrip[hidden] { display: none; }
+  .rsTrack { position: relative; height: 14px; margin: 0 4px; border-radius: 3px; background: #d9c495; }
+  .rsEnd { position: absolute; top: -3px; width: 3px; height: 20px; background: var(--chalk); }
+  #rsA, #rsB { position: absolute; top: 1px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: #2f7bff; border: 2px solid #fff; box-sizing: border-box; }
+  #rsB { background: #8fb8ff; }
+  .rsTxt { display: flex; justify-content: space-between; gap: 8px; margin-top: 5px; font: 700 12px var(--ui); color: var(--muted); white-space: nowrap; }
+  #rsCall { font: 900 13px var(--display); letter-spacing: 0.04em; }
+  #rsCall.go { color: #5be37d; } #rsCall.tight { color: var(--amber); } #rsCall.no { color: #ff5d5d; }
+  @media (max-width: 720px) and (orientation: portrait) { #runStrip { bottom: calc(230px + env(safe-area-inset-bottom, 0px)); width: 276px; } }
+  @media (max-height: 460px) { #runStrip { right: calc(8px + env(safe-area-inset-right, 0px)); bottom: calc(160px + env(safe-area-inset-bottom, 0px)); width: 256px; padding: 3px 8px; border-radius: 9px; }
+    .rsTrack { height: 10px; } .rsEnd { height: 16px; } #rsA, #rsB { top: 0; width: 10px; height: 10px; margin-left: -5px; }
+    .rsTxt { margin-top: 2px; font-size: 10px; } #rsCall { font-size: 11px; } }
+  /* DIVE and CANCEL, smaller, in a row to the left of RUN; dimmed when they'd do nothing just now */
+  #btnDive, #btnCancel { position: absolute; bottom: calc(118px + env(safe-area-inset-bottom, 0px)); width: 88px; height: 66px; border-radius: 14px;
+            border: 2px solid var(--chalk); background: rgba(10, 20, 30, 0.55); color: var(--chalk); font: 900 17px var(--display);
+            letter-spacing: 0.04em; cursor: pointer; padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  #btnDive { right: calc(132px + env(safe-area-inset-right, 0px)); border-color: var(--amber); background: rgba(255, 176, 46, 0.45); }
+  #btnCancel { right: calc(228px + env(safe-area-inset-right, 0px)); }
+  #btnDive[hidden], #btnCancel[hidden] { display: none; }
+  #btnDive small, #btnCancel small { font: 600 11px var(--ui); letter-spacing: 0.08em; color: var(--muted); }
+  #btnRun.off, #btnDive.off, #btnCancel.off { opacity: 0.35; animation: none; border-color: var(--muted); background: rgba(10, 20, 30, 0.45); }
+  @media (max-width: 720px) and (orientation: portrait) {
+    #btnDive, #btnCancel { bottom: calc(160px + env(safe-area-inset-bottom, 0px)); width: 80px; height: 60px; font-size: 15px; }
+    #btnDive { right: calc(120px + env(safe-area-inset-right, 0px)); } #btnCancel { right: calc(208px + env(safe-area-inset-right, 0px)); } }
+  @media (max-height: 460px) {
+    #btnDive, #btnCancel { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); width: 76px; height: 44px; font-size: 14px; }
+    #btnDive { right: calc(106px + env(safe-area-inset-right, 0px)); } #btnCancel { right: calc(188px + env(safe-area-inset-right, 0px)); } }
 </style>
 <style>
   /* Development presentation review: keep the pitch clear above a lower score ribbon. */
@@ -529,6 +571,11 @@
       <button type="button" id="moveR" aria-label="Move the batter to the leg side">▶</button>
       <button type="button" id="btnStep" class="wide">STEP OUT</button>
     </div>
+    <div id="runStrip" hidden><div class="rsTrack"><i class="rsEnd" style="left:0"></i><i class="rsEnd" style="right:0"></i><b id="rsA"></b><b id="rsB"></b></div>
+      <div class="rsTxt"><span id="rsBall"></span><span id="rsCall"></span></div></div>
+    <button type="button" id="btnCancel" class="runx" hidden>CANCEL<small>A</small></button>
+    <button type="button" id="btnDive" class="runx" hidden>DIVE<small>W</small></button>
+    <button type="button" id="btnRun" hidden>RUN<small>D</small></button>
   </div>
   <div id="autopad" class="autopad" hidden>
     <button type="button" id="btnFast">SPEED ×1</button>
@@ -617,7 +664,8 @@
         want it to go: down the screen is straight, left is the off side, right is the leg side, up is behind you. A plain tap lets
         your timing choose. Loft goes in the air for more runs, but fielders can catch it. Watch the ball's shadow to judge the bounce.</p>
       <p class="how">Keyboard: hold <b>arrows</b> for the direction and press <b>S</b> to hit (S alone defends), <b>Shift</b> to loft,
-        <b>D</b> to step out, <b>A</b> to leave, <b>left</b>/<b>right arrows</b> to move across before the run-up.</p>
+        <b>D</b> to step out, <b>A</b> to leave, <b>left</b>/<b>right arrows</b> to move across before the run-up. If you run
+        yourself (pause menu), after the hit <b>D</b> runs, <b>A</b> cancels and <b>W</b> dives for the crease.</p>
       <div class="row"><button class="btn ghost" id="chaseBack" type="button">Back</button></div>
     </div>
   </div>
@@ -670,6 +718,7 @@
         <button class="btn ghost" id="crowdToggle" type="button" aria-pressed="true">Crowd sound: on</button>
         <button class="btn ghost" id="restartMatch" type="button">Rematch</button>
         <button class="btn ghost" id="guideToggle" type="button">Timing guide: on</button>
+        <button class="btn ghost" id="runToggle" type="button" title="When you bat: run automatically, or run yourself: RUN (D) for each run, CANCEL (A) to send them back, DIVE (W) at the end of a close run.">Running: automatic</button>
         <button class="btn ghost" id="quit" type="button">Quit match</button>
       </div>
       <div class="tabs" id="pauseTabs"></div>
@@ -1878,7 +1927,8 @@ function deliveryKeys(spin) {
   const st = spin ? 0.7 : 1;                    // spinners: a shorter stride, more upright, a gentler follow-through
   const fwd = [0, 0, -1];
   return [
-    [-0.26, { fr: [0.05, 0.35 * j, Z + 2.2 * st], bk: [0.2, 0.25 * j, Z + 2.65 * st], pel: [0.12, lerp(0.95, 1.14, j), Z + 2.4 * st], hy: 160, sy: 140, lean: 5, side: 0,
+    // the bound: up in the air, the front knee driven high, the back leg trailing
+    [-0.26, { fr: [0.05, 0.52 * j, Z + 2.08 * st], bk: [0.2, 0.45 * j, Z + 2.88 * st], pel: [0.12, lerp(0.95, 1.24, j), Z + 2.4 * st], hy: 160, sy: 140, lean: 7, side: 0,
               hL: [0.02, 1.55, Z + 2.12 * st], hR: [0.22, 1.48, Z + 2.25 * st], kpL: fwd, kpR: fwd, epL: [0, -0.5, -1], epR: [0.5, -1, 0] }],
     [-0.13, { fr: [0.02, 0.3 * st, Z + 0.55 * st], bk: [0.22, 0, Z + 1.1 * st], pel: [0.12, 1.0, Z + 1.05 * st], hy: 110, sy: 95, lean: spin ? -4 : -12,
               hL: [0.05, 2.0, Z + 0.45 * st], hR: [0.32, spin ? 1.15 : 0.98, Z + 1.45 * st] }],
@@ -1919,14 +1969,17 @@ function bowlerState() {
   const keys = spin ? DELIVERY.spin : DELIVERY.pace;
   const tr = phase === 'runup' ? phaseT - RUNUP : phase === 'flight' ? phaseT : phase === 'result' || phase === 'play' ? 3 : null;
   const bound = PITCH - 0.6 + 2.6, speed = spin ? 4.6 : T.speed[0] > 130 ? 8.5 : 7.4;
-  const start = Math.min(T.start, bound + speed * (RUNUP - 0.38));
+  // he builds up speed from his mark (from 40% of full pace, rising fastest early) and reaches full pace at the bound
+  const V0 = 0.4, AVG = V0 + (1 - V0) * 2 / 3, D = RUNUP - 0.38;
+  const ease = u => (V0 * u + (1 - V0) * (u - (1 - Math.pow(1 - u, 3)) / 3)) / AVG, pace = u => (V0 + (1 - V0) * (1 - (1 - u) * (1 - u)));
+  const start = Math.min(T.start, bound + speed * D * AVG);
   const home = [1.7, 0, 17.2];
   const runner = (pos, face, run, ph, dist) => { const d = dist !== undefined ? dist : Math.hypot(pos[0] - 1.1, pos[2] - start);
     return { pos, j: runFig(figure(pos, face, { run, phase: ph, gaitDistance: d }), pos, face, d, run, spin ? 'jog' : 'sprint') }; };
   if (tr === null) return runner([1.1, 0, start], Math.PI, 0, 0);
   if (tr < -0.38) {   // running in, at an angle from the right
     const u = clamp((tr + RUNUP) / (RUNUP - 0.38), 0, 1);
-    return runner([lerp(1.1, BOWLER_LANE_X, smooth(Math.min(1, u / 0.9))), 0, lerp(start, bound, u)], Math.PI, 1, phaseT * (spin ? 9 : 12));
+    return runner([lerp(1.1, BOWLER_LANE_X, smooth(Math.min(1, u / 0.9))), 0, lerp(start, bound, ease(u))], Math.PI, lerp(0.55, 1, pace(u)), phaseT * (spin ? 9 : 12));
   }
   if (tr < 0.5) {
     if(MOTION2 && !keys.curve)keys.curve=CricketMotion.prepare(keys);
@@ -2597,6 +2650,8 @@ function resolvePlay(fp, airborne) {
   res.throwStart = best.t + gather;
   res.throwTime = throwDist / 24 + 0.25;
   const avail = back - 0.2;   // the batters set off almost at once
+  res.kind = 'runs';
+  if (ownRun()) { res.own = { legs: [], back, last: -1 }; res.runs = 0; return res; }   // the player calls the runs (callRun)
   let runs = 0;
   if (avail > RUN1) runs = 1 + Math.floor((avail - RUN1) / RUN_MORE);
   // a tight extra run: when they very nearly have time for one more, now and then they go for it. Mostly they make it;
@@ -2610,6 +2665,101 @@ function resolvePlay(fp, airborne) {
   return res;
 }
 const RUN_RISK = { q: 0.85, go: 0.15, make: 0.65 };   // see resolvePlay: how close, how often they try, how often they make it
+// Running (a setting, `cricket-rush-running`): automatic, or the player runs himself while batting, as in Cricket 07:
+// D (or the RUN button, or R) calls a run, A (CANCEL) sends them back, W (DIVE) dives for the crease at the end of a run.
+// Each call adds a run that starts when he calls it (or when the last one ends; a dive costs a moment getting up). A run can
+// be cancelled in its first half (they turn and get back; no more runs off that ball). A dive in the last DIVE_WIN seconds
+// of a run gets him in DIVE_GAIN sooner. When the throw reaches the keeper's end: runs finished count; a run under way (or a
+// cancelled one not yet back) is a run-out, unless he had barely set off (then he is sent back and is safe).
+const RUN_KEY = 'cricket-rush-running', SENT_BACK = 0.22, DIVE_WIN = 0.7, DIVE_GAIN = 0.3, DIVE_UP = 0.5, CANCEL_BY = 0.5;
+let runOwn = false;
+try { runOwn = localStorage.getItem(RUN_KEY) === 'own'; } catch (e) {}
+const ownRun = () => runOwn && !!inn && inn.userBats && !quiet && !ff && !M.autoplay;
+const legIn = l => l.s + l.d - (l.dive !== undefined ? DIVE_GAIN : 0);   // when he (or his bat) is in at the end of a run
+function ownOutcome(res) {   // { runs, out, live } from the runs called so far, judged at the moment the throw comes in
+  const o = res.own; if (o.done) return o.done;
+  const back = o.back, legs = o.legs;
+  const runs = legs.filter(l => l.abort === undefined && legIn(l) <= back).length;
+  const gone = legs.find(l => l.abort !== undefined && l.abort < back && l.abort + l.back > back);   // cancelled, not back yet
+  if (gone) return { runs, live: gone, out: true };
+  const live = legs.find(l => l.abort === undefined && l.s < back && legIn(l) > back) || null;
+  return { runs, live, out: !!live && (back - live.s) / live.d >= SENT_BACK };
+}
+const runOutAhead = res => !!res && res.kind === 'runs' && (res.own ? ownOutcome(res).out : !!res.runOut);
+const ownLive = () => { const pl = ball && ball.play, o = pl && pl.res.own; return phase === 'play' && o && !o.done && pl.t < o.back - 0.05 ? o : null; };
+function callRun() {
+  const o = ownLive(), t = o && ball.play.t;
+  if (!o || o.cancelled || t - o.last < 0.25) return;
+  const prev = o.legs[o.legs.length - 1];
+  const s = prev ? Math.max(t, prev.s + prev.d + (prev.dive !== undefined ? DIVE_UP : 0)) : Math.max(t, 0.15);
+  if (s >= o.back) return;   // he can't set off again before the ball is back
+  o.last = t;
+  o.legs.push({ s, d: prev ? RUN_MORE : RUN1 - 0.2 });   // (the first: no time lost reacting, he called it)
+  runButton();
+}
+const runNow = (o, t) => o.legs.find(l => l.abort === undefined && l.s <= t && t < l.s + l.d);   // the run under way
+function cancelRun() {   // turn them back: the run under way (in its first half) and any called after it
+  const o = ownLive(), t = o && ball.play.t;
+  if (!o || o.cancelled) return;
+  const l = runNow(o, t), u = l ? (t - l.s) / l.d : 0;
+  if (l && u >= CANCEL_BY) return;   // too far gone: they have to keep going
+  o.legs = o.legs.filter(x => x.s <= t);
+  if (l) { l.abort = t; l.back = 0.45 + l.d * 1.1 * u * u * (3 - 2 * u); }
+  o.cancelled = true;
+  runButton();
+}
+function diveRun() {   // a dive for the crease at the end of the run under way
+  const o = ownLive(), t = o && ball.play.t, l = o && runNow(o, t);
+  if (!l || l.dive !== undefined || l.s + l.d - t > DIVE_WIN) return;
+  l.dive = t;
+  o.legs = o.legs.filter(x => x.s <= l.s);   // (a run called after it starts once he is up again)
+  runButton();
+}
+// What another run would look like now: 'go' (in with time to spare), 'tight' (only with a dive), 'no'; and whether the run
+// under way can still be made (with a dive at the end). The running strip shows it, so the player can judge without seeing the batters.
+function runCall(o, t) {
+  const l = runNow(o, t), last = o.legs[o.legs.length - 1];
+  const verdict = end => end <= o.back - 0.35 ? 'go' : end - DIVE_GAIN <= o.back ? 'tight' : 'no';
+  const now = !l ? null : l.dive !== undefined ? (legIn(l) <= o.back ? 'go' : 'no') : verdict(l.s + l.d);
+  const from = last ? Math.max(t, last.s + last.d + (last.dive !== undefined ? DIVE_UP : 0)) : Math.max(t, 0.15);
+  return { now, next: o.cancelled ? 'no' : verdict(from + (last ? RUN_MORE : RUN1 - 0.2)), l };
+}
+function runStrip(o) {
+  const el = $('runStrip'), show = !!o;
+  if (el.hidden === show) el.hidden = !show;
+  if (!show) return;
+  const pl = ball.play, t = pl.t, res = pl.res, legs = o.legs.length ? o.legs : null;
+  const at = startZ => { const r = legs && CricketLocomotion.legsRunner({ time: t, legs, startZ, x: 0, pitch: PITCH }); return r ? r.pos[2] : startZ; };
+  const pc = z => clamp((z - 0.6) / (PITCH - 1.2), 0, 1) * 100 + '%';
+  $('rsA').style.left = pc(at(0.6)); $('rsB').style.left = pc(at(PITCH - 0.6));
+  const bt = t < res.t ? 'Fielder chasing' : t < res.throwStart ? 'Fielder has it' : 'Throw coming in';
+  const c = runCall(o, t), call = $('rsCall');
+  let txt, cls;
+  if (c.l && c.now !== 'go') [txt, cls] = c.l.dive !== undefined ? ['TOO LATE', 'no'] : c.now === 'tight' ? ['DIVE AT THE END!', 'tight']
+    : (t - c.l.s) / c.l.d < CANCEL_BY ? ['TURN BACK!', 'no'] : ['DIVE!', 'tight'];
+  else [txt, cls] = c.next === 'go' ? [legs ? 'ANOTHER RUN: SAFE' : 'SAFE TO RUN', 'go'] : c.next === 'tight' ? [legs ? 'ANOTHER RUN: TIGHT' : 'TIGHT · DIVE AT THE END', 'tight']
+    : [legs ? 'NO MORE RUNS' : 'NO RUN', 'no'];
+  if ($('rsBall').textContent !== bt) $('rsBall').textContent = bt;
+  if (call.textContent !== txt) { call.textContent = txt; call.className = cls; }
+}
+function runButton() {
+  const o = ownLive(), show = !!o;
+  for (const id of ['btnRun', 'btnDive', 'btnCancel']) { const b = $(id); if (b.hidden === show) b.hidden = !show; }
+  runStrip(o);
+  if (!show) return;
+  const t = ball.play.t, l = runNow(o, t), b = $('btnRun'), txt = o.legs.length ? 'AGAIN' : 'RUN';
+  if (b.firstChild.nodeValue !== txt) b.firstChild.nodeValue = txt;
+  b.classList.toggle('off', !!o.cancelled);
+  $('btnDive').classList.toggle('off', !(l && l.dive === undefined && l.s + l.d - t <= DIVE_WIN));
+  $('btnCancel').classList.toggle('off', !!o.cancelled || !o.legs.length || !!(l && (t - l.s) / l.d >= CANCEL_BY));
+}
+function legsFor(res) {   // the runs to animate: called by the player, or the automatic ones (plus the one they don't make)
+  if (!res || res.kind !== 'runs') return null;
+  if (res.own) return res.own.legs.length ? res.own.legs : null;
+  const n = res.runs + (res.runOut ? 1 : 0), legs = [];
+  for (let k = 0, s = 0.35; k < n; k++) { const d = k ? RUN_MORE : RUN1; legs.push({ s, d }); s += d; }
+  return n ? legs : null;
+}
 function landingExtra(path, i) {
   for (let k = i; k < path.length; k++) if (!path[k].air) return Math.hypot(path[k].p[0], path[k].p[2]) - Math.hypot(path[i].p[0], path[i].p[2]);
   const last = path[path.length - 1].p;
@@ -2681,7 +2831,7 @@ function contact() {
     else if (res.kind === 'four' || res.kind === 'six') f.target = null;
     else {
       // others drift toward the ball's path a little; the keeper heads to the stumps
-      f.target = f.keeper ? [0, 0, -1.2] : lerp3(f.pos, fp.path[Math.min(fp.path.length - 1, 90)].p, 0.15);
+      f.target = f.keeper ? KEEP_AT.slice() : lerp3(f.pos, fp.path[Math.min(fp.path.length - 1, 90)].p, 0.15);
     }
   }
   if (res.fielder && (res.kind === 'four' || res.kind === 'six')) res.fielder.target = fp.path[res.rope.i].p.slice();
@@ -3842,16 +3992,28 @@ function update(dt) {
         const dir = regionName(pl.angle, 60);
         finishBall({ runs: res.runs }, res.kind === 'six' ? res.carry + ' m over ' + dir : 'Through ' + dir);
       } else if (res.kind === 'runs' && pl.t >= res.throwStart + res.throwTime) {
+        if (res.own) {   // the runs the player called: how many were finished, and a run-out if one was under way
+          const oc = ownOutcome(res);
+          res.runs = oc.runs; res.runOut = oc.out;
+          if (oc.live && !oc.out) oc.live.abort = res.own.back;   // he'd barely set off: sent back
+          res.own.legs = res.own.legs.filter(l => l.s < res.own.back);   // (nothing starts after the ball is back)
+          res.own.done = oc;
+          runButton();
+        }
         sndGlove(0.45);
         const dir = regionName(pl.angle, Math.hypot(res.point[0], res.point[2]));
         const line = res.dropped ? 'Dropped at ' + res.fielder.name + '!' : (res.runs ? 'Worked to ' + dir : 'Straight to ' + res.fielder.name);
-        if (res.runOut) {   // the throw beats him to the keeper's end: bails off
-          ball.bails = [{ p: [-0.055, 0.72, 0], v: [rand(-1.5, -0.3), rand(1.5, 2.8), rand(0.5, 1.5)] }, { p: [0.055, 0.72, 0], v: [rand(0.3, 1.5), rand(1.5, 2.8), rand(0.5, 1.5)] }];
-          sndStumps(); finishBall({ runs: res.runs, out: { how: 'run out', by: res.fielder } }, 'Run out!');
-        } else finishBall({ runs: res.runs }, line);
+        if (res.runOut) finishBall({ runs: res.runs, out: { how: 'run out', by: res.fielder } }, 'Run out!');   // the throw beats him to the keeper's end
+        else finishBall({ runs: res.runs }, line);
       }
     }
+    // a run-out: the keeper takes the throw and sweeps the bails off a moment later (keeperTake)
+    if (res.runOut && !ball.bails && pl.t >= res.throwStart + res.throwTime + 0.14) {
+      ball.bails = [{ p: [-0.055, 0.72, 0], v: [rand(-1.5, -0.3), rand(1.5, 2.8), rand(0.8, 1.8)] }, { p: [0.055, 0.72, 0], v: [rand(0.3, 1.5), rand(1.5, 2.8), rand(0.8, 1.8)] }];
+      sndStumps();
+    }
   }
+  runButton();
 
   // fielders move
   for (const f of fielders) {
@@ -3879,8 +4041,8 @@ function update(dt) {
   const hint = $('swipeHint'), showHint = inn && inn.userBats && (M.batBalls || 0) < 4 && ['wait', 'runup', 'flight'].includes(phase) && !(ball && (ball.swing || ball.left)) && (!REFERENCE_VIEW || phase==='wait');
   if (showHint) {
     const t = shotType === 'defend' ? 'DEFEND' : shotType === 'loft' ? 'LOFT' : 'SHOT';
-    const txt = touch ? t + ' chosen · swipe where you want it as the ball arrives'
-      : 'Arrows + S to hit · S alone defends · Shift = loft · D = step out · A = leave · ◀ ▶ before the run-up = move across';
+    const txt = touch ? t + ' chosen · swipe where you want it as the ball arrives' + (runOwn ? ' · RUN, CANCEL, DIVE to run' : '')
+      : 'Arrows + S to hit · S alone defends · Shift = loft · D = step out · A = leave · ◀ ▶ before the run-up = move across' + (runOwn ? ' · after the hit: D = run, A = cancel, W = dive' : '');
     if (hint.textContent !== txt) hint.textContent = txt;
   }
   hint.hidden = !showHint;
@@ -3925,6 +4087,11 @@ function update(dt) {
     }
     if (cam.end !== end) { cam.end = end; cam.pos = tp.slice(); cam.tgt = tt.slice(); cam.fov = tf; }
   } else cam.end = 0;
+  // a run-out (3D): low and square at the keeper's end as the throw comes in, the batter stretching for the crease
+  const ro = !RP && !!R3D && R3D.active() && !!(ball && ball.play) && runOutAhead(ball.play.res)
+    && ball.play.t > ball.play.res.throwStart + ball.play.res.throwTime - 1.0 && (phase === 'play' || phaseT < sigStart(celebrate) - 0.05);
+  if (ro) { tp = RO_CAM.pos; tt = RO_CAM.tgt; tf = RO_CAM.fov; rate = 8; }
+  if (!!cam.ro !== ro) { cam.ro = ro; cam.pos = tp.slice(); cam.tgt = tt.slice(); cam.fov = tf; }   // cut, don't swoop
   // a wicket (3D): cut to a close-up of the batter walking off, the stumps behind him
   // the umpire signalling: a cut to him from in front, full length so raised arms fit
   const uc = phase === 'result' && !RP && phaseT > sigStart(celebrate) - 0.05 && phaseT < sigEnd(celebrate);
@@ -3967,6 +4134,7 @@ function liveBallPos() {
       const u = clamp((pl.t - res.throwStart) / res.throwTime, 0, 1);
       const from = held || res.from || add(f.pos, [0, 1.9, 0]), to = THROW_TO;
       if (held) res.from = held;
+      if (u >= 1 && kHand) return add(kHand, [0, 0.05, 0]);   // in the keeper's gloves (keeperTake)
       const p = lerp3(from, to, u); p[1] += Math.sin(u * Math.PI) * Math.min(8, dist2(from, to) * 0.12);
       return p;
     }
@@ -4134,7 +4302,8 @@ function mixJ(a, b, u) {
 // Positions are game-space (right-hander), like the rest of people(); the ball sits in his hands (fielderBall).
 const angTo = (from, to) => Math.atan2(to[0] - from[0], to[2] - from[2]);
 const turnTo = (a, b, u) => { let d = ((b - a) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI; return a + d * u; };
-const THROW_TO = [0, 0.9, -0.6];
+const RO_CAM = { pos: [7.2, 1.05, 1.1], tgt: [-0.3, 0.55, 1.3], fov: 30 };   // the run-out close-up (live and replay)
+const KEEP_AT = [-0.1, 0, -0.62], THROW_TO = [0, 0.95, -0.25];   // where the keeper waits at the stumps for the throw, and where it reaches him
 // which way to face to watch the ball come: where it was a moment before it reaches him (the point where he takes it is in his
 // hands or over his head, so it can't give a direction)
 function watchAng(f, pl, t, from) {
@@ -4280,6 +4449,25 @@ function appealFig(pos, face, t, seed) {
   for (const k of ['neck', 'head', 'shL', 'shR']) j[k] = add(j[k], mul(F, -0.06 * u));   // leaning back a touch, shouting at him
   return j;
 }
+// stretching for the crease at the end of a tight run: a long last stride, low, the bat pushed out ahead along the ground
+// (carry: the hand holding the bat, 'r' or 'l'; the leg on that side leads)
+function stretchFig(pos, face, carry) {
+  const F = [Math.sin(face), 0, Math.cos(face)], L = [Math.cos(face), 0, -Math.sin(face)], s = carry === 'r' ? -1 : 1;
+  const P = (a, b, h) => add(pos, add(add(mul(F, a), mul(L, b)), [0, h, 0])), j = {};
+  j.pelvis = P(0, 0, 0.64); j.hipL = P(0, 0.11, 0.64); j.hipR = P(0, -0.11, 0.64);
+  j.neck = P(0.5, 0, 1.0); j.head = P(0.68, 0, 1.08); j.shL = P(0.45, 0.19, 0.98); j.shR = P(0.45, -0.19, 0.98);
+  const lead = s < 0 ? 'R' : 'L', trail = s < 0 ? 'L' : 'R';
+  j['foot' + lead] = P(0.62, s * 0.15, 0); j['foot' + trail] = P(-0.62, -s * 0.15, 0.06);
+  const hand = P(0.84, s * 0.17, 0.55), free = P(0.2, -s * 0.5, 0.82);
+  j['hand' + (s < 0 ? 'R' : 'L')] = hand; j['hand' + (s < 0 ? 'L' : 'R')] = free;
+  j.kneeL = ik(j.hipL, add(j.footL, [0, 0.07, 0]), LEG, LEG, F); j.kneeR = ik(j.hipR, add(j.footR, [0, 0.07, 0]), LEG, LEG, F);
+  const pole = add(mul(F, -0.4), [0, -0.8, 0]);
+  j.elL = ik(j.shL, j.handL, UPARM, FOREARM, add(pole, mul(L, 0.3))); j.elR = ik(j.shR, j.handR, UPARM, FOREARM, add(pole, mul(L, -0.3)));
+  j.footDirL = F.slice(); j.footDirR = F.slice();
+  j['footPitch' + lead] = [0, 0, 0]; j['footPitch' + trail] = [0.7, 0, 0];   // back heel up
+  const drop = 0.53;   // the toe on the ground ahead
+  return { j, hand, tip: add(hand, add(mul(F, Math.sqrt(0.86 * 0.86 - drop * drop)), [0, -drop, 0])) };
+}
 // caught behind and stumpings are appealed for before the umpire gives them
 const appealed = c => !!(c && c.out && (c.out.how === 'stumped' || (c.out.how === 'caught' && c.out.by && c.out.by.keeper)));
 function headFig(pos, face, t, seed) {   // hands on the head
@@ -4297,11 +4485,20 @@ function walkIn() {
 }
 function livePeople() {
   const out = [], helmet = helmetCol();
-  const runT = ball && ball.play && ball.play.res.kind === 'runs' ? ball.play.t - 0.35 : -1;
-  const runs = ball && ball.play ? ball.play.res.runs + (ball.play.res.runOut ? 1 : 0) : 0;   // (going for the one they don't make)
-  const runner = (startZ, x) => !ball || ball.play?.res.kind !== 'runs' ? null : CricketLocomotion.runner({
-    time: runT, runs, startZ, x, pitch: PITCH, firstDuration: RUN1, moreDuration: RUN_MORE
-  });
+  const legs = ball && ball.play ? legsFor(ball.play.res) : null, pt = legs ? ball.play.t : 0;
+  const runT = legs ? pt - legs[0].s : -1, runs = legs ? legs.length : 0;
+  const runner = (startZ, x) => legs ? CricketLocomotion.legsRunner({ time: pt, legs, startZ, x, pitch: PITCH }) : null;
+  // a tight finish at the keeper's end (a run-out, or made by less than half a second): he stretches for the crease
+  const back = legs ? ball.play.res.throwStart + ball.play.res.throwTime : 0;
+  const diveW = r => {
+    if (!r || r.u <= 0) return 0;
+    const L = legs[r.leg]; if (L.abort !== undefined) return 0;
+    const out = 1 - smooth(clamp((pt - r.end - (L.dive !== undefined ? DIVE_UP - 0.1 : 0.8)) / 0.6, 0, 1));
+    if (ball.play.res.own) return L.dive === undefined ? 0 : pt < r.end ? smooth(clamp((pt - L.dive) / 0.22, 0, 1)) : out;   // W: his dive
+    if (r.toZ > 2 || !(L.s < back + 0.1 && r.end > back - 0.45)) return 0;
+    return pt < r.end ? smooth(clamp((r.u - 0.8) / 0.12, 0, 1)) : out;
+  };
+  const diveFace = r => r.toZ < PITCH / 2 ? Math.PI : 0;   // (no turn at the end of a dive)
   const pid = k => inn && inn.bat.players[k] ? inn.bat.players[k].name : 'x';
   // the striker: in his stance and swing, or running
   const sr = runner(0.6, 0.55);
@@ -4342,6 +4539,7 @@ function livePeople() {
     out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look: [Math.sin(face), 0, Math.cos(face)],
                bat: { carry: true, carryHand: 'r', hands: hR, tip: add(hR, [-0.1 * u, 0.85 * u - 0.6 * (1 - u), 0]) } });
   } else if (sr) {
+    const dw = diveW(sr); if (dw > 0) sr.face = diveFace(sr);
     let j = runFig(figure(sr.pos, sr.face, { run: MOTION2?sr.runWeight:sr.moving?1:0, phase: clock * 11,gaitDistance:sr.distance }), sr.pos, sr.face, sr.distance, sr.runWeight);
     const runForward = [Math.sin(sr.face), 0, Math.cos(sr.face)];
     let hand = j.handR, tip = add(hand, add([0, -0.7, 0], mul(runForward, 0.3))), look = null;
@@ -4360,6 +4558,7 @@ function livePeople() {
       const fw = [Math.sin(sr.face), 0, Math.cos(sr.face)], tb = norm([bp[0] - sr.pos[0], 0, bp[2] - sr.pos[2]]);
       if (dot(fw, tb) > -0.3) look = norm(lerp3(fw, tb, 0.55));
     }
+    if (dw > 0) { const s = stretchFig(sr.pos, sr.face, 'r'); j = mixJ(j, s.j, dw); hand = lerp3(hand, s.hand, dw); tip = lerp3(tip, s.tip, dw); look = null; }
     out.push({ j, at: sr.pos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look,
                bat: { carry: true, carryHand: 'r', hands: hand, tip } });
   } else {
@@ -4381,13 +4580,15 @@ function livePeople() {
     out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look, bat: { carry: false, hands, tip, contact,...(MOTION2?{width}:{}) } });
   }
   // the non-striker
-  const ns = runner(PITCH - 0.6, -1.5);
+  const ns = runner(PITCH - 0.6, -1.5), ndw = diveW(ns);
   const nsPos = ns ? ns.pos : [-1.7, 0, PITCH - 0.4];
-  const nsFace = ns ? ns.face : Math.PI, nsForward = [Math.sin(nsFace), 0, Math.cos(nsFace)];
+  const nsFace = ndw > 0 ? diveFace(ns) : ns ? ns.face : Math.PI, nsForward = [Math.sin(nsFace), 0, Math.cos(nsFace)];
   let nj = figure(nsPos, nsFace, { run: MOTION2?(ns?ns.runWeight:0):(ns&&ns.moving?1:0), phase: clock * 11 + 1,gaitDistance:ns?ns.distance+1.9:undefined, seed: 20 });
-  if (ns) nj = runFig(nj, nsPos, ns.face, ns.distance + 1.9, ns.runWeight);
+  if (ns) nj = runFig(nj, nsPos, nsFace, ns.distance + 1.9, ns.runWeight);
+  let nHand = nj.handL, nTip = add(nj.handL, add([0.1, -0.75, 0], mul(nsForward, 0.25)));
+  if (ndw > 0) { const s = stretchFig(nsPos, nsFace, 'l'); nj = mixJ(nj, s.j, ndw); nHand = lerp3(nHand, s.hand, ndw); nTip = lerp3(nTip, s.tip, ndw); }
   out.push({ j: nj, at: nsPos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.non : 1), look: null,
-             bat: { carry: true, carryHand: 'l', hands: nj.handL, tip: add(nj.handL, add([0.1, -0.75, 0], mul(nsForward, 0.25))) } });
+             bat: { carry: true, carryHand: 'l', hands: nHand, tip: nTip } });
   // the bowler, then the fielders (once the ball is hit, the bowler is one of the fielders)
   const afterHit = !!(ball && ball.play);
   const fid = w => inn && w !== null && w !== undefined && inn.bowl.players[w] ? inn.bowl.players[w].name : 'f' + w;
@@ -4438,6 +4639,10 @@ function livePeople() {
       out.push({ j: keeperFig(kp, f.face, sq, g), at: kp, team: 'bowl', keeper: true, bowler: false, pid: fid(f.who), look: null });
       continue;
     }
+    if (f.keeper && afterHit && !rj && ball.play.res.kind === 'runs' && ball.play.res.fielder !== f) {   // taking the throw at the stumps
+      const kj = keeperTake(f, pos);
+      if (kj) { out.push({ j: kj, at: pos, team: 'bowl', keeper: true, bowler: false, pid: fid(f.who), look: null }); continue; }
+    }
     const startBlend=MOTION2 && f.target && ball?.play?smooth(clamp((ball.play.t-(f.keeper ? .12 : .32))/.18,0,1)):1;
     let j = rj || figure(pos, f.face, { run:MOTION2?run*startBlend:run, phase: ph,
       gaitDistance:MOTION2 && f.run>.9?f.phase*f.speed/11:undefined,crouch: CLIPS ? f.crouch * (1 - (wi.walk || 0)) : wi.moving ? 0 : f.crouch, seed: fi + 1 });
@@ -4454,12 +4659,33 @@ function livePeople() {
   out.push(...umpires());
   return out;
 }
+// The keeper takes the throw at the stumps: hands to the ball as it comes, and on a run-out a sweep down onto the bails
+// (they fly at +0.14 s, in update). kHand carries the ball once it is in his gloves.
+function keeperTake(f, pos) {
+  const pl = ball.play, res = pl.res, kt = pl.t - (res.throwStart + res.throwTime);
+  if (kt < -0.7 || kt > 1.2 || f.run > 0.3) return null;
+  const face = f.face, F = [Math.sin(face), 0, Math.cos(face)], L = [Math.cos(face), 0, -Math.sin(face)];
+  const chest = add(pos, add(mul(F, 0.3), [0, 1.0, 0])), w = smooth(clamp((kt + 0.6) / 0.45, 0, 1));
+  let g, crouch = 0.3 * w, bend = 0;
+  if (kt < 0) {   // reaching for it as it comes in
+    const bp = liveBallPos(), d = bp ? sub(bp, chest) : [0, 0, 0], l = len(d);
+    g = lerp3(add(pos, add(mul(F, 0.2), [0, 0.95, 0])), add(chest, l > 0.35 ? mul(d, 0.35 / l) : d), w);
+  } else if (runOutAhead(res)) {   // the sweep onto the stumps, then the ball held up
+    const u = smooth(clamp(kt / 0.14, 0, 1));
+    g = lerp3(THROW_TO, [0, 0.76, 0.0], u); bend = 0.35 * u * (1 - smooth(clamp((kt - 0.3) / 0.4, 0, 1)));
+  } else {   // caught it: lowers it to his waist
+    const u = smooth(clamp((kt - 0.15) / 0.6, 0, 1));
+    g = lerp3(THROW_TO, add(pos, add(mul(F, 0.3), [0, 0.95, 0])), u); crouch *= 1 - u;
+  }
+  kHand = kt >= 0 ? g : null;
+  return figure(pos, face, { crouch, bend, handL: add(g, mul(L, 0.07)), handR: add(g, mul(L, -0.07)), seed: 3 });
+}
 // the two umpires: one behind the stumps at the bowler's end (off the bowler's line), one at square leg. The bowler's-end umpire
 // gives the signals after a ball (celebrate.signals); the one at square leg watches the ball once it is hit.
 const UMP_SIG = 0.9;   // seconds per signal
 const UMP_AT = [-0.08, 0, PITCH + 2.4];   // the bowler's-end umpire: in the middle, behind the stumps (the bowler passes 0.5 m to his right)
 // when the signals run (phase 'result'): from S0 for UMP_SIG each; the camera cuts to the umpire for them (umpCam in update())
-const sigStart = c => appealed(c) ? 1.0 : c && c.out ? 0.35 : 0.6;   // (after the appeal)
+const sigStart = c => appealed(c) ? 1.0 : c && c.out ? (c.out.how === 'run out' ? 1.3 : 0.35) : 0.6;   // (after the appeal, or the run-out close-up)   // (after the appeal)
 const sigEnd = c => c && c.signals && c.signals.length ? sigStart(c) + c.signals.length * UMP_SIG : 0;
 function umpires() {
   const list = [], sig = phase === 'result' && celebrate ? celebrate.signals || [] : [];
@@ -4628,15 +4854,16 @@ function recFrame(dt) {
 // what's worth a replay (called with the ball's outcome)
 function recMark(o, line) {
   rec.end = rec.t;
-  rec.kind = o.out ? (o.out.how === 'caught' ? 'catch' : 'stumps') : o.runs === 6 ? 'six' : /^Dropped/.test(line) ? 'catch' : null;
+  rec.kind = o.out ? (o.out.how === 'caught' ? 'catch' : o.out.how === 'run out' ? 'runout' : 'stumps') : o.runs === 6 ? 'six' : /^Dropped/.test(line) ? 'catch' : null;
 }
 const canReplay = () => replaysOn && R3D && R3D.active() && !quiet && !ff && !M.autoplay && rec.frames.length > 20;
 function startReplay() {
   const f = rec.frames, last = f[f.length - 1].t;
-  const start = Math.max(f[0].t, (rec.rel !== null ? rec.rel : rec.end) - 0.6);
-  const end = Math.min(last, rec.end + (rec.kind === 'six' ? 1.4 : 0.9));
+  const ro = rec.kind === 'runout';   // a run-out: the last two seconds of the run, slowed down as the bails come off
+  const start = Math.max(f[0].t, ro ? rec.end - 2.2 : (rec.rel !== null ? rec.rel : rec.end) - 0.6);
+  const end = Math.min(last, rec.end + (rec.kind === 'six' ? 1.4 : ro ? 1.1 : 0.9));
   if (end - start < 0.8) return;
-  RP = { t: start, start, end, kind: rec.kind, pivot: rec.hit !== null ? rec.hit : rec.end, i: 0, trail: [], saved: { pos: cam.pos.slice(), tgt: cam.tgt.slice(), fov: cam.fov },
+  RP = { t: start, start, end, kind: rec.kind, pivot: ro ? rec.end + 0.1 : rec.hit !== null ? rec.hit : rec.end, i: 0, trail: [], saved: { pos: cam.pos.slice(), tgt: cam.tgt.slice(), fov: cam.fov },
          people: [], ball: null, snap: {}, look: null };
   replayPose(); replayCam();
   hideBanner(); hideCard();
@@ -4675,7 +4902,10 @@ function replayPose() {
 }
 function replayCam() {
   const bp = RP.ball;
-  if (RP.t < RP.pivot + (RP.kind === 'stumps' ? -0.32 : 0.12)) {
+  if (RP.kind === 'runout') {   // high from the bowler's end, down the pitch with the batter, then the same low side-on view as live
+    const a = RP.t < RP.pivot - 0.8 ? { pos: [1.2, 3.6, 25], tgt: [-0.5, 0.7, 3], fov: 24 } : RO_CAM;
+    cam.pos = a.pos.slice(); cam.tgt = a.tgt.slice(); cam.fov = a.fov;
+  } else if (RP.t < RP.pivot + (RP.kind === 'stumps' ? -0.32 : 0.12)) {
     // the bowler's end, high and tight on the batter
     cam.pos = [0.6, 4.6, 32]; cam.tgt = [0.45, 1.0, 1.4]; cam.fov = 8.5;
   } else if (RP.kind === 'stumps') {
@@ -4819,6 +5049,15 @@ for (const [id, fn] of [['moveL', () => moveGuard(-1)], ['moveR', () => moveGuar
   if (!canBat() || (ball && (ball.swing || ball.left || ball.charge))) return;
   if (phase === 'flight' && ball) applyCharge(); else if (phase === 'wait' || phase === 'runup') wantCharge = true;
 }]]) $(id).addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); audio(); fn(); });
+for (const [id, fn] of [['btnRun', callRun], ['btnDive', diveRun], ['btnCancel', cancelRun]]) {
+  if (touch) $(id).querySelector('small').remove();   // (the key hints are for keyboards)
+  $(id).addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); audio(); fn(); });
+}
+function setRunning(own) {
+  runOwn = own; try { localStorage.setItem(RUN_KEY, own ? 'own' : 'auto'); } catch (e) {}
+  $('runToggle').textContent = 'Running: ' + (own ? 'I call the runs' : 'automatic');
+}
+setRunning(runOwn); $('runToggle').addEventListener('click', () => setRunning(!runOwn));
 $('btnFast').addEventListener('click', () => { M.watchFast = !M.watchFast; setFF(M.watchFast); showControls(); });
 $('btnBowlMe').addEventListener('click', () => setAutoBowl(false));
 $('btnBowl').addEventListener('pointerdown', e => { e.preventDefault(); bowlPress(); });
@@ -4860,6 +5099,10 @@ window.addEventListener('keydown', e => {
   if (DIR_KEYS.includes(e.code) && !(batting && e.code.startsWith('Key'))) { e.preventDefault(); held.add(e.code); return; }
   if (e.repeat) return;
   if (e.code === 'KeyF' && (phase === 'play' || phase === 'result')) { setFF(true); return; }
+  if (phase === 'play' && ownLive()) {   // running yourself, as in Cricket 07: D run, A cancel, W dive (R also runs)
+    const fn = { KeyD: callRun, KeyR: callRun, KeyA: cancelRun, KeyW: diveRun }[e.code];
+    if (fn) { e.preventDefault(); fn(); return; }
+  }
   if (userBowling()) {
     const n = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'].indexOf(e.code);
     if (n >= 0 && (phase === 'aim' || phase === 'runup')) { if (n < BOWL_TYPES[btype(bowlerP())].vars.length) setVar(n); else cycleEffort(); return; }
