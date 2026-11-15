@@ -1561,7 +1561,7 @@ function strokeFamily(a, loft, defend, push, short, spin, at) {
 function strokeKeys(sw) {   // every stroke family has staged key poses in player-production/motion.js
   // (keep the random stream as it was, so deliveries play out the same)
   if (!sw.vary) sw.vary = { l: rand(-4, 4), y: rand(-7, 7), h: [rand(-0.08, 0.08), rand(-0.1, 0.1), rand(-0.06, 0.06)], f: rand(-0.03, 0.05), hold: rand(0.8, 1.3) };
-  return CricketMotion[sw.fam + 'Keys']({ start: sw.visualStart || PREPARE, target: sw.target, aim: sw.intent, loft: sw.loft, stance: STANCE, impact: SWING_LAG });
+  return CricketMotion[sw.fam + 'Keys']({ start: sw.visualStart || PREPARE, target: sw.target, aim: sw.intent, loft: sw.loft, stance: styled(STANCE, batStyle()), impact: SWING_LAG });
 }
 // The bat must never pass through the batter. Body parts as capsules (from, to, radius in metres, with pads, shirt and
 // helmet); if the blade would be inside one, it turns about the hands just far enough to pass outside it.
@@ -1594,11 +1594,27 @@ function bladeClear(j, h, bd) {
 // from wherever this has got to (swing() keeps it as visualStart).
 const TRIGGER = { ...READY, bk: [0.54, 0, 0.38], fr: [0.55, 0, 1.08], pel: [0.6, 0.87, 0.74], lean: 16, h: [0.34, 1.05, 0.66], bd: norm([-0.3, -0.35, -0.89]) };
 const TOPLIFT = { ...TRIGGER, h: [0.27, 1.3, 0.8], bd: norm([-0.3, 0.8, -0.52]) };
+// Each batter's own way of standing and picking the bat up, from his name (so it stays the same all match): wider or
+// narrower, crouched or upright, a slightly open or closed stance, a higher or lower backlift taken earlier or later, and his
+// own rhythm of taps. Strokes start from wherever this has got to, so they carry it too.
+const styleCache = {};
+function batStyle() {
+  const name = inn && inn.bat.players[inn.striker] ? inn.bat.players[inn.striker].name : '';
+  if (styleCache[name]) return styleCache[name];
+  let h = 2166136261; for (const c of name) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  const r = i => (((h >>> (i * 4)) & 15) / 15) - 0.5;   // eight numbers from -0.5 to 0.5
+  return styleCache[name] = { width: r(0) * 0.18, crouch: r(1) * 0.1, open: r(2) * 20, lift: r(3) * 0.32, liftAt: r(4) * 0.1,
+                              tap: 0.75 + r(5) * 0.35, tapBig: 1 + r(6) * 0.6, lean: r(7) * 10 };
+}
+function styled(k, st) {
+  return { ...k, fr: [k.fr[0], k.fr[1], k.fr[2] + st.width * 0.5], bk: [k.bk[0], k.bk[1], k.bk[2] - st.width * 0.5],
+           pel: add(k.pel, [0, -st.crouch, 0]), hy: k.hy + st.open, sy: k.sy + st.open * 0.6, lean: k.lean + st.lean };
+}
 function waitMove(k) {
-  const tt = phase === 'runup' ? phaseT - RUNUP : ball.t;   // time from the release
-  const trig = smooth(clamp((tt + 0.32) / 0.28, 0, 1)), lift = smooth(clamp((tt + 0.12) / 0.32, 0, 1));
-  let P = mixPose(k, TRIGGER, trig);
-  P = mixPose(P, TOPLIFT, lift);
+  const tt = phase === 'runup' ? phaseT - RUNUP : ball.t, st = batStyle();   // time from the release
+  const trig = smooth(clamp((tt + 0.32 + st.liftAt) / 0.28, 0, 1)), lift = smooth(clamp((tt + 0.12 + st.liftAt) / 0.32, 0, 1));
+  let P = mixPose(k, styled(TRIGGER, st), trig);
+  P = mixPose(P, { ...styled(TOPLIFT, st), h: add(TOPLIFT.h, [0, st.lift, -st.lift * 0.3]) }, lift);
   P.bk = add(P.bk, [0, 0.06 * Math.sin(Math.PI * trig), 0]);   // the back foot lifts as it moves
   if (phase === 'flight' && ball && ball.Tstar) {
     const T0 = 0.1, T1 = Math.max(T0 + 0.14, Math.min(ball.Tstar - SWING_LAG - 0.02, T0 + 0.34));
@@ -1623,21 +1639,118 @@ function waitMove(k) {
   return P;
 }
 // the batter this frame: { j, hands, tip } (before moving across the crease or down the pitch)
+// Between balls the striker walks a few steps toward square leg, fiddles with his gloves, and walks back to his guard
+// (idleWalk(); started in afterBall when the gap is long enough). It is squeezed to fit the gap, and fades out quickly if
+// the player skips the gap or moves across the crease.
+// The non-striker backs up: a few steps out of his crease as the bowler delivers, and back again before the next ball
+// (nsBack is set in afterBall: when the walk back starts, and from how far out; after a run he is in his crease already).
+const NS_BACK = 1.6;
+let nsBack = { t: -1e9, from: 0 }, nsBackNext = 0;
+function nsBackup() {
+  if (phase === 'runup' || phase === 'flight') {
+    const tr = phase === 'runup' ? phaseT - RUNUP : ball ? ball.t : phaseT, u = clamp((tr + 0.75) / 1.0, 0, 1);
+    return { b: NS_BACK * smooth(u), walk: Math.min(1, Math.sin(Math.PI * u) * 2.2), out: true };
+  }
+  if (phase === 'play' || phase === 'result') return { b: NS_BACK, walk: 0, out: true };
+  if (phase === 'wait') { const u = clamp((clock - nsBack.t) / 1.4, 0, 1); return { b: nsBack.from * (1 - smooth(u)), walk: nsBack.from ? Math.min(1, Math.sin(Math.PI * u) * 2.2) : 0, out: false }; }
+  return { b: 0, walk: 0, out: true };
+}
+let idle = null, idleBalls = 0;   // balls since the striker last walked away between balls
+const IDLE_AWAY = [1.85, 0, 0.1];
+function idleWalk() {
+  if (!idle) return null;
+  const rt = clock - idle.t0, sc = clamp((idle.len - 1.0) / 3.0, 0.55, 1), T = x => x * sc;   // the routine's times, squeezed to fit
+  const live = phase === 'wait' && !guard && phaseT < -0.75 && !paused;
+  const target = live ? smooth(clamp(rt / 0.3, 0, 1)) * (1 - smooth(clamp((rt - T(3.0)) / 0.35, 0, 1))) : 0;
+  const dt = Math.max(0, clock - idle.last); idle.last = clock;
+  idle.w += (target - idle.w) * Math.min(1, dt * (target < idle.w ? 9 : 6));
+  if (idle.w < 0.01 && rt > 0.5) { if (!live || rt > T(3.4)) idle = null; return null; }
+  const S0 = [0.6, 0, 0.75], d = len(sub(IDLE_AWAY, S0)), out = Math.atan2(IDLE_AWAY[0] - S0[0], IDLE_AWAY[2] - S0[2]), home = out + Math.PI;
+  const a = T(0.2), b = T(1.25), c = T(1.95), e = T(3.0);
+  let pos, face, dist, walk = 0, gloves = 0;
+  if (rt < b) { const u = smooth(clamp((rt - a) / (b - a), 0, 1)); pos = lerp3(S0, IDLE_AWAY, u); face = out; dist = u * d; walk = Math.min(1, Math.sin(Math.PI * u) * 2.5); }
+  else if (rt < c) { const u = (rt - b) / (c - b); pos = IDLE_AWAY; face = out + (home - out) * smooth(clamp(u * 1.6, 0, 1)); dist = d; gloves = Math.sin(Math.PI * u); }
+  else { const u = smooth(clamp((rt - c) / (e - c), 0, 1)); pos = lerp3(IDLE_AWAY, S0, u); face = home; dist = d + u * d; walk = Math.min(1, Math.sin(Math.PI * u) * 2.5); }
+  return { w: idle.w, pos, face, dist, walk, gloves };
+}
+// The pose a stroke settles into once its finish is let go: upright, shoulders square to the hips, the bat hanging down in
+// front of him in both hands, the feet where they are (flat on the ground)
+function relaxedFrom(k) {
+  const sy = lerp(k.sy, k.hy, 0.6), F = facing(sy), pel = [k.pel[0], lerp(k.pel[1], 0.92, 0.7), k.pel[2]];
+  return { ...k, pel, sy, lean: 8, side: 0, rearFootPitch: 0, batRoll: 0,
+           fr: [k.fr[0], 0, k.fr[2]], bk: [k.bk[0], 0, k.bk[2]],
+           h: add(pel, add(mul(F, 0.36), [0, 0.02, 0.06])), bd: norm(add(mul(F, 0.3), [0, -1, 0.08])) };
+}
+// The order of the swing: how far (s) the hips run ahead of the stroke's key poses, and the shoulders behind, mid-downswing
+// how far (radians) the wrists roll the face over after contact, for strokes whose keys don't (a drive: more to the on side)
+const ROLL = { drive: 0.45, cut: 0.6, pull: 0.8, hook: 0.45, sweep: 0.6, rsweep: 0.5, bdrive: 0.3 };
+const ROLL_K = +(new URLSearchParams(location.search).get('roll') ?? 1);   // ?roll=0: no wrist roll
+const WHIP = +(new URLSearchParams(location.search).get('whip') ?? 0.45);   // ?whip=0 for the swing as authored
+const CHAIN = { hips: +(new URLSearchParams(location.search).get('hips') || 0.04), shoulders: 0.025 };
 function batterPose(sw) {
   let k, motionTime = sw ? sw.t : 0;
   if (sw) {
     if (!sw.keys) sw.keys = strokeKeys(sw);
     if(!sw.curve)sw.curve=CricketMotion.prepare(sw.keys);
-    const sampled=CricketMotion[sw.fam==='drive'?'sampleDrive':'sampleCut'](sw.curve,sw.t,sw.contactAge,SWING_LAG);
+    const S = dt => CricketMotion[sw.fam==='drive'?'sampleDrive':'sampleCut'](sw.curve,sw.t+dt,sw.contactAge,SWING_LAG);
+    const sampled=S(0);
     k=sampled.pose;motionTime=sampled.time;
+    // the downswing whips: the bat and upper body are slower away from the top and fastest as they come into the ball
+    // (u - WHIP·u·(1-u)², the same pace as the follow-through at contact); the feet keep their own timing
+    const A = Number.isFinite(sw.contactAge) && sw.contactAge > 0.04 && sw.contactAge < 0.45 ? sw.contactAge : SWING_LAG;
+    if (sw.t > 0 && sw.t < A) {
+      const u = sw.t / A, w = S(-WHIP * u * (1 - u) * (1 - u) * A).pose;
+      k = { ...w, fr: k.fr, bk: k.bk, kpL: k.kpL, kpR: k.kpR };
+    }
+    const how = sw.how || {}, after = motionTime - SWING_LAG, attack = !sw.defend;
+    if (after < 0 && motionTime > 0) {   // the body uncoils in order: hips first, then shoulders, the bat last (it still meets the ball on time)
+      const w = Math.sin(Math.PI * motionTime / SWING_LAG) ** 2 * (attack ? 1 : 0.4);
+      const hips = S(CHAIN.hips * w).pose, shoulders = S(-CHAIN.shoulders * w).pose;
+      k = { ...k, hy: hips.hy, pel: hips.pel, sy: shoulders.sy };
+    } else if (after > 0) {
+      // the follow-through tells how it was hit: late or edged, cramped and cut short; a six, the high finish held
+      const lateR = how.kind === 'edge' ? 0.8 : how.kind === 'hit' && attack ? clamp((-how.e - 0.3) / 0.5, 0, 1) : 0, late = 0.6 * lateR;
+      const six = attack && ball && ball.swing === sw && ball.play && ball.play.res.kind === 'six';
+      const warp = late ? after * late : six && after > 0.35 ? (after - 0.35) * 0.7 : 0;
+      if (warp) { const s = S(-warp); k = s.pose; motionTime = s.time; }
+      if (lateR) {   // late: the ball is on him, the hands finish low and close to the body
+        const r = smooth(clamp(after / 0.25, 0, 1)) * lateR;
+        k = { ...k, h: add(k.h, [0, -0.28 * r, -0.12 * r]), lean: k.lean + 4 * r, pel: add(k.pel, [0, -0.02 * r, -0.04 * r]) };
+      }
+      if (how.kind === 'hit' && attack && how.e > 0.3) {   // early: through the shot too soon, falling over toward the off side
+        const r = smooth(clamp(after / 0.2, 0, 1)) * clamp((how.e - 0.3) / 0.5, 0, 1);
+        k = { ...k, lean: k.lean + 16 * r, side: (k.side || 0) + 10 * r, pel: add(k.pel, [-0.09 * r, -0.07 * r, 0.12 * r]) };
+      }
+      if (how.kind === 'edge' && after < 0.3) {   // the jar of an edge through the bat
+        const b = norm(k.bd), p = norm(cross(b, [0, 1, 0])), amp = 0.2 * Math.exp(-after / 0.07) * Math.sin(after * 55);
+        if (p.every(Number.isFinite)) k = { ...k, bd: norm(add(b, mul(p, amp))) };
+      }
+      // then he lets the finish go: the bat comes down, he stands up a little and the shoulders come back round over the hips
+      // (a six is admired a while first). The batters running blend out of this as usual.
+      if (sw.relaxVar === undefined) sw.relaxVar = Math.random();   // not the same every time
+      const hold = (six ? 1.3 : sw.defend ? 0.3 : 0.45) + 0.3 * sw.relaxVar, rx = smooth(clamp((after - hold) / 0.7, 0, 1)) * 0.9;
+      sw.rx = rx;
+      if (rx > 0) k = mixPose(k, relaxedFrom(k), rx);
+      // beaten outside off: now and then he plays the shot again slowly to himself (feet where they are), then lets it go
+      sw.shadowW = 0;
+      if (how.kind === 'miss' && !(celebrate && celebrate.out) && !(ball && ball.play)) {
+        if (sw.shadow === undefined) sw.shadow = Math.random() < 0.6 || new URLSearchParams(location.search).get('shadow') === '1';
+        const w = sw.shadow ? smooth(clamp((after - 0.9) / 0.25, 0, 1)) * (1 - smooth(clamp((after - 1.8) / 0.3, 0, 1))) : 0;
+        if (w > 0) {
+          const st = 0.04 + smooth(clamp((after - 1.1) / 0.7, 0, 1)) * (SWING_LAG + 0.1), sp = mixPose(S(st - sw.t).pose, k, 0.3);
+          k = mixPose(k, { ...sp, fr: k.fr, bk: k.bk }, w); sw.shadowW = w;
+        }
+      }
+    }
   }
   else {
     const ready = phase === 'runup' ? smooth(clamp((phaseT - RUNUP + 0.4) / 0.35, 0, 1)) : (phase === 'flight' || phase === 'result') && ball ? 1 : 0;
-    k = ready ? mixPose(STANCE, READY, ready) : STANCE;
+    const st = batStyle();
+    k = ready ? mixPose(styled(STANCE, st), styled(READY, st), ready) : styled(STANCE, st);
     // alive at the crease: breathing, and a tap of the bat until the bowler is well into his run
     const br = Math.sin(clock * 1.7);
     const tapOn = phase === 'runup' ? clamp((RUNUP - 0.5 - phaseT) / 0.25, 0, 1) : ['flight', 'play', 'result'].includes(phase) ? 0 : 1;
-    const tp = (clock * 0.75) % 1, tap = tapOn * (tp < 0.2 ? Math.sin(tp / 0.2 * Math.PI) : 0);
+    const tp = (clock * st.tap) % 1, tap = tapOn * st.tapBig * (tp < 0.2 ? Math.sin(tp / 0.2 * Math.PI) : 0);
     k = { ...k, pel: add(k.pel, [0, br * 0.008, 0]), lean: k.lean + br * 1.2,
           h: add(k.h, [0, 0.06 * tap, 0]), bd: norm(add(k.bd, [0, 0.35 * tap, -0.15 * tap])) };
     if ((phase === 'runup' || (phase === 'flight' && ball))) k = waitMove(k);   // a leave blends from here too
@@ -1650,9 +1763,27 @@ function batterPose(sw) {
   const j = buildBody({ ...k, hL: sub(k.h, mul(bd, 0.045)), hR: add(k.h, mul(bd, 0.045)), headOff: [0, 0, 0.04] });
   bd = bladeClear(j, k.h, bd);
   const follow=sw?smooth(clamp((motionTime-SWING_LAG-.04)/.32,0,1)):0;
-  const gaze=facing(sw?clamp(sw.intent||0,-70,70)*follow:0);
+  let gaze=facing(sw?clamp(sw.intent||0,-70,70)*follow:0);
+  if (sw && sw.how && motionTime > SWING_LAG) {
+    const after = motionTime - SWING_LAG;
+    if (sw.how.kind === 'miss')   // beaten: he turns his head to see where it went (and back for a practice shot)
+      gaze = facing(lerp(0, 165, smooth(clamp((after - 0.12) / 0.3, 0, 1)) * (1 - (sw.shadowW || 0))));
+    else if (ball && ball.swing === sw && ball.play && ball.play.res.kind === 'six')   // and up, watching it go
+      gaze = norm(add(gaze, [0, 0.9 * smooth(clamp((after - 0.2) / 0.4, 0, 1)), 0]));
+  }
   if(sw?.loft)j.head[2]-=.035*follow;
-  const width=sw ? CricketMotion.pathWidth(sw.curve,motionTime,bd,k.batRoll||0) : null;
+  let width=sw ? CricketMotion.pathWidth(sw.curve,motionTime,bd,k.batRoll||0) : null;
+  // the wrists roll over after contact to keep the ball down (strokes whose keys don't roll the bat themselves): the face
+  // (cross(bd, width), as the renderer builds the bat) turns toward the ground, and comes back as he lets the finish go
+  const roll = sw && !sw.loft && ROLL[sw.fam];
+  if (roll && width && motionTime > SWING_LAG) {
+    const r = roll * ROLL_K * (sw.fam === 'drive' ? clamp(((sw.intent || 0) + 100) / 135, 0.3, 1) : 1)
+      * smooth(clamp((motionTime - SWING_LAG - 0.02) / 0.25, 0, 1)) * (1 - (sw.rx || 0));
+    if (r > 0.01) {
+      const rot = a => norm(add(mul(width, Math.cos(a)), mul(cross(bd, width), Math.sin(a)))), p = rot(r), m = rot(-r);
+      width = cross(bd, p)[1] < cross(bd, m)[1] ? p : m;
+    }
+  }
   return { j, hands: k.h.slice(), tip: add(k.h, mul(bd, 0.85)), pose:k,look:gaze,motionTime,width };
 }
 
@@ -2165,6 +2296,7 @@ function swing(loft, pressT, aim, w) {
   if (kind !== 'hit') {   // beaten: the bat passes the ball (inside the line outside off, outside it at the pads, under a bouncer); an edge just shaves it
     const side = atBat[0] < 0.1 ? 1 : -1, m = kind === 'miss' ? 1 : 0.35;
     ball.swing.target = [atBat[0] + side * 0.16 * m, clamp(atBat[1] + (high ? -0.3 : 0.07) * m, 0.12, 1.9), 1.02]; }
+  ball.swing.how = { kind, e: clamp(-dtTiming / okW, -1.5, 1.5) };   // how it looks: hit / edge / miss, and how early (+) or late (-)
   ball.decision = { kind, q, angle, fam: ball.swing.fam, loft: ball.swing.loft, defend: ball.swing.defend, push: !!(aim && aim.defend && aimed), dtTiming, power: ((aim && aim.power) || 1) * (ball.charge && !(aim && aim.defend) ? 1.1 : 1) };
   // the bat meets the ball in front of the batter (early) or beside the stumps (late), never behind them
   ball.contactT = kind === 'miss' ? Infinity : ball.Tstar + clamp(dtTiming, -0.05, 0.015);
@@ -2353,7 +2485,7 @@ function resolvePlay(fp, airborne) {
     const end = path[path.length - 1];
     let f0 = null, tt = 1e9;
     for (const f of fielders) { const t = 0.3 + Math.max(0, dist2(f.pos, end.p) - 1) / f.speed; if (t < tt) { tt = t; f0 = f; } }
-    best = { f: f0, t: Math.max(tt, end.t), i: path.length - 1, catchChance: false, margin: 0, point: end.p.slice() };
+    best = { f: f0, t: Math.max(tt, end.t), i: path.length - 1, catchChance: false, margin: 0, point: end.p.slice(), stopped: true };
   }
   const res = { fielder: best ? best.f : null, t: best ? best.t : null, point: best ? best.point : null, rope };
   if (rope && (!best || rope.t <= best.t)) {
@@ -2382,10 +2514,21 @@ function resolvePlay(fp, airborne) {
   // a ground ball chased down near the rope is stopped with a slide (it takes a moment longer to get up and throw)
   res.slide = !res.dropped && !best.f.keeper && best.point[1] < 0.5 && Math.hypot(best.point[0], best.point[2]) > 42 && dist2(best.f.pos, best.point) > 4;
   // fielded: gather, throw to the keeper's end, count completed runs
-  const gather = res.dropped ? 1.0 : res.slide ? 1.1 : 0.6;
+  // an infield ground ball he only just gets to: a full-length dive (it takes a moment to get up again)
+  // (only when it is going past him: over the next DIVE.look s he never gets comfortably behind it)
+  let spare = -1e9;
+  if (!best.stopped && !best.catchChance) for (let j = best.i; j < path.length && path[j].t < best.t + DIVE.look; j++) {
+    const s = path[j]; if (s.air) break;
+    spare = Math.max(spare, best.f.speed * 0.85 * Math.max(0, s.t - 0.45) - (dist2(best.f.pos, s.p) - 0.9));
+  }
+  res.dive = !res.dropped && !res.slide && !best.stopped && !best.catchChance && !best.f.keeper && best.point[1] < 0.5 && spare < DIVE.margin
+    && Math.hypot(best.point[0], best.point[2]) < 42 && dist2(best.f.pos, best.point) > 1.2;
+  const gather = res.dropped ? 1.0 : res.slide ? 1.1 : res.dive ? 0.6 + DIVE.cost : 0.6;
   const throwDist = Math.hypot(best.point[0], best.point[2] - 0.5);
   const back = best.t + gather + throwDist / 24 + 0.25;
   res.throwStart = best.t + gather;
+  // how he throws it (looks only): an underarm flick from close in, flat and hard from the infield, a high one from the deep
+  res.throwKind = throwDist < 17 && !res.dropped ? 'under' : throwDist < 40 ? 'flat' : 'lob';
   res.throwTime = throwDist / 24 + 0.25;
   const avail = back - 0.2;   // the batters set off almost at once
   res.kind = 'runs';
@@ -2728,6 +2871,12 @@ function beginBall(delay, announce) {
     el.innerHTML = touch ? 'Tap the pitch to aim, then <b>BOWL</b>' : 'Click the pitch or use the arrow keys to aim, then <b>BOWL</b> (Space)';
     el.classList.add('show');
   } else { phase = 'wait'; phaseT = -delay - (inn.userBats ? 0.8 : 0) - (ff || M.autoplay || quiet ? 0 : BALL_GAP); }
+  // only now and then: at least five balls apart, and then about one ball in three (so roughly once every eight balls)
+  nsBack = { t: clock, from: nsBackNext }; nsBackNext = 0;
+  idleBalls++;
+  idle = phase === 'wait' && -phaseT >= 2.4 && (new URLSearchParams(location.search).get('idle') === '1' || (idleBalls >= 5 && Math.random() < 0.33))
+    ? { t0: clock, len: -phaseT, w: 0, last: clock } : null;
+  if (idle) idleBalls = 0;
   if (inn.userBats) { preBall = buildDelivery(aiSpec(bowlerP(), M.diff.aiBowl)); preBall.noBall = overstepped(bowlerP()); }   // so its bounce mark shows before the run-up
   showControls();
   updateScore();
@@ -2735,6 +2884,8 @@ function beginBall(delay, announce) {
 
 // after a ball's result has been shown
 function afterBall() {
+  // the non-striker walks back in, unless they ran (he is in a crease already) or the over is done (the ends change)
+  nsBackNext = ball && !(ball.play && ball.play.res.kind === 'runs' && ball.play.res.runs > 0) && !(inn && inn.overDone) ? NS_BACK : 0;
   if (M.autoplay) { const m = M.autoplay; M.autoplay = null; return autoRun(m); }
   if (inningsOver()) return endInnings();
   if (inn.overDone) return startOver();
@@ -3858,7 +4009,7 @@ function liveBallPos() {
       const from = held || res.from || add(f.pos, [0, 1.9, 0]), to = THROW_TO;
       if (held) res.from = held;
       if (u >= 1 && kHand) return add(kHand, [0, 0.05, 0]);   // in the keeper's gloves (keeperTake)
-      const p = lerp3(from, to, u); p[1] += Math.sin(u * Math.PI) * Math.min(8, dist2(from, to) * 0.12);
+      const p = lerp3(from, to, u); p[1] += Math.sin(u * Math.PI) * Math.min(8, dist2(from, to) * (res.throwKind === 'under' ? 0.05 : res.throwKind === 'flat' ? 0.045 : 0.12));
       return p;
     }
     return samplePath(path, pl.t);
@@ -4037,7 +4188,65 @@ function watchAng(f, pl, t, from) {
   }
   return angTo(o, [0, 0, 0]);
 }
-function fielderAct(f) {
+function fielderAct(f) {   // what the fielder with the ball is doing (fielderActCore), with a dive over it when there is one
+  const a = fielderActCore(f), pl = ball && ball.play, res = pl && pl.res;
+  if (!res || !res.dive || res.fielder !== f || res.kind !== 'runs') return a;
+  return diveAct(f, res, pl.t, res.t, a) || a;
+}
+// A full-length dive for a ground ball at the edge of his reach: launched DIVE.launch s before it arrives, flat out with both
+// hands on it, down for DIVE.down s, then up into the gather and the throw (the get-up is DIVE.cost s of extra gather time).
+const DIVE = { margin: 0.7, look: 0.4, launch: 0.24, down: 0.3, up: 0.6, cost: 0.35 };
+function diveFig(point, dir) {
+  const F = dir, L = [F[2], 0, -F[0]], at = (b, f, s, h) => [b[0] + F[0] * f + L[0] * s, h, b[2] + F[2] * f + L[2] * s], j = {};
+  const p = [point[0], 0, point[2]], hy = Math.max(0.09, Math.min(point[1], 0.3));
+  j.handL = at(p, 0, 0.07, hy); j.handR = at(p, 0, -0.07, hy);
+  j.neck = at(p, -0.66, 0, 0.3); j.head = at(p, -0.47, 0, 0.38);
+  j.shL = at(p, -0.62, 0.18, 0.27); j.shR = at(p, -0.62, -0.18, 0.27);
+  j.pelvis = at(p, -1.18, 0, 0.2); j.hipL = at(p, -1.18, 0.1, 0.2); j.hipR = at(p, -1.18, -0.1, 0.2);
+  j.footL = at(p, -2.0, 0.12, 0.07); j.footR = at(p, -1.72, -0.24, 0.12);
+  j.kneeL = ik(j.hipL, j.footL, LEG, LEG, [0, -1, 0]); j.kneeR = ik(j.hipR, j.footR, LEG, LEG, add([0, -1, 0], mul(L, -0.5)));
+  j.elL = ik(j.shL, j.handL, UPARM, FOREARM, add([0, -1, 0], mul(L, 0.3))); j.elR = ik(j.shR, j.handR, UPARM, FOREARM, add([0, -1, 0], mul(L, -0.3)));
+  j.footDirL = mul(F, -1); j.footDirR = mul(F, -1); j.footPitchL = [0, 0, 0]; j.footPitchR = [0, 0, 0];
+  return j;
+}
+// getting up from the dive: pushed up onto the right knee, the ball in both hands at the waist
+function kneelFig(point, dir) {
+  const F = dir, L = [F[2], 0, -F[0]], at = (b, f, s, h) => [b[0] + F[0] * f + L[0] * s, h, b[2] + F[2] * f + L[2] * s], j = {};
+  const p = [point[0], 0, point[2]];
+  j.pelvis = at(p, -0.7, 0, 0.62); j.hipL = at(p, -0.7, 0.1, 0.62); j.hipR = at(p, -0.7, -0.1, 0.62);
+  j.neck = at(p, -0.45, 0, 1.1); j.head = at(p, -0.36, 0, 1.3);
+  j.shL = at(p, -0.47, 0.18, 1.06); j.shR = at(p, -0.47, -0.18, 1.06);
+  j.handL = at(p, -0.25, 0.05, 0.62); j.handR = at(p, -0.25, -0.05, 0.62);
+  j.footL = at(p, -0.25, 0.16, 0.06); j.footR = at(p, -1.2, -0.12, 0.06);
+  j.kneeL = ik(j.hipL, j.footL, LEG, LEG, F); j.kneeR = ik(j.hipR, j.footR, LEG, LEG, add(F, [0, -1, 0]));
+  j.elL = ik(j.shL, j.handL, UPARM, FOREARM, add([0, -1, 0], mul(L, 0.4))); j.elR = ik(j.shR, j.handR, UPARM, FOREARM, add([0, -1, 0], mul(L, -0.4)));
+  j.footDirL = F; j.footDirR = F; j.footPitchL = [0, 0, 0]; j.footPitchR = [0, 0, 0];
+  return j;
+}
+function diveAct(f, res, t, tc, a) {
+  const tL = tc - DIVE.launch, tUp = tc + DIVE.down, tStand = tUp + DIVE.up;
+  if (t < tL || t > tStand) return null;
+  const d = sub(res.point, f.pos); d[1] = 0;
+  const dir = len(d) > 0.05 ? norm(d) : [Math.sin(f.face), 0, Math.cos(f.face)], face = Math.atan2(dir[0], dir[2]);
+  const lie = diveFig(res.point, dir);
+  // the pose he dives out of, and gets up into: what he would be doing anyway
+  let base = a ? figure(f.pos, a.face, { crouch: a.crouch || 0, bend: a.bend || 0, handL: a.handL, handR: a.handR, seed: 3 }) : figure(f.pos, face, { crouch: 0.6, seed: 3 });
+  if (a && a.clipJ) base = mixJ(base, a.clipJ, a.w);
+  let j, hold = null;
+  if (t < tc) {   // launched: up off the ground a little, and out flat toward the ball
+    const u = smooth((t - tL) / DIVE.launch), lift = 0.22 * Math.sin(Math.PI * u);
+    j = mixJ(base, lie, u);
+    for (const k in j) if (!/^foot(Dir|Pitch)/.test(k)) j[k] = add(j[k], [0, lift, 0]);
+  } else if (t < tUp) { j = lie; hold = lerp3(lie.handL, lie.handR, 0.5); }
+  else {   // up onto a knee, then onto his feet into whatever comes next (the throw)
+    const v = (t - tUp) / DIVE.up, kn = kneelFig(res.point, dir);
+    j = v < 0.5 ? mixJ(lie, kn, smooth(v / 0.5)) : mixJ(kn, base, smooth((v - 0.5) / 0.5));
+    const mid = lerp3(j.handL, j.handR, 0.5);
+    hold = a && a.hold && v > 0.5 ? (v > 0.97 ? a.hold : lerp3(mid, j.handR, smooth(clamp((v - 0.5) / 0.4, 0, 1)))) : mid;
+  }
+  return { face: a ? a.face : face, crouch: 0, handL: j.handL, handR: j.handR, clipJ: j, w: 1, hold };
+}
+function fielderActCore(f) {
   const pl = ball && ball.play, res = pl && pl.res;
   if (!res || res.fielder !== f || res.t == null || (res.kind !== 'caught' && res.kind !== 'runs')) return null;
   const t = pl.t, tc = res.t, pos = f.pos;
@@ -4075,6 +4284,25 @@ function fielderAct(f) {
   const back = at(face, -0.35, -0.32, 1.7), release = at(face, 0.38, -0.2, 1.9), follow = at(face, 0.5, 0.18, 0.85);
   const leftAim = at(face, 0.55, 0.12, 1.5), leftRest = at(face, 0.15, 0.24, 0.95);
   const rise = smooth(clamp((t - tc) / Math.max(0.2, ts - 0.32 - tc), 0, 1));
+  if (res.throwKind === 'under' && !air) {   // close in: stays low and flicks it underarm, face-on to the stumps
+    const LOW = 0.5, wind = ts - 0.3, F = [Math.sin(face), 0, Math.cos(face)], L = [Math.cos(face), 0, -Math.sin(face)];
+    const cock = at(face, 0.2, -0.2, 0.62), backH = at(face, -0.28, -0.32, 0.42), rel = at(face, 0.55, -0.1, 0.78), fin = at(face, 0.72, -0.05, 1.3);
+    const done = ts + 0.5;
+    if (t > done + 0.4) return null;
+    let hr, low = LOW; const w = 1;
+    if (t < wind) { const r = smooth(clamp((t - tc) / Math.max(0.15, wind - tc), 0, 1)); hr = lerp3(pick, cock, r); low = 1 - (1 - LOW) * r; }
+    else if (t < ts - 0.12) hr = lerp3(cock, backH, smooth((t - wind) / 0.18));
+    else if (t < ts) hr = lerp3(backH, rel, smooth((t - (ts - 0.12)) / 0.12));
+    else if (t < done) { hr = lerp3(rel, fin, smooth(clamp((t - ts) / 0.22, 0, 1))); low = LOW * (1 - smooth((t - ts) / 0.5)); }
+    else { const r = smooth((t - done) / 0.4); hr = lerp3(fin, at(face, 0.02, -0.24, 0.93), r); low = 0; }   // arm down to his side
+    const J = gatherFig(pos, face, low, null);
+    let hl = lerp3(J.handL, at(face, 0.2, 0.3, 0.75), smooth(clamp((t - wind) / 0.25, 0, 1)));
+    if (t > done) hl = lerp3(hl, at(face, 0.02, 0.24, 0.93), smooth((t - done) / 0.4));
+    J.handR = hr; J.handL = hl;
+    J.elR = ik(J.shR, hr, UPARM, FOREARM, add(mul(L, -0.6), add([0, -0.6, 0], mul(F, -0.2))));
+    J.elL = ik(J.shL, hl, UPARM, FOREARM, add(mul(L, 0.8), [0, -0.5, 0]));
+    return { face, crouch: 0, handL: hl, handR: hr, clipJ: J, w, hold: t < ts + 0.04 ? hr : null };   // (held just past ts so the throw starts from his hand)
+  }
   if (t < ts - 0.32) {   // up out of the gather, the ball coming to the chest in the throwing hand
     const hr = lerp3(pick, chest, rise);
     if (!air) { const J = gatherFig(pos, face, 1 - rise, hr); J.handL = lerp3(J.handL, leftRest, rise); J.elL = ik(J.shL, J.handL, UPARM, FOREARM, [0, -1, 0]);
@@ -4161,6 +4389,35 @@ function cheerFig(pos, face, t, seed) {
   const p = [pos[0], hop, pos[2]], one = seed % 2 > 1;     // some punch one fist, some throw both arms up
   const hand = (s, hi) => add(p, add(add(mul(L, s * lerp(0.25, 0.32, up)), mul(F, 0.08)), [0, lerp(0.95, hi, up), 0]));
   return figure(p, face, { handL: hand(1, one ? 1.5 : 2.2), handR: hand(-1, 2.25), seed });
+}
+// After a wicket the fielders near the bowler (or near the catcher, for a catch in the field) run in to him: high fives, a few
+// little jumps, then pats on the back. He stays where he is, celebrating (cheerFig); the keeper stays put while he has the ball.
+const HUDDLE = { reach: 30, speed: 5.2, ring: 1.05 };
+function huddleCentre(c) {
+  const by = c.out.by;
+  if (c.out.how === 'caught' && by && !by.keeper) return { f: by, at: fielderDisplayPos(by) };
+  const bf = fielders.find(f => f.bowler);
+  return { f: bf, at: ball && ball.play && bf ? fielderDisplayPos(bf) : bowlerState().pos };
+}
+function huddleFig(f, start, fi, hc, c) {
+  if (f === hc.f || (f.keeper && (appealed(c) || c.out.how === 'run out'))) return null;
+  const C = hc.at, d0 = dist2(start, C);
+  if (d0 > HUDDLE.reach || d0 < 0.5) return null;
+  const t = phaseT - (appealed(c) ? sigStart(c) + 0.25 : 0.55) - (fi % 4) * 0.08;
+  if (t < 0) return null;
+  const ang = Math.atan2(start[0] - C[0], start[2] - C[2]) + ((fi % 3) - 1) * 0.35;
+  const slot = [C[0] + Math.sin(ang) * HUDDLE.ring, 0, C[2] + Math.cos(ang) * HUDDLE.ring];
+  const D = dist2(start, slot), T = Math.max(0.3, D / HUDDLE.speed), at = lerp3(start, slot, clamp(t / T, 0, 1)), arrive = t - T;
+  const runFace = angTo(start, slot), toC = angTo(at, C), clip = D > 6 ? 'sprint' : 'jog';
+  const running = (w, face) => runFig(figure(at, face, { seed: fi + 1 }), at, face, D * clamp(t / T, 0, 1), w, clip);
+  if (arrive < 0) return { j: running(1, runFace), at };
+  // there: turned to him, hands up for the high fives (with little jumps), then down to pat him on the back
+  const a = smooth(clamp(arrive / 0.25, 0, 1)), face = turnTo(runFace, toC, a), F = [Math.sin(face), 0, Math.cos(face)], L = [Math.cos(face), 0, -Math.sin(face)];
+  const hop = arrive < 1.2 ? Math.max(0, Math.sin(arrive * 9 + fi)) * 0.1 : 0, p = [at[0], hop, at[2]];
+  const pat = smooth(clamp((arrive - 1.1) / 0.4, 0, 1)), tap = 0.05 * Math.sin(arrive * 14) * pat;
+  const hand = s => add(p, add(add(mul(F, lerp(0.35, 0.5, pat)), mul(L, s * lerp(0.17, 0.12, pat))), [0, lerp(lerp(1.0, 1.95, a), 1.45 + tap, pat), 0]));
+  const j = figure(p, face, { handL: hand(1), handR: hand(-1), seed: fi + 1 });
+  return { j: a < 1 ? mixJ(running(1, face), j, a) : j, at };
 }
 // an appeal to the umpire: turned to him, up on the toes, one arm thrust up and forward, the other out
 function appealFig(pos, face, t, seed) {
@@ -4297,14 +4554,25 @@ function livePeople() {
     const stroke=ball && ball.swing;
     const width=authoredWidth || (stagedStroke(stroke?.fam) && stroke.keys
       ? CricketMotion.cutWidth(norm(sub(tip,hands)),stroke.keys.find(k=>Math.abs(k[0]-SWING_LAG)<1e-8)[1].bd) : [1,0,0]);
-    out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look, bat: { carry: false, hands, tip, contact,width } });
+    const iw = idleWalk();
+    if (iw) {   // between balls: a few steps toward square leg, a fiddle with the gloves, and back
+      const fw = [Math.sin(iw.face), 0, Math.cos(iw.face)];
+      let wj = figure(iw.pos, iw.face, iw.gloves > 0 ? { handL: add(iw.pos, add(mul(fw, 0.28), [0.03, 1.0, 0])), handR: add(iw.pos, add(mul(fw, 0.3), [-0.06, 0.98, 0])), seed: 9 } : { seed: 9 });
+      wj = runFig(wj, iw.pos, iw.face, iw.dist, iw.walk, 'walk');
+      const wh = wj.handR, wt = add(wh, add([0, -0.72, 0], mul(fw, 0.22)));
+      j = mixJ(j, wj, iw.w); hands = lerp3(hands, wh, iw.w); tip = lerp3(tip, wt, iw.w);
+      if (iw.w > 0.5) { out.push({ j, at: iw.pos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look: null, bat: { carry: true, carryHand: 'r', hands, tip } }); }
+      else out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look, bat: { carry: false, hands, tip, contact, width } });
+    } else out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look, bat: { carry: false, hands, tip, contact,width } });
   }
   // the non-striker
-  const ns = runner(PITCH - 0.6, -1.5), ndw = diveW(ns);
-  const nsPos = ns ? ns.pos : [-1.7, 0, PITCH - 0.4];
-  const nsFace = ndw > 0 ? diveFace(ns) : ns ? ns.face : Math.PI, nsForward = [Math.sin(nsFace), 0, Math.cos(nsFace)];
+  const ns = runner(PITCH - 0.6, -1.5), ndw = diveW(ns), nb = nsBackup();
+  if (ns && ns.leg === 0) ns.pos = [ns.pos[0], 0, ns.pos[2] - NS_BACK * (1 - smooth(clamp(ns.u, 0, 1)))];   // he set off from where he had backed up to
+  const nsPos = ns ? ns.pos : [lerp(-1.7, -1.5, nb.b / NS_BACK), 0, PITCH - 0.4 - nb.b];
+  const nsFace = ndw > 0 ? diveFace(ns) : ns ? ns.face : nb.out ? Math.PI : 0, nsForward = [Math.sin(nsFace), 0, Math.cos(nsFace)];
   let nj = figure(nsPos, nsFace, { run: ns ? ns.runWeight : 0, phase: clock * 11 + 1,gaitDistance:ns?ns.distance+1.9:undefined, seed: 20 });
   if (ns) nj = runFig(nj, nsPos, nsFace, ns.distance + 1.9, ns.runWeight);
+  else if (nb.walk > 0) nj = runFig(nj, nsPos, nsFace, nb.out ? nb.b : NS_BACK * 2 - nb.b, nb.walk, 'walk');
   let nHand = nj.handL, nTip = add(nj.handL, add([0.1, -0.75, 0], mul(nsForward, 0.25)));
   if (ndw > 0) { const s = stretchFig(nsPos, nsFace, 'l'); nj = mixJ(nj, s.j, ndw); nHand = lerp3(nHand, s.hand, ndw); nTip = lerp3(nTip, s.tip, ndw); }
   out.push({ j: nj, at: nsPos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.non : 1), look: null,
@@ -4322,7 +4590,7 @@ function livePeople() {
     const bw = bowlerState(), rj = react({ bowler: true }, bw.pos, Math.PI);
     out.push({ j: rj || bw.j, at: bw.pos, team: 'bowl', bowler: true, pid: fid(inn ? inn.bowler : 0), look: null });
   }
-  const wi = walkIn();
+  const wi = walkIn(), hc = won && phase === 'result' ? huddleCentre(cel) : null;
   for (const [fi, f] of fielders.entries()) {
     if (f.bowler && !afterHit) continue;
     let pos = fielderDisplayPos(f, wi), run = f.run, ph = f.phase;
@@ -4331,6 +4599,12 @@ function livePeople() {
       if (wi.moving) { run = Math.max(run, 0.3); ph = clock * 7 + f.phase; }
     }
     const act = fielderAct(f), caughtCel = act && act.u !== undefined && act.u >= 1;
+    const hj = hc && (!act || caughtCel) ? huddleFig(f, pos, fi, hc, cel) : null;
+    if (hj) {
+      if (f.keeper) kHand = null;
+      out.push({ j: hj.j, at: hj.at, team: 'bowl', keeper: !!f.keeper, bowler: !!f.bowler, pid: fid(f.who), look: null });
+      continue;
+    }
     const rj = f.run < 0.3 && (!act || caughtCel) ? react(f, pos, act ? act.face : f.face) : null;
     if (f.keeper) kHand = rj ? (rj.handL[1] > rj.handR[1] ? rj.handL : rj.handR) : null;   // the ball he took goes up with his raised glove
     if (act && !rj) {

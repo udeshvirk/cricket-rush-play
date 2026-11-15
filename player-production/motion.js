@@ -117,16 +117,18 @@
       h:add(start.h,[.01,.025,-.025]),bd:slerp(unit(start.bd),unit([-.4,.76,-.51]),.3)};
     const slot={...blend(start,contact,.65),hy:mix(start.hy,contact.hy,.85),sy:mix(start.sy,contact.sy,.45),
       h:[mix(start.h[0],h[0],.7),h[1]+.1,h[2]-.12],bd:unit([-.18+dx*.12,-.32,-.92])};
-    const through={...contact,pel:add(pelvis,[0,.025,.02]),hy:p[3]+12,sy:p[4]+12,lean:20+low*30,side:3,
+    const through={...contact,pel:add(pelvis,[0,.005,.05]),hy:p[3]+12,sy:p[4]+12,lean:22+low*30,side:5,
       h:add(h,[dx*.16,.035,dz*.20]),bd:unit([dx*.55-.04,-.65,.75*dz]),rearFootPitch:.23};
-    const extension={...contact,pel:add(pelvis,[0,.055,.035]),hy:p[3]+22,sy:p[4]+28,lean:14,side:1,
+    const extension={...contact,pel:add(pelvis,[0,loft?.04:.015,.08]),hy:p[3]+22,sy:p[4]+28,lean:loft?14:19,side:loft?2:5,
       h:add(h,[dx*.24,.18+(loft?.15:0),.30*dz]),bd:unit([dx*.9-.04,loft?.4:.12,.96*dz]),rearFootPitch:.3};
-    const height=loft?Math.max(1.60,p[5]+.15):p[5];
-    const finish={...contact,pel:[pelvis[0]+.015,.88,1.04-.12*Math.max(0,(-angle-45)/55)],
-      hy:p[3]+30,sy:p[6],lean:8,side:0,rearFootPitch:.3,
+    // along the ground the drive is checked: the bat stops pointing up in front, at the shoulders; lofted, it goes right through
+    const height=loft?Math.max(1.60,p[5]+.15):p[5]-.1;
+    // weight stays on the bent front knee, head and front shoulder over it (a lofted drive comes up taller)
+    const finish={...contact,pel:[pelvis[0]+.015,loft?.86:.82,1.1-.12*Math.max(0,(-angle-45)/55)],
+      hy:p[3]+30,sy:p[6],lean:loft?10:16,side:loft?2:5,rearFootPitch:.38,
       h:[pelvis[0]-.06+dx*.25,height,1.25-.15*Math.abs(dx)],
-      bd:unit([dx*.9-.12,loft?.86:mix(.30,.90,Math.max(0,1-Math.abs(angle)/100)),.30])};
-    const settle={...finish,h:add(finish.h,[0,-.06,0]),lean:7,rearFootPitch:.18};
+      bd:loft?unit([dx*.9-.12,.86,.30]):unit([dx*.55-.1,mix(.55,.95,Math.max(0,1-Math.abs(angle)/100)),.55])};
+    const settle={...finish,pel:add(finish.pel,[0,.03,-.02]),h:add(finish.h,[0,-.06,loft?0:.06]),lean:loft?8:12,side:loft?1:3,rearFootPitch:.25};
     return [[0,start],[impact*.26,load],[impact*.63,slot],[impact,contact],
       [impact+.075,through],[impact+.18,extension],[impact+.42,finish],
       [impact+.95,settle],[impact+1.6,stance]];
@@ -264,8 +266,8 @@
       hy:-94,sy:-100,lean:15+12*low,side:3,h,bd,kpL:[-1,0,.3],kpR:[-1,0,0],rearFootPitch:0,batRoll:.35};
     const load={...contact,pel:start.pel.map((v,i)=>v+(contact.pel[i]-v)*.35),
       hy:start.hy+(contact.hy-start.hy)*.3,sy:start.sy+(contact.sy-start.sy)*.2,
-      h:start.h.map((v,i)=>v+(h[i]-v)*.25),bd:slerp(unit(start.bd),unit([-.5,.6,.5]),.22),batRoll:.08};
-    const slot={...contact,sy:-96,h:add(h,[.015,.07,.01]),bd:unit([-.5,-.8,.32]),batRoll:.25};
+      h:start.h.map((v,i)=>v+(h[i]-v)*.25),bd:slerp(unit(start.bd),unit([-.5,.6,.5]),.6),batRoll:.08};
+    const slot={...contact,sy:-96,h:add(h,[.015,.07,.01]),bd:unit([-.5,-.6,.45]),batRoll:.25};
     const through={...contact,sy:-106,h:add(h,[-.035,-.015,-.05]),bd:unit([-.44,-.88,-.12]),batRoll:.42};
     const finish={...contact,sy:-112,lean:14+8*low,
       h:[h[0]-.055,h[1]-.045,h[2]-.10],bd:unit([-.48,-.86,-.16]),batRoll:.4};
@@ -297,20 +299,20 @@
   // then release the wrists into a leg-side extension before wrapping up.
   function flickKeys({start,target,stance,aim=45,loft=false,impact=.15}) {
     const shift=clamp(target[0],-.3,.3),low=clamp((.6-target[1])/.4,0,1);
-    const fr=[clamp(.49+shift,.12,.78),0,1.3];
+    const fr=[clamp(.53+shift*1.1,.12,.86),0,1.3];
     const bd=unit([.12,-1,-.06]),h=add(target,scale(bd,-clamp((1.4-target[1])/-bd[1],.2,.52+.06*low)));
     const contact={...start,fr,pel:[.51+shift*.45,.85-low*.055,1.0],hy:-69,sy:-75,
       lean:23+low*5,side:8,h,bd,kpL:[-.25,0,1],rearFootPitch:0,batRoll:0};
     const load={...contact,pel:start.pel.map((v,i)=>v+(contact.pel[i]-v)*.35),
       hy:-82,sy:-88,h:add(start.h,[-.025,.035,0]),bd:slerp(unit(start.bd),unit([-.3,.75,-.58]),.3),batRoll:0};
     const slot={...contact,hy:-74,sy:-82,h:add(h,[-.025,.12,-.085]),bd:unit([-.16,-.7,-.69])};
-    const through={...contact,hy:-59,sy:-53,lean:20,side:5,
+    const through={...contact,hy:-54,sy:-42,lean:20,side:5,
       h:add(h,[.14,.055,.14]),bd:unit([.62,-.66,.43]),batRoll:.12,rearFootPitch:.1};
     const square=clamp((aim-45)/80,0,1);
-    const extension={...contact,hy:-47,sy:-28,lean:16,side:3,
+    const extension={...contact,hy:-43,sy:-16,lean:16,side:3,
       h:[.55+shift*.4,loft?1.36:1.15,1.4-square*.08],
-      bd:unit([.87,loft?.25:-.18,.46-square*.2]),batRoll:loft?.16:.35,rearFootPitch:.2};
-    const finish={...extension,pel:[.53+shift*.4,.91,1.03],hy:-38,sy:-12,lean:10,side:1,
+      bd:unit([.87,loft?.25:-.3,.46-square*.2]),batRoll:loft?.16:.35,rearFootPitch:.2};
+    const finish={...extension,pel:[.53+shift*.4,loft?.89:.84,1.08],hy:-38,sy:-12,lean:loft?11:16,side:loft?1:4,
       h:[.66+shift*.35,loft?1.67:1.36,1.15],bd:unit([.75,loft?.62:.35,-.48]),batRoll:loft?.22:.55};
     const settle={...finish,sy:-18,h:add(finish.h,[0,-.055,0]),batRoll:.25};
     return [[0,{...start,batRoll:0}],[impact*.3,load],[impact*.7,slot],[impact,contact],
