@@ -3,14 +3,14 @@
 (function(root){
  const clubs=[
  ['csk','Chennai Super Kings','CSK','#ebcb3a','#215177'],
- ['dc','Delhi Capitals','DC','#3d77d6','#a92c49'],
- ['gt','Gujarat Titans','GT','#294c70','#d0ac68'],
- ['kkr','Kolkata Knight Riders','KKR','#7754a5','#d7b566'],
+ ['dc','Delhi Capitals','DC','#d0313f','#1d3f8f'],
+ ['gt','Gujarat Titans','GT','#0f5f6e','#d0ac68'],
+ ['kkr','Kolkata Knight Riders','KKR','#5a2d91','#d7b566'],
  ['lsg','Lucknow Super Giants','LSG','#55a0c1','#d75a32'],
  ['mi','Mumbai Indians','MI','#3975bd','#d2a54b'],
- ['pbks','Punjab Kings','PBKS','#d44e5e','#b8b4ac'],
+ ['pbks','Punjab Kings','PBKS','#c9ccd3','#c8202f'],
  ['rr','Rajasthan Royals','RR','#e36aa6','#443e9b'],
- ['rcb','Royal Challengers Bengaluru','RCB','#c64351','#252f48'],
+ ['rcb','Royal Challengers Bengaluru','RCB','#24242c','#d1323e'],
  ['srh','Sunrisers Hyderabad','SRH','#e9843d','#383c4d']];
  const names=['Varan','Darev','Keshan','Mirov','Talven','Nayak','Ravell','Joren','Sahvin','Deyran','Kovell'];
  const initials=['A','B','C','D','E','F','G','H','J','K'];

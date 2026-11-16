@@ -471,6 +471,13 @@ window.Cricket3D = function (G) {
   // Coordinates are metres from the head bone (the top of the neck), +z = the face. Brow 0.135 up, eyes 0.10, nose tip 0.06 (0.146 out),
   // chin -0.005, ears +-0.085 across at 0.06, top of the hair 0.235.
   const HEAD_SIZE = +(renderQuery.get('head')) || (LOOK_PLAYER ? 1.1 : 1.3);
+  // how big to draw a head at p: HEAD_SIZE when it is small on screen, 1 when it is big (see Person.fit); ?head= forces one size
+  function headSizeAt(p) {
+    if (renderQuery.get('head')) return HEAD_SIZE;
+    const d = Math.hypot(p.x - cam.pos[0], p.y - cam.pos[1], p.z - cam.pos[2]);   // (on narrow screens the lens is wider: camera.fov)
+    const frac = 0.25 / (2 * Math.max(0.5, d) * Math.tan(Math.max(cam.fov, camera.fov || 0) * Math.PI / 360));   // a head's share of the screen height
+    return 1 + (HEAD_SIZE - 1) * T.MathUtils.smoothstep(0.06 - frac, 0, 0.03);
+  }
   const HEADGEAR = (() => {
     const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
     const merge = geos => {   // one geometry from several (positions, normals)
@@ -662,11 +669,16 @@ window.Cricket3D = function (G) {
   }
   // the textured player (vendor/player-rb.js): photo-textured cloth and skin. The cloth is neutral in the texture and takes the
   // team's colours here (mask: red = shirt, green = trousers, blue = bare skin); the skin takes each player's tone
-  const RB_KEY = { body: 'rb-body-2', head: 'rb-head-2' };
+  const RB_KEY = { body: 'rb-body-2', head: 'rb-head-3' };
   // faces: [face, shade] choices per team (the shade darkens a lighter face, for more variety); any team not listed uses them all
-  const TAN = [[6, 1], [5, 1], [6, 0.82], [1, 0.6], [4, 0.58], [0, 0.6], [5, 0.85], [3, 0.56], [8, 0.7]], FAIR = [[0, 1], [1, 1], [2, 1], [3, 1], [4, 1], [8, 1], [6, 1], [1, 0.85]],
-        DARK = [[7, 1], [9, 1], [5, 0.8], [7, 0.85], [9, 1.1], [6, 0.7]], MIX = [...FAIR, [7, 1], [9, 1], [5, 1], [6, 1]];
-  const FACE_POOL = { ind: TAN, pak: TAN, sl: TAN, ban: TAN, afg: TAN, aus: FAIR, eng: FAIR, nz: FAIR, ire: FAIR, wi: DARK, sa: MIX, zim: MIX };
+  // faces 10-16 were added in November 2026 (dark-haired tan 12, bearded 14, goatee 16, blond 15, curly 10), 17-19 are older
+  // men (grey hair, grey beard, balding) for the umpires. A team's players take the pool in turn (see Person.fit), so with
+  // eleven or more entries no two teammates share a face.
+  const TAN = [[6, 1], [14, 1], [5, 1], [16, 1], [12, 0.8], [6, 0.82], [1, 0.6], [4, 0.58], [14, 0.85], [0, 0.6], [5, 0.85], [16, 0.88], [3, 0.56], [8, 0.7], [10, 0.62], [13, 0.6]],
+        FAIR = [[0, 1], [10, 1], [1, 1], [15, 1], [2, 1], [11, 1], [3, 1], [13, 1], [4, 1], [12, 1], [8, 1], [6, 1], [1, 0.85]],
+        DARK = [[7, 1], [9, 1], [5, 0.8], [16, 0.62], [7, 0.85], [14, 0.6], [9, 1.1], [6, 0.7], [12, 0.52], [16, 0.55], [14, 0.52], [1, 0.45]],
+        MIX = [...FAIR, [7, 1], [9, 1], [5, 1], [14, 1], [16, 1], [6, 1]], UMP = [[17, 1], [18, 1], [19, 1], [17, 0.8], [18, 0.85]];
+  const FACE_POOL = { ind: TAN, pak: TAN, sl: TAN, ban: TAN, afg: TAN, aus: FAIR, eng: FAIR, nz: FAIR, ire: FAIR, wi: DARK, sa: MIX, rsa: MIX, zim: MIX };
   // what is written on the shirts: one small canvas per player for the back, one per team for the chest
   const inkFor = c => (0.3 * c.r + 0.6 * c.g + 0.1 * c.b) > 0.42 ? '#141a2c' : '#ffffff';
   const CHEST = {};
@@ -682,17 +694,60 @@ window.Cricket3D = function (G) {
     g.fillText(name, 128, 112);
     return (CHEST[key] = t);
   }
+  // Facial hair, painted in the head's shader so every player can have his own without extra textures (all ten faces share
+  // one layout: eyes about 0.28 down the texture, nose tip 0.35, mouth 0.405, chin 0.48, the face from x 0.33 to 0.67).
+  // uBeard = (stubble, moustache, chin, full beard) strengths 0-1; uHair = its colour. Fine grain from a hash, so it reads as hair.
+  const FACIAL_HAIR = `
+  float fhHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float fhBlob(vec2 q, vec2 c, vec2 r, float soft) { return 1.0 - smoothstep(1.0 - soft, 1.0, length((q - c) / r)); }
+  vec3 facialHair(vec3 col, vec2 q) {
+    if (dot(uBeard, vec4(1.0)) < 0.001) return col;
+    float lips = fhBlob(q, vec2(0.5, 0.406), vec2(0.046, 0.0125), 0.5);
+    float lower = smoothstep(0.372, 0.392, q.y) * (1.0 - smoothstep(0.50, 0.53, q.y));   // from under the nose to under the chin
+    float full = fhBlob(q, vec2(0.5, 0.43), vec2(0.165, 0.095), 0.35) * lower;
+    float burns = fhBlob(q, vec2(0.335, 0.37), vec2(0.022, 0.07), 0.6) + fhBlob(q, vec2(0.665, 0.37), vec2(0.022, 0.07), 0.6);
+    float tache = fhBlob(q, vec2(0.5, 0.389), vec2(0.06, 0.013), 0.55);
+    float chin = fhBlob(q, vec2(0.5, 0.448), vec2(0.052, 0.04), 0.5);
+    float grain = 0.55 + 0.45 * fhHash(floor(q * 900.0));
+    float a = max(max(uBeard.x * 0.62 * max(full, burns * 0.8) * (0.4 + 0.6 * step(0.45, fhHash(floor(q * 1400.0) + 7.0))), uBeard.y * tache), max(uBeard.z * chin, uBeard.w * max(full, burns)));
+    a *= (1.0 - lips * 0.9) * grain;
+    return mix(col, uHair * (0.7 + 0.6 * grain), clamp(a, 0.0, 0.92));
+  }
+`;
+  // each player's own look from his name: facial hair (some clean-shaven, some stubble, a moustache, a goatee or a full beard),
+  // its colour, and his head's shape; ?beard=s,m,c,f forces one facial hair for everyone, ?hshape=w,l,d one head shape (for checking)
+  const LOOKS = {};
+  function playerLook(name) {
+    if (LOOKS[name]) return LOOKS[name];
+    let h = 2166136261; for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619);
+    const r = k => ((h >>> (k * 5)) & 1023) / 1023;
+    const forced = renderQuery.get('beard'), b = new T.Vector4();
+    if (forced) b.fromArray(forced.split(',').map(Number).concat([0, 0, 0, 0]).slice(0, 4));
+    else { const x = r(0);
+      if (x < 0.34) {}                                           // clean-shaven
+      else if (x < 0.6) b.set(0.7 + 0.3 * r(1), 0, 0, 0);       // stubble
+      else if (x < 0.72) b.set(0.5, 0.9, 0, 0);                 // moustache
+      else if (x < 0.82) b.set(0.4, 0.85, 0.95, 0);             // moustache and goatee
+      else b.set(0.5, 0.8, 0.8, 0.75 + 0.25 * r(2));             // full beard
+    }
+    const hair = new T.Color().setRGB(0.045, 0.032, 0.024).multiplyScalar(0.8 + 0.5 * r(3));
+    const shape = name ? [0.94 + 0.12 * r(4), 0.96 + 0.09 * r(5), 0.97 + 0.06 * r(6)] : [1, 1, 1];
+    return LOOKS[name] = { beard: b, hair, shape };
+  }
   function rbMaterial(src, body) {
-    const m = new T.MeshStandardMaterial({ map: src.map, roughness: body ? (LOOK_REFINED ? 0.86 : 0.82) : (LOOK_REFINED ? 0.68 : 0.62), metalness: 0 });
+    const m = new T.MeshStandardMaterial({ map: src.map, roughness: body ? (LOOK_REFINED ? 0.86 : 0.82) : (LOOK_REFINED ? 0.72 : 0.7), metalness: 0 });
     const u = m.userData.u = { uMask: { value: RIG.rbMask }, uShirt: { value: new T.Color(1, 1, 1) }, uPants: { value: new T.Color(1, 1, 1) },
-                               uTrim: { value: new T.Color(1, 1, 1) }, uSkin: { value: new T.Color(1, 1, 1) } };
+                               uTrim: { value: new T.Color(1, 1, 1) }, uSkin: { value: new T.Color(1, 1, 1) },
+                               uBeard: { value: new T.Vector4() }, uHair: { value: new T.Color(0.05, 0.035, 0.025) } };
     m.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, u);
-      sh.fragmentShader = 'uniform sampler2D uMask;\nuniform vec3 uShirt, uPants, uTrim, uSkin;\n' + sh.fragmentShader.replace('#include <map_fragment>', body ? `#include <map_fragment>
+      sh.fragmentShader = 'uniform sampler2D uMask;\nuniform vec3 uShirt, uPants, uTrim, uSkin, uHair;\nuniform vec4 uBeard;\n' + FACIAL_HAIR + sh.fragmentShader.replace('#include <map_fragment>', body ? `#include <map_fragment>
   vec4 mk = texture2D(uMask, vUv);
   float tr = mk.r * mk.g;   // red and green together = the trim (collar, cuffs, side panels, trouser stripe)
   diffuseColor.rgb *= mix(vec3(1.0), uShirt, mk.r - tr) * mix(vec3(1.0), uPants, mk.g - tr) * mix(vec3(1.0), uTrim, tr) * mix(vec3(1.0), uSkin, mk.b);` : `#include <map_fragment>
-  if (!(vUv.x < 0.36 && vUv.y > 0.6)) diffuseColor.rgb *= uSkin;   // not the eyes and teeth`);
+  if (!(vUv.x < 0.36 && vUv.y > 0.6)) { diffuseColor.rgb *= uSkin; diffuseColor.rgb = facialHair(diffuseColor.rgb, vUv); }   // not the eyes and teeth`)
+        .replace('#include <emissivemap_fragment>', body ? '#include <emissivemap_fragment>' : `#include <emissivemap_fragment>
+  totalEmissiveRadiance += diffuseColor.rgb * vec3(0.16, 0.08, 0.05);   // a faint warm glow, so the shadow side of a face isn't flat dark (light through skin)`);
     };
     m.customProgramCacheKey = () => RB_KEY[body ? 'body' : 'head'];
     return m;
@@ -1283,7 +1338,12 @@ window.Cricket3D = function (G) {
       const fittedHeadgear=this.isProduction && PLAYER_FIT;
       this.helmet.position.set(0,fittedHeadgear ? -.025 : 0,fittedHeadgear ? .012 : 0);
       this.helmet.scale.set(fittedHeadgear ? .94 : 1,fittedHeadgear ? .80 : 1,fittedHeadgear ? .90 : 1);
-      B.head.scale.setScalar(HEAD_SIZE); this.headG.scale.setScalar(HEAD_SIZE);   // a slightly bigger head, so faces read from the match camera
+      // a bigger head only where the head is small on screen (the long-lens match camera, under about 3% of the screen's height),
+      // true size in close-ups (the toss, wicket close-ups, replays: over about 6%), so close up they don't look like bobbleheads
+      const headK = headSizeAt(pos.head);
+      // his own head shape (width, length, depth: bone x, y, z); the helmet, cap or hat grows to the largest so nothing pokes through
+      const hs = renderQuery.get('hshape') ? renderQuery.get('hshape').split(',').map(Number) : playerLook(pr.pid || '').shape;
+      B.head.scale.set(headK * hs[0], headK * hs[1], headK * hs[2]); this.headG.scale.setScalar(headK * Math.max(1, hs[0], hs[1], hs[2]));
       // fingers: a fist round the bat handle (gloves), relaxed otherwise
       const curl = rig.curl[(pr.team === 'bat' && pr.gloves) || pr.keeper ? 'grip' : 'relax'];
       for (const k in curl) if (B[k]) B[k].quaternion.copy(curl[k]);
@@ -1295,9 +1355,13 @@ window.Cricket3D = function (G) {
       if (P.RB_Body) {
         const team = G.inn && !pr.umpire ? G.inn[pr.team === 'bat' ? 'bat' : 'bowl'] : null, ub = P.RB_Body.material.userData.u, uh = P.RB_Head.material.userData.u;
         ub.uShirt.value.copy(shirt.color); ub.uPants.value.copy(pants.color); ub.uTrim.value.copy(shirt === M3.batShirt ? M3.batTrim.color : shirt === M3.umpShirt ? M3.umpPants.color : M3.bowlTrim.color);
-        const pool = (team && FACE_POOL[team.id]) || MIX, [fi, shade] = pool[(pr.faceKey ?? skinIdx) % pool.length], face = RIG.faces[fi % RIG.faces.length];
+        const pool = pr.umpire ? UMP : (team && FACE_POOL[team.id]) || MIX, at = team ? team.players.findIndex(p => p.name === pr.pid) : -1;
+        const [fi, shade] = pool[(pr.faceKey ?? (at >= 0 ? at + hash(team.id) : skinIdx)) % pool.length], face = RIG.faces[fi % RIG.faces.length];
         if (face && face.map && P.RB_Head.material.map !== face.map) { P.RB_Head.material.map = face.map; P.RB_Head.material.needsUpdate = true; }
-        uh.uSkin.value.setRGB(shade, shade * (0.9 + 0.1 * shade), shade * (0.82 + 0.18 * shade));
+        // a darker tone from a lighter photo: take away more blue than red, as real darker skin has (an even darkening goes grey)
+        uh.uSkin.value.setRGB(shade, Math.pow(shade, 1.22), Math.pow(shade, 1.5));
+        const look = playerLook(pr.pid || '');   // his own facial hair (from his name)
+        uh.uBeard.value.copy(look.beard); uh.uHair.value.copy(look.hair);
         if (face && RIG.bodySkin) ub.uSkin.value.setRGB(face.skin.r / RIG.bodySkin.r, face.skin.g / RIG.bodySkin.g, face.skin.b / RIG.bodySkin.b).multiply(uh.uSkin.value);
         const ink = inkFor(shirt.color);
         drawBack(this.back, pr.umpire ? '' : pr.pid || '', ink);
