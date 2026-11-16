@@ -714,22 +714,16 @@ window.Cricket3D = function (G) {
     return mix(col, uHair * (0.7 + 0.6 * grain), clamp(a, 0.0, 0.92));
   }
 `;
-  // each player's own look from his name: facial hair (some clean-shaven, some stubble, a moustache, a goatee or a full beard),
-  // its colour, and his head's shape; ?beard=s,m,c,f forces one facial hair for everyone, ?hshape=w,l,d one head shape (for checking)
+  // each player's own look from his name: his head's shape (and painted facial hair, off unless ?beard= asks for it); ?beard=s,m,c,f forces one facial hair for everyone, ?hshape=w,l,d one head shape (for checking)
   const LOOKS = {};
   function playerLook(name) {
     if (LOOKS[name]) return LOOKS[name];
     let h = 2166136261; for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619);
     const r = k => ((h >>> (k * 5)) & 1023) / 1023;
-    const forced = renderQuery.get('beard'), b = new T.Vector4();
+    const forced = renderQuery.get('beard'), b = new T.Vector4(0, 0, 0, 0);   // (a bare Vector4 is 0,0,0,1: a full beard)
     if (forced) b.fromArray(forced.split(',').map(Number).concat([0, 0, 0, 0]).slice(0, 4));
-    else { const x = r(0);
-      if (x < 0.34) {}                                           // clean-shaven
-      else if (x < 0.6) b.set(0.7 + 0.3 * r(1), 0, 0, 0);       // stubble
-      else if (x < 0.72) b.set(0.5, 0.9, 0, 0);                 // moustache
-      else if (x < 0.82) b.set(0.4, 0.85, 0.95, 0);             // moustache and goatee
-      else b.set(0.5, 0.8, 0.8, 0.75 + 0.25 * r(2));             // full beard
-    }
+    // painted beards are off: on top of a photo they looked drawn on (owner, November 2026). Beards come from the photo faces
+    // that have real ones (14, 16, 18); ?beard= still tries the painted kind.
     const hair = new T.Color().setRGB(0.045, 0.032, 0.024).multiplyScalar(0.8 + 0.5 * r(3));
     const shape = name ? [0.94 + 0.12 * r(4), 0.96 + 0.09 * r(5), 0.97 + 0.06 * r(6)] : [1, 1, 1];
     return LOOKS[name] = { beard: b, hair, shape };
@@ -738,7 +732,7 @@ window.Cricket3D = function (G) {
     const m = new T.MeshStandardMaterial({ map: src.map, roughness: body ? (LOOK_REFINED ? 0.86 : 0.82) : (LOOK_REFINED ? 0.72 : 0.7), metalness: 0 });
     const u = m.userData.u = { uMask: { value: RIG.rbMask }, uShirt: { value: new T.Color(1, 1, 1) }, uPants: { value: new T.Color(1, 1, 1) },
                                uTrim: { value: new T.Color(1, 1, 1) }, uSkin: { value: new T.Color(1, 1, 1) },
-                               uBeard: { value: new T.Vector4() }, uHair: { value: new T.Color(0.05, 0.035, 0.025) } };
+                               uBeard: { value: new T.Vector4(0, 0, 0, 0) }, uHair: { value: new T.Color(0.05, 0.035, 0.025) } };
     m.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, u);
       sh.fragmentShader = 'uniform sampler2D uMask;\nuniform vec3 uShirt, uPants, uTrim, uSkin, uHair;\nuniform vec4 uBeard;\n' + FACIAL_HAIR + sh.fragmentShader.replace('#include <map_fragment>', body ? `#include <map_fragment>
