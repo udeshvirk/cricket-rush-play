@@ -36,6 +36,17 @@
     const dt=times[i+1]-times[i],u2=u*u,u3=u2*u;
     return (2*u3-3*u2+1)*values[i]+(u3-2*u2+u)*dt*slope(i)+(-2*u3+3*u2)*values[i+1]+(u3-u2)*dt*slope(i+1);
   }
+  // a key pose part way from a to b: numbers and points mixed, the bat's direction turned on the sphere (an in-between key,
+  // so a big turn of the bat is spread over the time instead of happening between two keys)
+  function between(a,b,u){
+    const out={...a};
+    for(const k of Object.keys(b)){const x=a[k],y=b[k];
+      if(x===undefined)out[k]=y;
+      else if(k==='bd')out[k]=slerp(unit(x),unit(y),u);
+      else if(Array.isArray(x))out[k]=x.map((v,i)=>v+(y[i]-v)*u);
+      else if(typeof x==='number')out[k]=x+(y-x)*u;}
+    return out;
+  }
   function prepare(keys){
     const times=keys.map(k=>k[0]),properties=new Set(keys.flatMap(k=>Object.keys(k[1]))),channels={};
     for(const key of properties){
@@ -174,8 +185,9 @@
       h:[.92+shift,loft?1.36:1.14,1.14],bd:unit([.48,loft?.25:-.12,.87]),rearFootPitch:.12};
     // the bat wraps right round: hands up by the front shoulder, blade over its back toward the keeper (reads from the bowler's end)
     const finish={...contact,pel:[.72+shift,.82,.76],hy:4,sy:42,lean:8,rearFootPitch:.3,
-      h:[.95+shift,loft?1.3:1.16,.72],bd:unit([.75,loft?.6:.45,-.5])};   // (stays well below the hook's finish)
-    const settle={...finish,hy:-4,sy:34,h:add(finish.h,[-.03,-.06,.03]),rearFootPitch:.15};
+      h:[.95+shift,loft?1.3:1.16,.72],bd:unit([.75,loft?.6:.53,-.5])};   // (stays well below the hook's finish)
+    // settling, the blade lifts a touch as the hands come down, so it stays over the front shoulder (it went through the upper arm)
+    const settle={...finish,hy:-4,sy:34,h:add(finish.h,[-.03,-.05,.03]),bd:loft?finish.bd:unit([.68,.6,-.42]),rearFootPitch:.15};
     return [[0,start],[impact*.3,load],[impact*.66,slot],[impact,contact],
       [impact+.08,through],[impact+.20,extension],[impact+.42,finish],[impact+.85,settle],[impact+1.5,stance]];
   }
@@ -269,13 +281,14 @@
       hy:-94,sy:-100,lean:15+12*low,side:3,h,bd,kpL:[-1,0,.3],kpR:[-1,0,0],rearFootPitch:0,batRoll:.35};
     const load={...contact,pel:start.pel.map((v,i)=>v+(contact.pel[i]-v)*.35),
       hy:start.hy+(contact.hy-start.hy)*.3,sy:start.sy+(contact.sy-start.sy)*.2,
-      h:start.h.map((v,i)=>v+(h[i]-v)*.25),bd:slerp(unit(start.bd),unit([-.5,.6,.5]),.6),batRoll:.08};
+      h:start.h.map((v,i)=>v+(h[i]-v)*.25),bd:slerp(unit(start.bd),unit([-.5,-.6,.45]),.15),batRoll:.08};
     const slot={...contact,sy:-96,h:add(h,[.015,.07,.01]),bd:unit([-.5,-.6,.45]),batRoll:.25};
+    const mid=between(load,slot,.5);   // the bat starts down at once and turns evenly (no lift, then snap)
     const through={...contact,sy:-106,h:add(h,[-.035,-.015,-.05]),bd:unit([-.44,-.88,-.12]),batRoll:.42};
     const finish={...contact,sy:-112,lean:14+8*low,
       h:[h[0]-.055,h[1]-.045,h[2]-.10],bd:unit([-.48,-.86,-.16]),batRoll:.4};
     const settle={...finish,sy:-106,h:add(finish.h,[.01,.025,.02]),batRoll:.25};
-    return [[0,{...start,batRoll:0}],[impact*.33,load],[impact*.68,slot],[impact,contact],
+    return [[0,{...start,batRoll:0}],[impact*.25,load],[impact*.5,mid],[impact*.75,slot],[impact,contact],
       [impact+.095,through],[impact+.3,finish],[impact+.75,settle],[impact+1.4,{...stance,batRoll:0}]];
   }
   // Leg glance: meet the ball beside the pad and absorb its pace. Keep the
@@ -289,13 +302,14 @@
       kpL:[-.45,0,1],rearFootPitch:0,batRoll:-.12};
     const load={...contact,pel:start.pel.map((v,i)=>v+(pel[i]-v)*.4),
       hy:start.hy+(contact.hy-start.hy)*.3,sy:start.sy+(contact.sy-start.sy)*.2,
-      h:start.h.map((v,i)=>v+(h[i]-v)*.3),bd:slerp(unit(start.bd),bd,.2),batRoll:0};
+      h:start.h.map((v,i)=>v+(h[i]-v)*.3),bd:slerp(unit(start.bd),unit([-.06,-.93,-.36]),.15),batRoll:0};
     const slot={...contact,sy:-80,h:add(h,[-.015,.055,-.045]),bd:unit([-.06,-.93,-.36]),batRoll:-.04};
+    const mid=between(load,slot,.5);   // the bat starts down at once and turns evenly (no lift, then snap)
     const through={...contact,sy:-73,lean:17,h:add(h,[.025,-.015,-.025]),bd:unit([.27,-.95,-.06]),batRoll:-.25};
     const finish={...contact,pel:add(pel,[.01,.01,0]),hy:-71,sy:-66,lean:15,side:4,
       h:add(h,[.07,.025,-.055]),bd:unit([.36,-.93,.06]),batRoll:-.32};
     const settle={...finish,h:add(finish.h,[0,-.025,.015]),batRoll:-.2};
-    return [[0,{...start,batRoll:0}],[impact*.3,load],[impact*.65,slot],[impact,contact],
+    return [[0,{...start,batRoll:0}],[impact*.25,load],[impact*.5,mid],[impact*.75,slot],[impact,contact],
       [impact+.075,through],[impact+.24,finish],[impact+.8,settle],[impact+1.45,{...stance,batRoll:0}]];
   }
   // Flick: plant toward the line, bring a straight blade through the ball,
@@ -307,8 +321,9 @@
     const contact={...start,fr,pel:[.51+shift*.45,.85-low*.055,1.0],hy:-69,sy:-75,
       lean:23+low*5,side:8,h,bd,kpL:[-.25,0,1],rearFootPitch:0,batRoll:0};
     const load={...contact,pel:start.pel.map((v,i)=>v+(contact.pel[i]-v)*.35),
-      hy:-82,sy:-88,h:add(start.h,[-.025,.035,0]),bd:slerp(unit(start.bd),unit([-.3,.75,-.58]),.3),batRoll:0};
+      hy:-82,sy:-88,h:add(start.h,[-.025,.035,0]),bd:slerp(unit(start.bd),unit([-.16,-.7,-.69]),.15),batRoll:0};
     const slot={...contact,hy:-74,sy:-82,h:add(h,[-.025,.12,-.085]),bd:unit([-.16,-.7,-.69])};
+    const mid=between(load,slot,.5);   // the bat starts down at once and turns evenly (no lift, then snap)
     const through={...contact,hy:-54,sy:-42,lean:20,side:5,
       h:add(h,[.14,.055,.14]),bd:unit([.62,-.66,.43]),batRoll:.12,rearFootPitch:.1};
     const square=clamp((aim-45)/80,0,1);
@@ -318,7 +333,7 @@
     const finish={...extension,pel:[.53+shift*.4,loft?.89:.84,1.08],hy:-38,sy:-12,lean:loft?11:16,side:loft?1:4,
       h:[.66+shift*.35,loft?1.67:1.36,1.15],bd:unit([.75,loft?.62:.35,-.48]),batRoll:loft?.22:.55};
     const settle={...finish,sy:-18,h:add(finish.h,[0,-.055,0]),batRoll:.25};
-    return [[0,{...start,batRoll:0}],[impact*.3,load],[impact*.7,slot],[impact,contact],
+    return [[0,{...start,batRoll:0}],[impact*.25,load],[impact*.5,mid],[impact*.75,slot],[impact,contact],
       [impact+.075,through],[impact+.2,extension],[impact+.42,finish],[impact+.9,settle],
       [impact+1.6,{...stance,batRoll:0}]];
   }
@@ -356,10 +371,10 @@
       pel:back?[.54+shift*.6,.90-.07*low+.035*high,.55+.18*high]:[.43+shift*.5,.79-.065*low,1.01],
       hy:back?-83:-76,sy:back?-88:-82,lean:back?12+low*8:28+low*6,side:3,h,bd,
       kpL:back?[-.8,0,.5]:[-.2,0,1],kpR:[-1,0,.05],rearFootPitch:back?0:.1,batRoll:0};
-    const load={...start,pel:add(start.pel,[0,-.015,back?-.035:.02]),
-      h:add(start.h,[-.015,-.045,0]),bd:slerp(unit(start.bd),unit([-.3,.62,-.72]),.25),batRoll:0};
     const slot={...contact,lean:contact.lean-2,h:add(h,[-.015,.075,-.055]),
       bd:slerp(unit([-.25,-.4,-.88]),bd,.55)};
+    // the bat starts down at once and turns at an even pace (it used to lift first, then swing 120° in 0.06 s and stop dead)
+    const start0={...start,batRoll:0},load=between(start0,slot,.18),mid=between(start0,slot,.6);
     const highBlock=back?high:0;
     const soft={...contact,h:add(h,[0,-.012*(1-highBlock),-.025+.06*highBlock]),lean:contact.lean+1};
     const dx=Math.sin(clamp(aim,-60,55)*Math.PI/180);
@@ -367,7 +382,7 @@
       h:add(h,[dx*.17,.035,.24]),bd:unit([dx*.3-.035,-.88,.47]),rearFootPitch:.18}
       :{...soft,h:add(h,[0,-.018*(1-highBlock),-.035+.09*highBlock]),sy:contact.sy+2};
     const settle={...finish,h:add(finish.h,[0,.015,-.01])};
-    return [[0,{...start,batRoll:0}],[impact*.28,load],[impact*.68,slot],[impact,contact],
+    return [[0,start0],[impact*.25,load],[impact*.5,mid],[impact*.75,slot],[impact,contact],
       [impact+.07,soft],[impact+(push?.28:.20),finish],[impact+.78,settle],[impact+1.4,{...stance,batRoll:0}]];
   }
   const fdefKeys=args=>defenceKeys(args),bdefKeys=args=>defenceKeys(args,true),pushKeys=args=>defenceKeys(args,false,true);
