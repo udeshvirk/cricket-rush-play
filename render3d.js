@@ -74,6 +74,7 @@ window.Cricket3D = function (G) {
   };
 
   // ---------------------------------------------------------------- sky
+  let stars = null;
   const sky = new T.Mesh(new T.SphereGeometry(600, 32, 16), new T.ShaderMaterial({
     side: T.BackSide, depthWrite: false, fog: false,
     uniforms: { top: { value: new T.Color(0x0b1838) }, mid: { value: new T.Color(0x24407a) }, bot: { value: new T.Color(0x6f6f9e) } },   // late dusk: deep blue above, a pale band on the horizon
@@ -95,11 +96,14 @@ window.Cricket3D = function (G) {
       pos[i * 3] = Math.cos(e) * Math.sin(a) * r; pos[i * 3 + 1] = Math.sin(e) * r; pos[i * 3 + 2] = Math.cos(e) * Math.cos(a) * r;
     }
     const g = new T.BufferGeometry(); g.setAttribute('position', new T.BufferAttribute(pos, 3));
-    scene.add(new T.Points(g, new T.PointsMaterial({ color: 0xc8d2ff, size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: presentationSlice ? 0 : 0.7 })));
+    stars = new T.Points(g, new T.PointsMaterial({ color: 0xc8d2ff, size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: presentationSlice ? 0 : 0.7 }));
+    scene.add(stars);
   }
 
   // ---------------------------------------------------------------- lights: four floodlight towers
-  scene.add(new T.HemisphereLight(window.CR_PLAYER_PRODUCTION?.reference?0xc4cbd7:0xb9c8ff,0x3a4a30,window.CR_PLAYER_PRODUCTION?.reference ? .62 : .6));   // floodlit air: plenty of soft light from all round
+  const hemi = new T.HemisphereLight(window.CR_PLAYER_PRODUCTION?.reference?0xc4cbd7:0xb9c8ff,0x3a4a30,window.CR_PLAYER_PRODUCTION?.reference ? .62 : .6);
+  scene.add(hemi);
+  const towerGlows = [], towerBanks = [];   // floodlit air: plenty of soft light from all round
   if(presentationSlice) {
     // Broad daylight fill keeps eyes readable underneath the visor.
     scene.add(new T.HemisphereLight(0xdfeeff,0x82745b,.55));
@@ -130,10 +134,10 @@ window.Cricket3D = function (G) {
       g.fillStyle = '#2a3150'; g.fillRect(0, 0, w, h);
       for (let y = 0; y < 4; y++) for (let x = 0; x < 8; x++) { g.fillStyle = '#fffbe8'; g.fillRect(4 + x * 15.5, 4 + y * 15, 11, 11); }
     }) }));
-    bank.position.set(top[0], top[1] + 2, top[2]); bank.lookAt(0, 0, 8); scene.add(bank);
+    bank.position.set(top[0], top[1] + 2, top[2]); bank.lookAt(0, 0, 8); scene.add(bank); towerBanks.push(bank);
     const glow = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: 0xfff4d8, transparent: true, depthWrite: false, blending: T.AdditiveBlending, fog: false }));
     glow.visible = !presentationSlice;
-    glow.position.copy(bank.position).multiplyScalar(0.985); glow.scale.set(60, 60, 1); scene.add(glow);
+    glow.position.copy(bank.position).multiplyScalar(0.985); glow.scale.set(60, 60, 1); scene.add(glow); towerGlows.push(glow);
   });
 
   // ---------------------------------------------------------------- ground
@@ -1105,14 +1109,17 @@ window.Cricket3D = function (G) {
     attachGrip() {
       if (!this.bones || this.gripG || !GRIP3.ready) return;
       this.gripG = {}; this.gripRel = {};
-      for (const s of ['l', 'r']) {
-        const o = GRIP3.side[s].glove.clone(); o.matrixAutoUpdate = false; o.visible = false; this.g.add(o); this.gripG[s] = o;
+      // a mirrored (left-handed) batter's top hand is his right: it wears the top glove's mirror image, and the left the bottom's
+      this.gripGm = {}; this.gloveCuffM = {};
+      for (const s of ['l', 'r']) for (const mir of [false, true]) {
+        const o = GRIP3.side[mir ? (s === 'l' ? 'r' : 'l') : s].glove.clone(); o.matrixAutoUpdate = false; o.visible = false; this.g.add(o);
+        (mir ? this.gripGm : this.gripG)[s] = o;
         if (GLOVE_CUFF === 'model') {   // the glove's padded cuff, taken off so it can bend with the wrist (placed each frame)
           o.updateMatrixWorld(true); const inv = o.matrixWorld.clone().invert(), cg = new T.Group(); cg.matrixAutoUpdate = false; cg.visible = false;
           const parts = []; o.traverse(m => { if (m.isMesh && m.visible && (/cuff/.test(m.name) || /cuff/.test(m.material.name))) parts.push(m); });
           for (const m of parts) { const c = new T.Mesh(m.geometry, m.material); c.castShadow = true; c.frustumCulled = false; c.matrixAutoUpdate = false;
             c.matrix.multiplyMatrices(inv, m.matrixWorld); cg.add(c); m.visible = false; }
-          if (parts.length) { this.g.add(cg); (this.gloveCuff || (this.gloveCuff = {}))[s] = cg; }
+          if (parts.length) { this.g.add(cg); if (mir) this.gloveCuffM[s] = cg; else (this.gloveCuff || (this.gloveCuff = {}))[s] = cg; }
         }
       }
       // a padded cuff on each forearm, running into the glove (y = along the forearm, 0 at the wrist)
@@ -1208,23 +1215,29 @@ window.Cricket3D = function (G) {
         hint.spineMid=hipSide.clone().lerp(side,.65).normalize();
       }
       // the two-handed grip: the bat from the game's pose, the wrists moved to the gloves' anchors and the elbows re-solved
-      this.bat3 = null; this.gripResidual = null; let gripQ = null;
+      this.bat3 = null; this.gripResidual = null; this.gloveMir = false; let gripQ = null;
       const G3 = GRIP3.ready && this.gripG && pr.bat;
       if (G3 && !pr.bat.carry) {
         const bh = A(pr.bat.hands), bt = A(pr.bat.tip), Y = bh.clone().sub(bt).normalize();     // bat +Y: from the blade to the handle
         // Retain a width axis through the swing. Rebuilding from a fixed face
         // normal flips the blade 180 degrees as it passes horizontal.
-        const X = pr.bat.width ? A(pr.bat.width) : A(j.shR).sub(A(j.shL));
+        // a mirrored (left-handed) batter: the grip is the mirror image of a right-hander's. The bat's frame below is then the
+        // mirror of his with its face axis reversed, so each hand takes the other hand's place on the handle, mirrored
+        // front to back (bat z), and wears the other glove mirrored the same way (?mirax=x tries the other axis)
+        const mir = !!pr.mirrored, ax = renderQuery.get('mirax') === 'x' ? 'x' : 'z';
+        const mx3 = v => { const c = v.clone(); if (mir) c[ax] = -c[ax]; return c; }, role = s => mir ? (s === 'l' ? 'r' : 'l') : s;
+        this.gloveMir = mir;
+        const X = pr.bat.width ? A(pr.bat.width) : A(j.shR).sub(A(j.shL)).multiplyScalar(mir ? -1 : 1);   // (the shoulders swap sides in the mirror)
         X.addScaledVector(Y,-X.dot(Y));if(X.lengthSq()<1e-8)X.copy(side).addScaledVector(Y,-side.dot(Y));X.normalize();
         if (GRIP3.twist) X.applyAxisAngle(Y, GRIP3.twist);
         const Bq = new T.Quaternion().setFromRotationMatrix(new T.Matrix4().makeBasis(X, Y, new T.Vector3().crossVectors(X, Y)));
-        const mid = GRIP3.side.l.anchor.clone().add(GRIP3.side.r.anchor).multiplyScalar(0.5);
+        const mid = mx3(GRIP3.side.l.anchor.clone().add(GRIP3.side.r.anchor).multiplyScalar(0.5));
         const O = bh.clone().sub(mid.applyQuaternion(Bq));                                           // the grip's middle where the game holds the bat
         clearBat(O,Bq,pos,r,pr.team==='bat' || pr.keeper);
         this.bat3 = { O, Bq }; gripQ = {}; this.gripResidual = {};
         for (const s of ['l', 'r']) {
-          const S3 = GRIP3.side[s];
-          const wrist = S3.cuffB.clone().applyQuaternion(Bq).add(O), palm = S3.anchor.clone().applyQuaternion(Bq).add(O);
+          const S3 = GRIP3.side[role(s)];
+          const wrist = mx3(S3.cuffB).applyQuaternion(Bq).add(O), palm = mx3(S3.anchor).applyQuaternion(Bq).add(O);
           const sh = pos['upperarm_' + s], L1 = r['lowerarm_' + s].distanceTo(r['upperarm_' + s]), L2 = r['hand_' + s].distanceTo(r['lowerarm_' + s]);
           pos['lowerarm_' + s] = elbowForBat(sh, wrist, pos['lowerarm_' + s], L1, L2, O, Bq, palm);
           pos['hand_' + s] = pos['lowerarm_' + s].clone().add(v1.subVectors(wrist, pos['lowerarm_' + s]).normalize().multiplyScalar(L2));
@@ -1276,7 +1289,8 @@ window.Cricket3D = function (G) {
       if (this.gripG) {
         for (const s of ['l', 'r']) {
           const hq = W['hand_' + s], hp = pos['hand_' + s], rel = this.gripRel[s];
-          if (gripQ && gripQ[s]) {   // remember where the glove sits on the hand, for when he lets go with one hand
+          if (gripQ && gripQ[s] && this.gloveMir) {}   // (a mirrored grip isn't remembered: one-handed, the gloves are the usual ones)
+          else if (gripQ && gripQ[s]) {   // remember where the glove sits on the hand, for when he lets go with one hand
             const iq = hq.clone().invert(), gp = this['glovePose_' + s];
             this.gripRel[s] = { q: iq.clone().multiply(gp.q), p: gp.p.clone().sub(hp).applyQuaternion(iq) };
             if (!rig.closedGloveRel) rig.closedGloveRel = {};
@@ -1285,10 +1299,11 @@ window.Cricket3D = function (G) {
             const R = rel || (rig.closedGloveRel && rig.closedGloveRel[s]) || { q: GRIP3.side[s].handInBat.clone().invert(), p: GRIP3.side[s].palm.clone() };
             this['glovePose_' + s] = { q: hq.clone().multiply(R.q), p: R.p.clone().applyQuaternion(hq).add(hp) };
           }
-          const gp = this['glovePose_' + s], o = this.gripG[s];
-          o.visible = gloved3; o.matrix.compose(gp.p, gp.q, v3.setScalar(GRIP3.size)); o.matrixWorldNeedsUpdate = true;
+          const mirG = this.gloveMir && gloved3, gp = this['glovePose_' + s], o = (mirG ? this.gripGm : this.gripG)[s], other = (mirG ? this.gripG : this.gripGm)[s];
+          other.visible = false; const oc = (mirG ? this.gloveCuff : this.gloveCuffM); if (oc && oc[s]) oc[s].visible = false;
+          o.visible = gloved3; o.matrix.compose(gp.p, gp.q, mirG && renderQuery.get('mirax') !== 'x' ? v3.set(GRIP3.size, GRIP3.size, -GRIP3.size) : v3.set(mirG ? -GRIP3.size : GRIP3.size, GRIP3.size, GRIP3.size)); o.matrixWorldNeedsUpdate = true;
           B['hand_' + s].scale.setScalar(gloved3 ? GRIP3.handScale : 1);
-          const gc = this.gloveCuff && this.gloveCuff[s];
+          const gc = (mirG ? this.gloveCuffM : this.gloveCuff) && (mirG ? this.gloveCuffM : this.gloveCuff)[s];
           if (gc) { gc.visible = gloved3;
             if (gloved3) {   // turn the cuff about the wrist, part of the way from the glove's line to the forearm's
               const dg = v1.subVectors(hp, gp.p).normalize(), df = v2.subVectors(pos['lowerarm_' + s], hp).normalize();
@@ -1612,6 +1627,35 @@ window.Cricket3D = function (G) {
   composer = makeComposer();
   function dropComposer() { if (!composer) return; composer.dispose(); composer = null; renderer.toneMapping = T.ACESFilmicToneMapping; scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); }
 
+  // ---------------------------------------------------------------- the match's conditions (G.cond: t time, s sky, p pitch; G.rope)
+  // night under a clear sky is the look the game always had; the menu shows it too
+  // the sky colours are linear (the sky shader encodes its output, as the night sky always did): on screen they come out lighter
+  const COND_LOOKS = {   // [sky top, middle, horizon, fog], hemisphere [sky, ground, strength], key light [colour, strength], the other towers, floodlights on, stars
+    '0-0': { sky: ['#3561a4', '#6792c2', '#b5cada', '#7398be'], hemi: [0xcfe3ff, 0x55603f, 0.6], key: [0xfff1dc, 1.45], fill: 0.1, lamps: false, stars: 0 },
+    '0-1': { sky: ['#525a64', '#777f88', '#a4aaaf', '#646c76'], hemi: [0xdde4ec, 0x5b6050, 1.05], key: [0xeef2f6, 0.75], fill: 0.2, lamps: false, stars: 0 },
+    '1-0': { sky: ['#06092b', '#6f2d47', '#e25a22', '#130c1b'], hemi: [0xd9c0d0, 0x3a4030, 0.62], key: [0xffdcb8, 1.35], fill: 0.38, lamps: true, stars: 0.25 },
+    '1-1': { sky: ['#2c2634', '#4c3642', '#8c5242', '#2a2230'], hemi: [0xcfc4cc, 0x3a4030, 0.7], key: [0xffe6cc, 1.2], fill: 0.4, lamps: true, stars: 0 },
+    '2-0': { sky: ['#0b1838', '#24407a', '#6f6f9e', '#16224a'], hemi: [0xb9c8ff, 0x3a4a30, 0.6], key: [0xfff3dd, 1.25], fill: 0.42, lamps: true, stars: 0.7 },
+    '2-1': { sky: ['#1e2028', '#2c2e38', '#40424c', '#20222a'], hemi: [0xb4bccc, 0x3a4a30, 0.62], key: [0xfff3dd, 1.25], fill: 0.42, lamps: true, stars: 0 },
+  };
+  const PITCH_TINT = [[1, 1, 1], [0.7, 0.9, 0.52], [1.08, 1.02, 0.9]];   // flat, green, dry
+  let condKey = '';
+  function applyCond() {
+    const c = G.cond || { t: 2, s: 0, p: 0 }, key = c.t + '-' + c.s + '-' + c.p + '-' + G.rope;
+    if (key === condKey || presentationSlice || PRODUCTION?.reference) return;
+    condKey = key;
+    const L = COND_LOOKS[c.t + "-" + c.s] || COND_LOOKS["2-0"], u = sky.material.uniforms;
+    u.top.value.set(L.sky[0]); u.mid.value.set(L.sky[1]); u.bot.value.set(L.sky[2]);
+    scene.fog.color.set(L.sky[3]); scene.background.set(L.sky[1]);
+    hemi.color.setHex(L.hemi[0]); hemi.groundColor.setHex(L.hemi[1]); hemi.intensity = L.hemi[2];
+    lightDirs.forEach((d, i) => { if (i === 0) { d.color.setHex(L.key[0]); d.intensity = L.key[1]; } else d.intensity = L.fill; });
+    towerGlows.forEach(g => { g.visible = L.lamps; });
+    towerBanks.forEach(b => b.material.color.setScalar(L.lamps ? 1 : 0.45));
+    if (stars) { stars.material.opacity = L.stars; stars.visible = L.stars > 0; }
+    const pt = PITCH_TINT[c.p] || PITCH_TINT[0]; pitch.material.color.setRGB(pt[0], pt[1], pt[2]);
+    const k = (G.rope || ROPE) / ROPE; rope.scale.set(k, k, 1);
+  }
+
   // ---------------------------------------------------------------- each frame
   let lastW = 0, lastH = 0, maxRatio = lowEnd ? 1.5 : 2;
   function size() {
@@ -1661,6 +1705,7 @@ window.Cricket3D = function (G) {
     const perfStart = perf ? performance.now() : 0;
     quality(performance.now());
     size();
+    applyCond();
     // the game's camera (the same maths as its 2D projection, so the guides line up)
     const aspect = G.W / Math.max(1, G.H);
     let fov = cam.fov;

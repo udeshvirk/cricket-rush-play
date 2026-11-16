@@ -156,7 +156,7 @@
       hy:start.hy+(contact.hy-start.hy)*.4,sy:start.sy+(contact.sy-start.sy)*.25,
       lean:start.lean+(upLean-start.lean)*.4,
       h:start.h.map((v,i)=>v+(h[i]-v)*.3+(i===1?.03:0)),
-      bd:slerp(unit(start.bd),unit([-.4,.75,-.5]),.3)};
+      bd:slerp(unit(start.bd),unit([-.7,.32,-.64]),.2)};   // already on its way down (it used to lift first and wait)
     const slot={...contact,pel:upPel,lean:upLean,sy:-105,h:add(h,[.025,.09,-.12]),bd:unit([-.7,.32,-.64])};   // drops into the shot only as the bat comes through
     const through={...contact,hy:-72,sy:-72,h:add(h,[-.08,-.07,.13]),bd:unit([-.96,-.2,.2])};
     const extension={...contact,hy:-64,sy:-52,lean:16,
@@ -268,7 +268,10 @@
     const rise={...finish,pel:[contact.pel[0],.73,.78],lean:15,
       h:reverse?[.08+shift,.86,.83]:[.53+shift,.85,1.05],
       bd:unit(reverse?[-.65,-.55,-.3]:[.3,-.9,.2]),rearFootPitch:.25};
-    return [[0,start],[impact*.34,load],[impact*.72,slot],[impact,contact],
+    // the reverse turns the bat right over: spread across the downswing (it all happened in the first 0.05 s)
+    const keys=reverse?[[0,start],[impact*.25,{...load,bd:slerp(unit(start.bd),unit(load.bd),.5)}],[impact*.5,between(load,slot,.35)],[impact*.75,slot]]
+      :[[0,start],[impact*.34,load],[impact*.72,slot]];
+    return [...keys,[impact,contact],
       [impact+.10,through],[impact+.34,finish],[impact+.64,settle],
       [impact+.98,rise],[impact+1.45,stance]];
   }
