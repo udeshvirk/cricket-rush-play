@@ -1631,12 +1631,12 @@ window.Cricket3D = function (G) {
   // night under a clear sky is the look the game always had; the menu shows it too
   // the sky colours are linear (the sky shader encodes its output, as the night sky always did): on screen they come out lighter
   const COND_LOOKS = {   // [sky top, middle, horizon, fog], hemisphere [sky, ground, strength], key light [colour, strength], the other towers, floodlights on, stars
-    '0-0': { sky: ['#3561a4', '#6792c2', '#b5cada', '#7398be'], hemi: [0xcfe3ff, 0x55603f, 0.6], key: [0xfff1dc, 1.45], fill: 0.1, lamps: false, stars: 0 },
-    '0-1': { sky: ['#525a64', '#777f88', '#a4aaaf', '#646c76'], hemi: [0xdde4ec, 0x5b6050, 1.05], key: [0xeef2f6, 0.75], fill: 0.2, lamps: false, stars: 0 },
-    '1-0': { sky: ['#06092b', '#6f2d47', '#e25a22', '#130c1b'], hemi: [0xd9c0d0, 0x3a4030, 0.62], key: [0xffdcb8, 1.35], fill: 0.38, lamps: true, stars: 0.25 },
-    '1-1': { sky: ['#2c2634', '#4c3642', '#8c5242', '#2a2230'], hemi: [0xcfc4cc, 0x3a4030, 0.7], key: [0xffe6cc, 1.2], fill: 0.4, lamps: true, stars: 0 },
-    '2-0': { sky: ['#0b1838', '#24407a', '#6f6f9e', '#16224a'], hemi: [0xb9c8ff, 0x3a4a30, 0.6], key: [0xfff3dd, 1.25], fill: 0.42, lamps: true, stars: 0.7 },
-    '2-1': { sky: ['#1e2028', '#2c2e38', '#40424c', '#20222a'], hemi: [0xb4bccc, 0x3a4a30, 0.62], key: [0xfff3dd, 1.25], fill: 0.42, lamps: true, stars: 0 },
+    '0-0': { sky: ['#3561a4', '#6792c2', '#b5cada', '#7398be'], hemi: [0xcfe3ff, 0x55603f, 0.7], key: [0xfff1dc, 1.7], fill: 0.1, lamps: false, stars: 0, grass: [1.14, 1.1, 0.8] },
+    '0-1': { sky: ['#525a64', '#777f88', '#a4aaaf', '#646c76'], hemi: [0xdde4ec, 0x5b6050, 1.05], key: [0xeef2f6, 0.75], fill: 0.2, lamps: false, stars: 0, grass: [0.9, 0.95, 0.92] },
+    '1-0': { sky: ['#06092b', '#6f2d47', '#e25a22', '#130c1b'], hemi: [0xd9c0d0, 0x3a4030, 0.62], key: [0xffdcb8, 1.35], fill: 0.38, lamps: true, stars: 0.25, grass: [1.08, 0.78, 0.56] },
+    '1-1': { sky: ['#2c2634', '#4c3642', '#8c5242', '#2a2230'], hemi: [0xcfc4cc, 0x3a4030, 0.7], key: [0xffe6cc, 1.2], fill: 0.4, lamps: true, stars: 0, grass: [0.92, 0.74, 0.64] },
+    '2-0': { sky: ['#0b1838', '#24407a', '#6f6f9e', '#16224a'], hemi: [0xb9c8ff, 0x3a4a30, 0.45], key: [0xfff3dd, 1.25], fill: 0.3, lamps: true, stars: 0.7, grass: [0.52, 0.62, 0.9] },
+    '2-1': { sky: ['#1e2028', '#2c2e38', '#40424c', '#20222a'], hemi: [0xb4bccc, 0x3a4a30, 0.45], key: [0xfff3dd, 1.25], fill: 0.3, lamps: true, stars: 0, grass: [0.5, 0.58, 0.74] },
   };
   const PITCH_TINT = [[1, 1, 1], [0.7, 0.9, 0.52], [1.08, 1.02, 0.9]];   // flat, green, dry
   let condKey = '';
@@ -1652,7 +1652,10 @@ window.Cricket3D = function (G) {
     towerGlows.forEach(g => { g.visible = L.lamps; });
     towerBanks.forEach(b => b.material.color.setScalar(L.lamps ? 1 : 0.45));
     if (stars) { stars.material.opacity = L.stars; stars.visible = L.stars > 0; }
-    const pt = PITCH_TINT[c.p] || PITCH_TINT[0]; pitch.material.color.setRGB(pt[0], pt[1], pt[2]);
+    // the grass carries the time of day, since the match camera hardly shows the sky; the pitch takes half of it
+    const gr = L.grass || [1, 1, 1], pt = PITCH_TINT[c.p] || PITCH_TINT[0], half = i => (1 + gr[i]) / 2;
+    field.material.color.setRGB(gr[0], gr[1], gr[2]); apron.material.color.setHex(0x1a5a22).multiply(field.material.color);
+    pitch.material.color.setRGB(pt[0] * half(0), pt[1] * half(1), pt[2] * half(2));
     const k = (G.rope || ROPE) / ROPE; rope.scale.set(k, k, 1);
   }
 

@@ -1625,8 +1625,9 @@ function buildBody(k) {
   j.footL = k.fr.slice(); j.footR = k.bk.slice();
   {
     j.footDirL=norm(k.kpL||nH);j.footDirR=norm(k.kpR||nH);
-    const pitch=k.rearFootPitch||0;j.footPitchR=[pitch,0,0];j.footPitchL=[0,0,0];
+    const pitch=k.rearFootPitch||0,fp=k.frontFootPitch||0;j.footPitchR=[pitch,0,0];j.footPitchL=[fp,0,0];
     j.footR[1]+=.14*Math.sin(pitch)+.06*(Math.cos(pitch)-1);
+    j.footL[1]+=.14*Math.sin(fp)+.06*(Math.cos(fp)-1);   // up on the toes (the upper cut)
   }
   j.kneeL = ik(j.hipL, add(j.footL, [0, 0.07, 0]), LEG, LEG, k.kpL || nH);
   j.kneeR = ik(j.hipR, add(j.footR, [0, 0.07, 0]), LEG, LEG, k.kpR || nH);
@@ -1679,11 +1680,11 @@ function strokeFamily(a, loft, defend, push, short, spin, at) {
   if (a > 35) {
     if (a >= 115 && a <= 155 && sweepableSpin) return 'sweep'; // Up + leg side; Shift lifts the same sweep
     if (!loft && a > 115 && a <= 155 && !(spin && h < 0.75)) return 'glance';   // fine on the leg side: the leg glance (spin, low: the fine sweep)
-    if (loft) return a < 120 ? 'slog' : 'flick';
+    if (loft) return a < 120 ? 'slog' : 'glance';   // fine: lifted off the pads over fine leg (the glance keys, lofted)
     return 'flick'; // side-only leg aim stays a standing stroke
   }
   if (a < -115 && a >= -155) {   // fine on the off side: the reverse sweep to a low ball from a spinner, else the late cut
-    if (!loft && sweepableSpin) return 'rsweep';
+    if (sweepableSpin) return 'rsweep';   // Shift: the lofted reverse sweep
     if (!loft) return 'lcut';
   }
   if (a < -100 || (a < -65 && wide)) return 'cut';   // square on the off side to a wide ball: the cut
@@ -1693,7 +1694,7 @@ function strokeFamily(a, loft, defend, push, short, spin, at) {
 function strokeKeys(sw) {   // every stroke family has staged key poses in player-production/motion.js
   // (keep the random stream as it was, so deliveries play out the same)
   if (!sw.vary) sw.vary = { l: rand(-4, 4), y: rand(-7, 7), h: [rand(-0.08, 0.08), rand(-0.1, 0.1), rand(-0.06, 0.06)], f: rand(-0.03, 0.05), hold: rand(0.8, 1.3) };
-  return CricketMotion[sw.fam + 'Keys']({ start: sw.visualStart || PREPARE, target: sw.target, aim: sw.intent, loft: sw.loft, stance: styled(STANCE, batStyle()), impact: SWING_LAG });
+  return CricketMotion[sw.fam + 'Keys']({ start: sw.visualStart || PREPARE, target: sw.target, aim: sw.intent, loft: sw.loft, short: sw.short, stance: styled(STANCE, batStyle()), impact: SWING_LAG });
 }
 // The bat must never pass through the batter. Body parts as capsules (from, to, radius in metres, with pads, shirt and
 // helmet); if the blade would be inside one, it turns about the hands just far enough to pass outside it.
@@ -1809,7 +1810,7 @@ function idleWalk() {
 // front of him in both hands, the feet where they are (flat on the ground)
 function relaxedFrom(k) {
   const sy = lerp(k.sy, k.hy, 0.6), F = facing(sy), pel = [k.pel[0], lerp(k.pel[1], 0.92, 0.7), k.pel[2]];
-  return { ...k, pel, sy, lean: 8, side: 0, rearFootPitch: 0, batRoll: 0,
+  return { ...k, pel, sy, lean: 8, side: 0, rearFootPitch: 0, frontFootPitch: 0, batRoll: 0,
            fr: [k.fr[0], 0, k.fr[2]], bk: [k.bk[0], 0, k.bk[2]],
            h: add(pel, add(mul(F, 0.36), [0, 0.02, 0.06])), bd: norm(add(mul(F, 0.3), [0, -1, 0.08])) };
 }
@@ -2359,6 +2360,7 @@ function samplePath(path, t) {
 }
 
 // the computer chooses a ball; mult < 1 makes it bowl worse (difficulty)
+const PRACTICE = new URLSearchParams(location.search).get('balls');   // ?balls=short|spin|full: practice deliveries when you bat
 function aiSpec(bp, mult) {
   const type = btype(bp), T = BOWL_TYPES[type], spin = !!T.turn, chase = M.mode === 'chase';
   const s = chase ? 1 : clamp(bp.bowl / 100 * mult, 0.25, 1);
@@ -2378,6 +2380,14 @@ function aiSpec(bp, mult) {
   if (!chase && Math.random() < (1 - s) * 0.07) line = Math.random() < 0.6 ? rand(-1.3, -1.05) : rand(0.85, 1.05);   // a wide
   if (gift) line = gift === 1 ? rand(0.05, 0.2) : rand(-0.7, -0.5);   // a half-volley on the pads, or short and wide
   pz = clamp(pz, 0.3, 11);
+  // practice page: ?balls=short (bouncers and short balls from a quick), spin (full spinners, for sweeps), full (drives)
+  let type2 = type;
+  if (PRACTICE && inn && inn.userBats) {
+    if (PRACTICE === 'short') { if (spin) type2 = 'F'; pz = rand(7.4, 9.6); line = rand(-0.45, 0.1); }
+    else if (PRACTICE === 'spin') { if (!spin) type2 = Math.random() < 0.5 ? 'O' : 'L'; pz = rand(3.4, 5.2); line = rand(-0.3, 0.1); }
+    else if (PRACTICE === 'full') { pz = rand(2.2, 4); line = rand(-0.4, 0.1); }
+    if (type2 !== type) return { type: type2, kmh: rand(BOWL_TYPES[type2].speed[0], BOWL_TYPES[type2].speed[1]), pz, px: lineToPitch(line, pz), vi: 0 };
+  }
   const kmh = M.diff.speed ? rand(M.diff.speed[0], M.diff.speed[1]) : rand(T.speed[0], T.speed[1]) * (0.95 + 0.05 * clamp(mult, 0, 1.2));
   const vi = chase ? 0 : quicker ? 2 : Math.random() < [0.12, 0.25, 0.38][plan] ? 1 + ((Math.random() * (T.vars.length - 1)) | 0) : 0;
   return { type, kmh, pz, px: lineToPitch(line, pz), vi };
@@ -2416,7 +2426,7 @@ function swing(loft, pressT, aim, w) {
   // each stroke's own difficulty: the reverse sweep and hook are hard to time, the late cut and glance just use the pace
   const spinB = !!(BOWL_TYPES[ball.type] || {}).turn, isDef = !!(aim && aim.defend);
   const preFam = aimed ? strokeFamily(wrapA(aim.angle), loft && !isDef, isDef, isDef, ball.short, spinB, atBat) : null;
-  w *= { rsweep: 0.85, hook: 0.9, lcut: 1.1, glance: 1.1 }[preFam] || 1;
+  w *= { rsweep: 0.85, hook: 0.9, lcut: 1.1, glance: loft ? 1 : 1.1 }[preFam] || 1;
   if (ball.charge) w *= high ? 0.8 : 1.15;                                              // down the pitch: a half-volley, unless it's a bouncer
   const okW = 0.1 * w, edgeW = 0.15 * w;
   const visualStart=batterPose(null).pose;
@@ -2447,6 +2457,7 @@ function swing(loft, pressT, aim, w) {
   ball.swing.push = !!(aim && aim.defend && aimed);
   ball.swing.fam = strokeFamily(ball.swing.intent, ball.swing.loft, ball.swing.defend, ball.swing.push, ball.short, !!(BOWL_TYPES[ball.type] || {}).turn, atBat);
   if (ball.swing.fam === 'ucut') ball.swing.loft = true;   // an upper cut always goes in the air
+  ball.swing.short = !!ball.short;   // (looks: up on the toes for the upper cut to a short ball)
   ball.swing.target = [atBat[0], clamp(atBat[1], 0.12, 1.9), 1.02];
   if (kind !== 'hit') {   // beaten: the bat passes the ball (inside the line outside off, outside it at the pads, under a bouncer); an edge just shaves it
     const side = atBat[0] < 0.1 ? 1 : -1, m = kind === 'miss' ? 1 : 0.35;
@@ -2485,6 +2496,8 @@ function shotName(a, loft, defend, push, family) {
   // Name the action actually selected, not the timing-deflected exit direction.
   // The old angle-only labels called fine-leg pulls (and lofted flicks) "Glance".
   if (family === 'sweep') return loft ? 'Lofted sweep' : 'Sweep';
+  if (family === 'rsweep' && loft) return 'Lofted reverse sweep';
+  if (family === 'glance' && loft) return 'Flick over fine leg';
   const names={rsweep:'Reverse sweep',glance:'Leg glance',lcut:'Late cut',ucut:'Upper cut',
     cut:'Square cut',pull:'Pull',hook:'Hook',bdrive:'Back-foot drive',flick:'Flick',slog:'Slog',
     fdef:'Forward defence',bdef:'Back-foot defence',push:'Push'};
