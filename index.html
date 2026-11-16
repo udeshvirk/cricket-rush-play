@@ -2691,8 +2691,12 @@ function landingExtra(path, i) {
 function nearestTo(p) { let b = null, d = 1e9; for (const f of fielders) { const x = dist2(f.pos, p); if (x < d) { d = x; b = f; } } return b; }
 
 // where the ball goes off the bat (no drawing; also used to simulate)
+// how hard the striker hits it, from his batting rating: full power at 85 and over, about 81% for a number 11 (12), so a
+// tail-ender's middled slog mostly comes down inside the rope. Not in quick chases (everyone there is the same 'you').
+const POWER = { lo: 0.78, k: 0.26, min: 0.8, max: 1.02 };
+const batPower = () => !M || M.mode !== 'match' || !inn ? 1 : clamp(POWER.lo + POWER.k * batterP(inn.striker).bat / 100, POWER.min, POWER.max);
 function strike() {
-  const d = ball.decision, atBat = samplePath(ball.path, ball.contactT);
+  const d = ball.decision, atBat = samplePath(ball.path, ball.contactT), pw = batPower();
   let v, angle, elev, airborne;
   if (d.kind === 'hit' && d.defend) {
     angle = d.angle; v = (d.push ? rand(6, 11) : rand(3, 7)) * (0.6 + 0.4 * d.q); elev = 0; airborne = false;
@@ -2701,16 +2705,16 @@ function strike() {
     const pace = (ball.kmh / 3.6 - 35) * 0.25;
     if (d.fam === 'ucut') {   // over the slips with the ball's own pace: a four or a one-bounce four, or a catch at third man
       if (d.q < 0.3) { v = rand(13, 18); elev = rand(48, 62); }
-      else { v = 15 + 15 * d.q + pace + rand(-1.2, 1.2); elev = rand(28, 40); }
+      else { v = (15 + 15 * d.q) * pw + pace + rand(-1.2, 1.2); elev = rand(28, 40); }
       airborne = true;
     } else if (d.loft) {
       const sky = d.fam === 'hook' ? 0.4 : 0.3;   // a hook not quite middled goes straight up
       if (d.q < sky) { v = rand(15, 21); elev = rand(50, 63); }
-      else { v = 17 + 16 * d.q + rand(-1.2, 1.2) + (d.fam === 'hook' ? 2 : 0); elev = rand(24, 34); }
+      else { v = (17 + 16 * d.q) * pw + rand(-1.2, 1.2) + (d.fam === 'hook' ? 2 : 0); elev = rand(24, 34); }
       airborne = true;
     } else {
       const k = { lcut: 0.72, glance: 0.75, rsweep: 0.85, hook: 1.08 }[d.fam] || 1;   // deflections run slower, the hook flies
-      v = ((15 + 19 * d.q) * rand(0.92, 1.06) + pace) * d.power * k; elev = rand(1.5, 5); airborne = false;
+      v = ((15 + 19 * d.q) * pw * rand(0.92, 1.06) + pace) * d.power * k; elev = rand(1.5, 5); airborne = false;
       if (d.fam === 'hook' && d.q < 0.6 && Math.random() < 0.35) { elev = rand(12, 22); airborne = true; }   // not kept down: in the air toward the deep fielder
       if (d.fam === 'rsweep' && d.q < 0.35 && Math.random() < 0.3) { v = rand(12, 17); elev = rand(30, 50); airborne = true; }   // a top edge
     }
