@@ -349,10 +349,13 @@
   // then release the wrists into a leg-side extension before wrapping up.
   function flickKeys({start,target,stance,aim=45,loft=false,impact=.15}) {
     const shift=clamp(target[0],-.3,.3),low=clamp((.6-target[1])/.4,0,1);
-    const fr=[clamp(.53+shift*1.1,.12,.86),0,1.3];
+    // a shorter step toward the line onto a bent front knee, head over it, back heel up (November 2026: it was a wide
+    // A-frame with both legs nearly straight)
+    const fr=[clamp(.53+shift*.85,.12,.8),0,1.2];
     const bd=unit([.12,-1,-.06]),h=add(target,scale(bd,-clamp((1.4-target[1])/-bd[1],.2,.52+.06*low)));
-    const contact={...start,fr,pel:[.51+shift*.45,.85-low*.055,1.0],hy:-69,sy:-75,
-      lean:23+low*5,side:8,h,bd,kpL:[-.25,0,1],rearFootPitch:0,batRoll:0};
+    const contact={...start,fr,pel:[.51+shift*.45,.81-low*.055,.98],hy:-69,sy:-75,
+      lean:23+low*5,side:8,h,bd,kpL:[-.25,0,1],...(start.bk?{bk:add(start.bk,[0,0,.06])}:{}),
+      ...(start.kpR?{kpR:[-.85,-.12,.5]}:{}),rearFootPitch:.45,batRoll:0};
     const load={...contact,pel:start.pel.map((v,i)=>v+(contact.pel[i]-v)*.35),
       hy:-82,sy:-88,h:add(start.h,[-.025,.035,0]),bd:slerp(unit(start.bd),unit([-.16,-.7,-.69]),.15),batRoll:0};
     const slot={...contact,hy:-74,sy:-82,h:add(h,[-.025,.12,-.085]),bd:unit([-.16,-.7,-.69])};
@@ -363,7 +366,7 @@
     const extension={...contact,hy:-43,sy:-16,lean:16,side:3,
       h:[.55+shift*.4,loft?1.36:1.15,1.4-square*.08],
       bd:unit([.87,loft?.25:-.3,.46-square*.2]),batRoll:loft?.16:.35,rearFootPitch:.2};
-    const finish={...extension,pel:[.53+shift*.4,loft?.89:.84,1.08],hy:-38,sy:-12,lean:loft?11:16,side:loft?1:4,
+    const finish={...extension,pel:[.53+shift*.4,loft?.86:.8,1.04],hy:-38,sy:-12,lean:loft?11:16,side:loft?1:4,
       h:[.66+shift*.35,loft?1.67:1.36,1.15],bd:unit([.75,loft?.62:.35,-.48]),batRoll:loft?.22:.55};
     const settle={...finish,sy:-18,h:add(finish.h,[0,-.055,0]),batRoll:.25};
     return [[0,{...start,batRoll:0}],[impact*.25,load],[impact*.5,mid],[impact*.75,slot],[impact,contact],
