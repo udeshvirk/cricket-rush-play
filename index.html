@@ -483,7 +483,7 @@
   #banner.small .head { font-size: clamp(28px, 5vw, 48px); }
   .shotsel button { width: min(22vw, 108px); height: 46px; font-size: 19px; border-radius: 12px; background: rgba(10, 16, 36, 0.45); border-width: 1.5px; }
   .batside { width: 96px; } .batside button { height: 34px; font-size: 13px; border-radius: 9px; background: rgba(10, 16, 36, 0.45); border-width: 1.5px; }
-  #swipeHint { bottom: calc(68px + env(safe-area-inset-bottom, 0px)); font-size: 13px; }
+  #swipeHint { top: calc(86px + env(safe-area-inset-top, 0px)); bottom: auto; font-size: 13px; }   /* up top: at the bottom it sat over the umpire's head */
   .autopad button { height: 38px; font-size: 13px; padding: 0 11px; background: rgba(10, 16, 36, 0.5); }
   @media (max-width: 720px) and (orientation: portrait) {
     #tvbar { max-width: calc(100% - 110px); }
@@ -494,7 +494,7 @@
     #tvcard .s { white-space: normal; line-height: 1.2; }
     .shotsel { gap: 6px; } .shotsel button { width: 28vw; height: 44px; }
     .batside { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); }
-    #swipeHint { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); right: 112px; font-size: 12px; }
+    #swipeHint { top: auto; bottom: calc(66px + env(safe-area-inset-bottom, 0px)); right: 112px; font-size: 12px; }
   }
   @media (max-height: 460px) {
     #tvbar { top: calc(5px + env(safe-area-inset-top, 0px)); left: calc(6px + env(safe-area-inset-left, 0px)); max-width: 46vw; }
@@ -558,6 +558,74 @@
   @media (max-height: 460px) {
     #btnDive, #btnCancel { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); width: 76px; height: 44px; font-size: 14px; }
     #btnDive { right: calc(106px + env(safe-area-inset-right, 0px)); } #btnCancel { right: calc(188px + env(safe-area-inset-right, 0px)); } }
+  /* ---- moments: the effects layer, pop banners, PERFECT, streaks, the chase, commentary strip (November 2026) ---- */
+  #fxLayer { inset: 0; width: 100%; height: 100%; }
+  #flash { inset: 0; opacity: 0; }
+  #flash.go { animation: flashOut 0.55s ease-out both; }
+  @keyframes flashOut { from { opacity: 1; } to { opacity: 0; } }
+  #banner.pop .head { animation: popIn 0.55s cubic-bezier(.18,1.5,.4,1) both; }
+  #banner.pop .line { animation: lineIn 0.4s ease-out 0.18s both; }
+  @keyframes popIn { 0% { transform: scale(2.6); opacity: 0; filter: blur(6px); } 55% { transform: scale(0.9); opacity: 1; filter: none; } 100% { transform: scale(1); } }
+  @keyframes lineIn { from { transform: translateY(10px); opacity: 0; } }
+  #banner.b4 .head, #banner.b6 .head, #banner.bmil .head {
+    background: linear-gradient(100deg, var(--c1) 38%, #fffbe8 50%, var(--c1) 62%) 0 0 / 260% 100%; -webkit-background-clip: text; background-clip: text;
+    color: transparent; text-shadow: none; filter: drop-shadow(0 4px 0 rgba(0,0,0,0.45)) drop-shadow(0 0 22px var(--c2));
+    animation: popIn 0.55s cubic-bezier(.18,1.5,.4,1) both, shine 1.3s ease-in-out 0.35s 2; }
+  #banner.b4 { --c1: var(--teal); --c2: rgba(46,196,182,0.45); }
+  #banner.b6, #banner.bmil { --c1: var(--amber); --c2: rgba(255,176,46,0.55); }
+  @keyframes shine { from { background-position: 100% 0; } to { background-position: 0 0; } }
+  #banner.bw .head { animation: slam 0.45s cubic-bezier(.2,1.4,.4,1) both; }
+  @keyframes slam { 0% { transform: translateY(-40px) scale(1.5); opacity: 0; } 60% { transform: translateY(4px) scale(0.97); opacity: 1; } 100% { transform: none; } }
+  #banner.quiet .head { display: none; }
+  #banner .streak { display: block; margin: 8px auto 0; width: max-content; font-family: var(--display); font-weight: 900; letter-spacing: 0.08em;
+                    font-size: clamp(16px, 2.6vw, 24px); color: #1a1205; background: linear-gradient(90deg, #ffb02e, #ff6a2e); padding: 3px 14px;
+                    border-radius: 999px; box-shadow: 0 0 18px rgba(255,120,40,0.7); animation: lineIn 0.4s ease-out 0.3s both; }
+  #banner .streak:empty { display: none; }
+  #timing.perfect { color: #fff6c9 !important; text-shadow: 0 0 8px rgba(255,214,90,0.6); }
+  @keyframes perfectPop { 0% { transform: translateX(-50%) scale(1.8); } 100% { transform: translateX(-50%) scale(1); } }
+  #scoreText.bump { animation: bump 0.45s cubic-bezier(.2,1.8,.4,1); }
+  @keyframes bump { 0% { transform: scale(1.45); color: var(--amber); } 100% { transform: scale(1); } }
+  #scoreText { display: inline-block; transform-origin: left center; }
+  #needText.p0 { color: var(--teal); } #needText.p1 { color: var(--amber); } #needText.p2 { color: #ff6a5a; }
+  #needText.hot { animation: needPulse 0.9s ease-in-out infinite alternate; font-weight: 800; }
+  @keyframes needPulse { to { text-shadow: 0 0 12px currentColor; } }
+  #fireTag { align-self: center; font-family: var(--display); font-weight: 900; font-size: 13px; letter-spacing: 0.08em; color: #1a1205;
+             background: linear-gradient(90deg, #ffb02e, #ff5a2e); border-radius: 999px; padding: 1px 9px !important; margin: 0 8px;
+             box-shadow: 0 0 12px rgba(255,110,40,0.8); animation: needPulse 0.7s ease-in-out infinite alternate; }
+  #fireTag[hidden] { display: none; }
+  #comm { left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 12px); max-width: min(720px, calc(100% - 24px));
+          display: flex; align-items: stretch; opacity: 0; transition: opacity 0.25s, transform 0.3s; font-size: 16px; }
+  #comm.show { opacity: 1; transform: translate(-50%, 0); }
+  #comm .mic { background: var(--amber); color: #1a1205; font-family: var(--display); font-weight: 900; letter-spacing: 0.08em; font-size: 13px;
+               padding: 6px 9px; display: flex; align-items: center; }
+  #comm .txt { background: rgba(8, 13, 30, 0.88); color: var(--chalk); padding: 6px 12px; font-weight: 600; border: 1px solid rgba(243,239,228,0.1); border-left: 0; }
+  #comm.tp { bottom: calc(196px + env(safe-area-inset-bottom, 0px)); font-size: 14px; }   /* touch screens: above the timing word and the buttons */
+  @media (max-width: 720px) and (orientation: portrait) { #comm { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); font-size: 13px; width: max-content; }
+    #fireTag .w { display: none; } #fireTag { margin: 0 2px; padding: 1px 5px !important; } }
+  @media (max-height: 460px) { #comm { display: none; } }
+  #game:has(> .screen:not([hidden])) :is(#comm, #fxLayer, #flash) { visibility: hidden; }
+  /* the menu: one big PLAY button, tiles that slide in, a shine on the title */
+  #goQuick { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; cursor: pointer;
+             background: linear-gradient(100deg, #ffb02e, #ff8a2e); color: #1a1205; border: 0; border-radius: 6px; padding: 14px 18px;
+             font-family: var(--ui); box-shadow: 0 8px 28px rgba(255,150,40,0.35); position: relative; overflow: hidden; }
+  #goQuick .n { font-family: var(--display); font-weight: 900; font-size: 34px; letter-spacing: 0.04em; line-height: 1; }
+  #goQuick .d { font-size: 15px; font-weight: 600; opacity: 0.85; }
+  #goQuick .go { font-family: var(--display); font-weight: 900; font-size: 30px; }
+  #goQuick::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 35%, rgba(255,255,255,0.55) 50%, transparent 65%) -150% 0 / 250% 100% no-repeat;
+                    animation: sweep 3.2s ease-in-out 1s infinite; }
+  #goQuick:hover { filter: brightness(1.07); }
+  @keyframes sweep { 0% { background-position: 150% 0; } 40%, 100% { background-position: -150% 0; } }
+  #menu:not([hidden]) .levels > * { animation: tileIn 0.45s cubic-bezier(.2,1.2,.4,1) both; }
+  #menu .levels > :nth-child(2) { animation-delay: 0.06s; } #menu .levels > :nth-child(3) { animation-delay: 0.12s; }
+  #menu .levels > :nth-child(4) { animation-delay: 0.18s; } #menu .levels > :nth-child(5) { animation-delay: 0.24s; } #menu .levels > :nth-child(6) { animation-delay: 0.3s; }
+  @keyframes tileIn { from { opacity: 0; transform: translateY(14px); } }
+  #menu .title span { background: linear-gradient(100deg, var(--amber) 40%, #fff3c4 50%, var(--amber) 60%) 0 0 / 260% 100%; -webkit-background-clip: text; background-clip: text;
+                      color: transparent; animation: shine 2.4s ease-in-out 0.6s infinite alternate; }
+  @media (max-height: 460px) { #goQuick { padding: 8px 12px; } #goQuick .n { font-size: 24px; } #goQuick .go { font-size: 22px; } }
+  /* the pause menu: Resume stands out, the rest are smaller */
+  #pause .row .btn.ghost { font-size: 14px; padding: 8px 12px; }
+  #pause #resume { min-width: 180px; }
+  @media (prefers-reduced-motion: reduce) { #banner .head, #banner .line, #goQuick::after, #menu .levels > *, #needText.hot, #fireTag { animation: none !important; } }
 </style>
 </head>
 <body>
@@ -583,7 +651,10 @@
   <div id="ffTag" class="hud" hidden>FAST-FORWARD ▸▸</div>
   <div id="nextTag" class="hud" hidden>NEXT BALL<span class="skip">tap to skip</span></div>
   <div id="fhBadge" class="hud" hidden>FREE HIT</div>
-  <div id="banner" class="hud"><div class="head"></div><div class="line"></div></div>
+  <canvas id="fxLayer" class="hud"></canvas>
+  <div id="flash" class="hud"></div>
+  <div id="banner" class="hud"><div class="head"></div><div class="line"></div><div class="streak"></div></div>
+  <div id="comm" class="hud"><span class="mic">LIVE</span><span class="txt"></span></div>
   <div id="tvcard" class="hud"><div class="bar"></div><div class="body"><div class="t"></div><div class="s"></div></div></div>
   <div id="replayTag" class="hud" hidden><span class="dot"></span>REPLAY<span class="skip">tap to skip</span></div>
   <div id="wipe" class="hud"></div>
@@ -595,6 +666,7 @@
     <div class="runs" id="scoreText">0/0</div>
     <div class="overs" id="oversText">0.0 ov</div>
     <div class="need" id="needText">Need 30 off 12</div>
+    <div id="fireTag" hidden>🔥<span class="w"> ON FIRE</span></div>
   </div>
   <div id="batline" class="hud" hidden><div id="batters"></div><div id="bowlerLine" class="bw"></div></div>
   <div id="overchips" class="hud"></div>
@@ -630,8 +702,9 @@
   <div id="menu" class="screen">
     <div class="card">
       <div class="title">CRICKET <span>RUSH</span></div>
-      <div class="tag">Night cricket under the lights.</div>
+      <div class="tag">Hit sixes. Chase targets. Lift the cup.</div>
       <div class="levels">
+        <button type="button" id="goQuick"><span><span class="n">PLAY NOW</span><br><span class="d" id="quickLine">Quick match</span></span><span class="go">▶</span></button>
         <button class="level" type="button" id="goMatch"><span class="n">Play a match</span><span class="d">Bat and bowl, two innings</span>
           <span class="s">Pick your team · 2 overs up to T20 and ODI</span><span class="best" id="recordLine"></span></button>
         <button class="level" type="button" id="goResume" hidden><span class="n">Continue match</span><span class="d" id="resumeLine"></span></button>
@@ -2044,7 +2117,7 @@ function setCrowdEnabled(on) {
 }
 updateCrowdMix();
 $('crowdToggle').addEventListener('click',()=>{audio();setCrowdEnabled(!crowdOn);});
-const commentary=window.CricketCommentary?.create({onSpeaking(speaking){commentarySpeaking=speaking;updateCrowdMix();}})
+const commentary=window.CricketCommentary?.create({onSpeaking(speaking){commentarySpeaking=speaking;updateCrowdMix();},onCaption(text){showComm(text);}})
   || {supported:false,enabled:false,emit(){return false;},setEnabled(){},setMuted(){},setSuspended(){},reset(){},unlock(){}};
 let commentaryPreference=false;
 try{commentaryPreference=localStorage.getItem('cricket-rush-commentary-preview')==='on';}catch(e){}
@@ -2111,6 +2184,7 @@ function audio() {
     crowdBus.connect(crowdTone); crowdTone.connect(master); updateCrowdMix();
     NOISE = actx.createBuffer(1, sr, sr); { const d = NOISE.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
     CLAPS = clapBuffer(4);
+    setTimeout(() => { try { if (!CHEER) CHEER = cheerBuffer(); } catch (e) {} }, 1200);
     // the crowd: a murmur all the time, and a roar that rises for the big moments
     const loop = (buf, gain) => { const s = actx.createBufferSource(); s.buffer = buf; s.loop = true; const g = actx.createGain(); g.gain.value = gain; s.connect(g); g.connect(crowdBus); s.start(); return g; };
     crowdGain = loop(noiseLoop(6, [0.03, 0.12], 0.35), 0);   // no constant murmur: the owner found it irritating. The crowd is heard only for boundaries and wickets (and a fifty or hundred)
@@ -2192,7 +2266,215 @@ function sndHorn() {   // softer distant cheer accent after a six
   f.connect(g); g.connect(crowdBus);
 }
 const sndTick = () => { if (live()) { ping(1900, 0.025, 0.05, 0, 'triangle'); } };
-function sndBuzz(level) {   // the crowd stirring as the bowler runs in: switched off with the murmur (see crowdGain)
+// the crowd stirring as the bowler runs in: a soft swell over the run-up only, faded by the time the ball is played
+// (the constant murmur stays off: the owner found it irritating)
+function sndBuzz(level) {
+  if (!live() || !crowdOn || !crowdGain) return;
+  const t = actx.currentTime, g = crowdGain.gain;
+  g.cancelScheduledValues(t); g.setValueAtTime(g.value, t);
+  g.linearRampToValueAtTime(level, t + 1.5); g.setTargetAtTime(0, t + 2.1, 0.45);
+}
+const hushCrowd = () => { if (live() && crowdGain) { const t = actx.currentTime, g = crowdGain.gain; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.setTargetAtTime(0, t, 0.25); } };
+
+// ----------------------------------------------------------------------- the crowd's voices (November 2026)
+// A cheer built from people, not noise: about 36 voices, men and women, each a train of glottal pulses through three
+// vowel formants ("hey!", "yeah!", "oh!"), each pitch jumping up at the start, wobbling, and falling away; panned across
+// the stands. Made once, a moment after the sound starts (about 50 ms of work), and played on boundaries and wickets.
+let CHEER = null;
+function cheerBuffer() {
+  const sr = 22050, dur = 3.4, n = Math.floor(sr * dur), L = new Float32Array(n), R = new Float32Array(n);
+  const VOW = [[730, 1090, 2440], [570, 840, 2410], [660, 1720, 2410], [530, 1840, 2480], [490, 1350, 2500], [300, 2200, 2900]];
+  for (let v = 0; v < 48; v++) {
+    const male = Math.random() < 0.5, f0 = male ? rand(150, 230) : rand(240, 380);   // no deep voices: low ones growled like a lion
+    const vw = VOW[Math.floor(Math.random() * VOW.length)].map(f => f * (male ? 1 : 1.16) * rand(0.94, 1.06));
+    const res = vw.map((f, k) => { const bw = [110, 140, 200][k], r = Math.exp(-Math.PI * bw / sr), th = 2 * Math.PI * f / sr;
+      return { a1: 2 * r * Math.cos(th), a2: -r * r, g: (1 - r) * [1, 0.7, 0.3][k], y1: 0, y2: 0 }; });
+    const t0 = Math.random() < 0.7 ? rand(0, 0.25) : rand(0.25, 0.9), len = rand(1.2, 2.6), i0 = Math.floor(t0 * sr), cnt = Math.min(n - i0, Math.floor(len * sr));
+    const vib = rand(4.5, 6.5), vibA = rand(0.01, 0.035), rise = rand(0.2, 0.5), amp = rand(0.45, 1), pan = rand(-0.9, 0.9);
+    const gl = amp * Math.sqrt((1 - pan) / 2), gr = amp * Math.sqrt((1 + pan) / 2);
+    let ph = Math.random(), lp = 0, x1 = 0, x2 = 0;
+    for (let i = 0; i < cnt; i++) {
+      const t = i / sr, u = t / len;
+      const pf = f0 * (1 + rise * Math.min(1, t / 0.16) - rise * 0.7 * Math.max(0, (u - 0.55) / 0.45)) * (1 + vibA * Math.sin(6.283 * vib * t)) * (1 + 0.02 * (Math.random() - 0.5));
+      ph += pf / sr;
+      let src = (Math.random() * 2 - 1) * 0.3;    // breath (airy, like voices across a ground)
+      if (ph >= 1) { ph -= 1; src += 1; }          // a pulse from the vocal folds
+      lp += 0.4 * (src - lp);                      // softened
+      let y = 0;
+      for (const q of res) { const o = q.g * (lp - x2) + q.a1 * q.y1 + q.a2 * q.y2; q.y2 = q.y1; q.y1 = o; y += o; }
+      x2 = x1; x1 = lp;
+      const env = Math.min(1, t / 0.06) * (u < 0.5 ? 1 : Math.exp(-(u - 0.5) * 6));
+      L[i0 + i] += y * env * gl; R[i0 + i] += y * env * gr;
+    }
+  }
+  let ss = 0; for (let i = 0; i < n; i++) ss += L[i] * L[i] + R[i] * R[i];
+  const k = 0.3 / Math.max(1e-6, Math.sqrt(ss / (2 * n * 0.55)));   // RMS 0.3 over the loud part, like the crowd loops
+  const buf = actx.createBuffer(2, n, sr), dl = buf.getChannelData(0), dr = buf.getChannelData(1);
+  for (let i = 0; i < n; i++) { const f = Math.min(1, (n - i) / (sr * 0.4)); dl[i] = L[i] * k * f; dr[i] = R[i] * k * f; }
+  return buf;
+}
+function sndCheer(level = 1) {   // people cheering: two takes, offset, for a fuller stand
+  if (!live() || !crowdOn) return;
+  if (!CHEER) { try { CHEER = cheerBuffer(); } catch (e) { return; } }
+  for (let j = 0; j < (level > 0.9 ? 2 : 1); j++) {
+    const t = actx.currentTime + j * rand(0.12, 0.3), s = actx.createBufferSource(), g = actx.createGain();
+    s.buffer = CHEER; s.playbackRate.value = rand(0.97, 1.1);
+    g.gain.setValueAtTime(level * (j ? 0.25 : 0.4), t);
+    const hp = actx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 420; hp.Q.value = 0.6;   // the chesty low end cut
+    s.connect(hp); hp.connect(g); g.connect(crowdBus); s.start(t, j ? rand(0, 0.2) : 0);
+  }
+}
+
+// ----------------------------------------------------------------------- game sounds for the big moments
+function sndPerfect() {   // a bright chime and a sparkle
+  if (!live()) return;
+  [1568, 2093, 2637].forEach((f, i) => ping(f, 0.45, 0.035, i * 0.04, 'sine'));
+  burst(0.3, 'highpass', 6500, 0.7, 0.025, 0.06);
+}
+function sndStinger(kind) {   // a short tune: up for a good moment, down for a bad one
+  if (!live()) return;
+  const T = { six: [523, 659, 784, 1047], four: [659, 988], streak: [523, 659, 784, 1047, 1319, 1568], win: [523, 659, 784, 1047, 784, 1047],
+              wicket: [392, 523, 659, 784], out: [330, 247] }[kind] || [];
+  const step = kind === 'out' ? 0.16 : kind === 'win' ? 0.12 : 0.07;
+  T.forEach((f, i) => { ping(f, kind === 'out' ? 0.5 : 0.35, 0.07, i * step, 'triangle'); ping(f * 2, 0.2, 0.02, i * step, 'sine'); });
+}
+function sndWhoosh(v = 1) { if (live()) burst(0.32, 'bandpass', 500, 1.1, 0.14 * v, 0, sfx, 2600); }
+function sndFirework(when = 0, v = 1) {
+  if (!live()) return;
+  ping(rand(420, 560), 0.55, 0.018 * v, when, 'sine', rand(1500, 1900));            // the whistle going up
+  burst(0.45, 'lowpass', 1100, 0.7, 0.32 * v, when + 0.55, sfx, 180);               // the bang
+  ping(65, 0.35, 0.22 * v, when + 0.55, 'sine', 38);
+  for (let i = 0; i < 12; i++) burst(0.02, 'highpass', rand(3000, 6500), 0.8, rand(0.03, 0.08) * v, when + 0.7 + Math.random() * 0.8);   // the crackle
+}
+
+// ----------------------------------------------------------------------- the effects layer (sparks, rings, fireworks, confetti)
+// Drawn on #fxLayer above the field in screen space, so it works in 2D and 3D. It runs on its own clock and stops when empty.
+const FX = { parts: [], cv: null, g: null, w: 0, h: 0, last: 0, run: false };
+const fxOn = () => !quiet && !ff && !(M && M.autoplay) && !RP && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+function fxAdd(p) {
+  if (FX.parts.length > 900) return;
+  FX.parts.push({ t: 0, vx: 0, vy: 0, grav: 0, drag: 1, a: 0, va: 0, delay: 0, ...p });
+  if (!FX.run) { FX.run = true; FX.last = performance.now(); requestAnimationFrame(fxStep); }
+}
+function fxStep(now, manual) {
+  if (FX.hold && !manual) { requestAnimationFrame(fxStep); return; }   // (tests: frames stepped by hand)
+  if (!FX.cv) { FX.cv = $('fxLayer'); FX.g = FX.cv.getContext('2d'); }
+  const cv = FX.cv, g = FX.g, r = Math.min(2, window.devicePixelRatio || 1), w = cv.clientWidth, h = cv.clientHeight;
+  if (w !== FX.w || h !== FX.h) { FX.w = w; FX.h = h; cv.width = w * r; cv.height = h * r; }
+  g.setTransform(r, 0, 0, r, 0, 0);
+  const dt = clamp((now - FX.last) / 1000, 0, 0.05); FX.last = now;
+  g.clearRect(0, 0, w, h);
+  const born = [];
+  FX.parts = FX.parts.filter(p => {
+    if (p.delay > 0) { p.delay -= dt; return true; }
+    p.t += dt;
+    if (p.t >= p.life) { if (p.onEnd) born.push(p); return false; }
+    p.vy += p.grav * dt; const d = Math.pow(p.drag, dt * 60); p.vx *= d; p.vy *= d;
+    p.x += p.vx * dt; p.y += p.vy * dt; p.a += p.va * dt;
+    return true;
+  });
+  born.forEach(p => p.onEnd(p));
+  for (const p of FX.parts) {
+    if (p.delay > 0) continue;
+    const k = 1 - p.t / p.life;
+    if (p.kind === 'spark' || p.kind === 'rocket') {   // a glowing streak along its motion
+      g.globalCompositeOperation = 'lighter'; g.globalAlpha = p.kind === 'rocket' ? 0.9 : k * k;
+      g.strokeStyle = p.col; g.lineWidth = p.size * (p.kind === 'rocket' ? 1 : 0.5 + k); g.lineCap = 'round';
+      g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(p.x - p.vx * 0.045, p.y - p.vy * 0.045); g.stroke();
+      if (p.kind === 'spark' && Math.random() < 0.15 * k) { g.fillStyle = '#fff'; g.fillRect(p.x - 1, p.y - 1, 2, 2); }   // a twinkle
+    } else if (p.kind === 'ring') {
+      g.globalCompositeOperation = 'lighter'; g.globalAlpha = k * 0.9;
+      g.strokeStyle = p.col; g.lineWidth = p.size * k + 1;
+      g.beginPath(); g.arc(p.x, p.y, p.r0 + (p.r1 - p.r0) * (1 - k * k), 0, 6.2832); g.stroke();
+    } else if (p.kind === 'glow') {
+      g.globalCompositeOperation = 'lighter'; g.globalAlpha = k;
+      const rr = Math.max(1, p.size * (1.4 - 0.4 * k)), gr = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, rr);
+      gr.addColorStop(0, p.col); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(p.x - rr, p.y - rr, 2 * rr, 2 * rr);
+    } else if (p.kind === 'confetti') {
+      g.globalCompositeOperation = 'source-over'; g.globalAlpha = Math.min(1, k * 3);
+      g.save(); g.translate(p.x + Math.sin(p.a) * 6, p.y); g.rotate(p.a); g.scale(1, Math.cos(p.a * 1.7));
+      g.fillStyle = p.col; g.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2); g.restore();
+    }
+  }
+  g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+  if (FX.parts.length) requestAnimationFrame(fxStep); else { FX.run = false; g.clearRect(0, 0, w, h); }
+}
+const FX_COLS = { gold: ['#ffd36a', '#ffb02e', '#fff2c0'], teal: ['#5ef0dc', '#2ec4b6', '#e8fffb'], red: ['#ff5a4f', '#ffb02e', '#ffe2d6'],
+                  party: ['#ffb02e', '#2ec4b6', '#f3efe4', '#e63946', '#ffe27a', '#4c8dff', '#c77dff'] };
+function fxSparks(x, y, cols, n = 40, speed = 380, grav = 260, delay = 0) {
+  for (let i = 0; i < n; i++) { const a = Math.random() * 6.2832, s = speed * (0.35 + Math.random() * 0.75);
+    fxAdd({ kind: 'spark', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, grav, drag: 0.955, life: rand(0.6, 1.2), size: rand(2, 3.5), col: cols[i % cols.length], delay }); }
+}
+function fxRing(x, y, col, r1 = 140, delay = 0) { fxAdd({ kind: 'ring', x, y, r0: 8, r1, life: 0.55, size: 6, col, delay }); }
+function fxGlow(x, y, col, size = 120, delay = 0) { fxAdd({ kind: 'glow', x, y, size, life: 0.5, col, delay }); }
+function fxFlash(bg) { const f = $('flash'); f.style.background = bg; f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
+function fxConfetti(n = 120, x = null, y = null) {   // from a point (a burst), or raining from the top
+  const w = FX.w || W, cols = FX_COLS.party;
+  for (let i = 0; i < n; i++) {
+    const burstAt = x != null, a = -Math.PI / 2 + rand(-1.1, 1.1), s = rand(250, 620);
+    fxAdd({ kind: 'confetti', x: burstAt ? x : Math.random() * w, y: burstAt ? y : rand(-60, -10), vx: burstAt ? Math.cos(a) * s : rand(-30, 30), vy: burstAt ? Math.sin(a) * s : rand(60, 160),
+            grav: burstAt ? 520 : 40, drag: burstAt ? 0.975 : 1, a: Math.random() * 6, va: rand(-8, 8), life: rand(2.2, 3.6), size: rand(7, 12), col: cols[i % cols.length], delay: burstAt ? 0 : Math.random() * 0.8 });
+  }
+}
+// fireworks over the stands: rockets go up from the crowd and burst at the top of the picture
+function fxFireworks(count = 5, teamCol, k = 1) {   // k: size and brightness
+  const w = FX.w || W, h = FX.h || H;
+  for (let i = 0; i < count; i++) {
+    const x = w * rand(0.12, 0.88), y0 = h * rand(0.32, 0.45), y1 = h * rand(0.07, 0.24), T = rand(0.45, 0.6), delay = i * rand(0.22, 0.4);
+    const cols = i % 2 && teamCol ? [teamCol, '#ffffff', '#ffd36a'] : (i % 3 === 0 ? FX_COLS.gold : i % 3 === 1 ? FX_COLS.teal : FX_COLS.party);
+    fxAdd({ kind: 'rocket', x, y: y0, vx: rand(-20, 20), vy: (y1 - y0) / T, life: T, size: 2.5, col: '#fff3c4', delay,
+            onEnd: p => { fxGlow(p.x, p.y, cols[0], 90 * k); fxSparks(p.x, p.y, cols, Math.round(46 * k), rand(260, 360) * k, 120); } });
+    sndFirework(delay, 0.8 * k);
+  }
+}
+// where a point on the field is on the screen (the same maths as render(), mirrored for a left-hander)
+function screenOf(p) {
+  if (!p) return null;
+  if (MIR < 0) { cam.pos[0] = -cam.pos[0]; cam.tgt[0] = -cam.tgt[0]; }
+  try { setupCamera(); const c = toCam(p); return c[2] > 0.5 ? proj(c) : null; }
+  finally { if (MIR < 0) { cam.pos[0] = -cam.pos[0]; cam.tgt[0] = -cam.tgt[0]; } setupCamera(); }
+}
+// the bat met the ball perfectly: a flash at the bat, sparks, a ring, a chime
+function fxPerfect() {   // kept small (owner's request): a soft glow, one ring, a few sparks, a quiet chime, no screen flash
+  if (!fxOn()) return;
+  const s = screenOf(ballPos()) || [W / 2, H * 0.45];
+  fxGlow(s[0], s[1], 'rgba(255,240,190,0.45)', 70); fxRing(s[0], s[1], 'rgba(255,233,160,0.55)', 90);
+  fxSparks(s[0], s[1], FX_COLS.gold, 12, 300, 380);
+  sndPerfect();
+}
+// the result of a ball, as a moment: fireworks for a six, a ring for a four, a burst for a wicket you took
+function fxResult(kind, ours, teamCol) {
+  if (!fxOn()) return;
+  const bx = W / 2, by = H * 0.38;
+  if (kind === 'six') {
+    // kept subtle (owner's request): a soft ring, a few sparks, three small fireworks, no screen flash
+    sndWhoosh(0.8);
+    fxRing(bx, by, 'rgba(255,211,106,0.6)', Math.min(W, H) * 0.3);
+    fxSparks(bx, by, FX_COLS.gold, 16, 360, 300, 0.05);
+    if (ours) { fxFireworks(3, teamCol, 0.6); sndStinger('six'); }
+  } else if (kind === 'four') {
+    sndWhoosh(0.9);
+    fxRing(bx, by, '#5ef0dc', Math.min(W, H) * 0.32); fxSparks(bx, by, FX_COLS.teal, 30, 420, 280, 0.05);
+    if (ours) sndStinger('four');
+  } else if (kind === 'wicket') {   // you took a wicket
+    sndWhoosh(1);
+    fxRing(bx, H * 0.5, '#ff6a5a', Math.min(W, H) * 0.4); fxSparks(bx, H * 0.5, FX_COLS.red, 44, 500, 320);
+    sndStinger('wicket');
+  } else if (kind === 'out') {     // you lost one
+    fxFlash('radial-gradient(circle, rgba(0,0,0,0) 45%, rgba(200,30,30,0.35))');
+    sndStinger('out');
+  } else if (kind === 'milestone') {
+    fxConfetti(110, bx, by); sndStinger('streak');
+  } else if (kind === 'streak') {
+    fxSparks(bx, by, ['#ffb02e', '#ff6a2e', '#ffe27a'], 50, 560, 200, 0.1); sndStinger('streak');
+  }
+}
+// a line of commentary on screen, TV style: always shown, spoken too if the voice is on
+let commTimer = 0;
+function showComm(text) {
+  if (quiet || ff || !text) return;
+  const el = $('comm'); el.querySelector('.txt').textContent = text; el.classList.add('show'); el.classList.toggle('tp', touch);
+  clearTimeout(commTimer); commTimer = setTimeout(() => el.classList.remove('show'), Math.max(3200, 900 + text.length * 55));
 }
 
 // ======================================================================= game state
@@ -2472,6 +2754,7 @@ function swing(loft, pressT, aim, w) {
     : kind === 'edge' ? 'Edged' : 'Missed';
   ball.decision.shot = kind === 'hit' ? sn : '';
   if (swipeVis) swipeVis.label = sn;
+  ball.perfect = kind === 'hit' && inn.userBats && Math.abs(dtTiming) < 0.03 * w;   // shown as a moment at contact (fxPerfect)
   if (!quiet) showTiming(dtTiming, kind, kind === 'hit' ? sn : '', w);
 }
 
@@ -2525,7 +2808,7 @@ function showTiming(dtT, kind, shot, w) {
   const span = 0.25 * w, okP = 0.1 * w / span * 50, pos = 50 + clamp(dtT / span, -1, 1) * 50;
   el.innerHTML = esc(shot ? txt + ' · ' + shot : txt) +
     '<span class="tbar"><b class="e">early</b><span class="ok" style="left:' + (50 - okP) + '%;width:' + 2 * okP + '%"></span><i style="left:' + pos + '%"></i><b class="l">late</b></span>';
-  el.style.color = col; el.classList.add('show');
+  el.style.color = col; el.classList.add('show'); el.classList.remove('perfect');   // the glow is added at contact, on a six only
 }
 
 // ----------------------------------------------------------------------- the computer batting
@@ -2868,6 +3151,8 @@ function contact() {
   const h = strike();
   if (h.playedOn) return;
   const { fp, res, angle } = h;
+  // the sparkle at the bat only when a perfectly timed hit is going for six (owner's request: not for a four or a catch)
+  if (ball.perfect && !d.defend && res.kind === 'six') { fxPerfect(); $('timing').classList.add('perfect'); }
   ball.play = { fp, res, t: 0, angle, startT: clock, edge: d.kind === 'edge' };
   phase = 'play'; phaseT = 0;
   camMode = 'chase';
@@ -3144,10 +3429,17 @@ function updateScore() {
   $('scoreText').textContent = i.runs + '/' + i.wkts;
   $('oversText').textContent = ovStr(i.balls) + (match ? ' / ' + (i.superOver ? 1 : M.overs) : '') + ' ov' + (match && inPP() ? ' · PP' : i.superOver ? ' · Super Over' : '');
   const left = i.maxBalls - i.balls, crr = i.balls ? (i.runs / i.balls * 6).toFixed(2) : '0.00';
+  const nt = $('needText'); nt.className = 'need';
   if (i.target) {
-    const need = Math.max(0, i.target - i.runs);
-    $('needText').textContent = need === 0 ? 'Target reached' : 'Need ' + need + ' off ' + left;
-  } else $('needText').textContent = 'Run rate ' + crr;
+    const need = Math.max(0, i.target - i.runs), rrr = need / Math.max(1, left) * 6;
+    nt.textContent = need === 0 ? 'Target reached' : 'Need ' + need + ' off ' + left;
+    if (need > 0) nt.classList.add(rrr <= 7.5 ? 'p0' : rrr <= 11 ? 'p1' : 'p2');   // how hard the chase is: easy, tight, steep
+    if (need > 0 && left <= 12) nt.classList.add('hot');                          // the last two overs
+  } else nt.textContent = 'Run rate ' + crr;
+  { const st = $('scoreText'), key = i.runs + '/' + i.wkts + '/' + M.cur;
+    if (st.dataset.k && st.dataset.k !== key && fxOn()) { st.classList.remove('bump'); void st.offsetWidth; st.classList.add('bump'); }
+    st.dataset.k = key; }
+  $('fireTag').hidden = (i.bStreak || 0) < 3;
   if (match) {
     $('levelName').textContent = M.teams[0].short + ' v ' + M.teams[1].short + ' · ' + M.diff.name;
     if (i.target) {
@@ -3186,9 +3478,10 @@ function updateScore() {
   }
   if (i.freeHit && chips.children[i.over.length]) { const c = chips.children[i.over.length]; c.classList.add('cf'); c.textContent = 'FH'; }   // the next ball is a free hit
 }
-function showBanner(head, line, cls, dur) {
+function showBanner(head, line, cls, dur, streak) {
   const b = $('banner');
   b.className = 'hud show ' + (cls || '');
+  b.querySelector('.streak').textContent = streak || '';
   b.querySelector('.head').textContent = head;
   const l = b.querySelector('.line');
   l.textContent = line || ''; l.hidden = !line;
@@ -3302,18 +3595,27 @@ function finishBall(o, line) {
   const signals = [o.out && o.out.how !== 'bowled' && 'out', o.noBall && 'nb', o.wide && 'wide', o.runs === 6 && 'six', o.runs === 4 && 'four',
     (o.noBall || o.wide) && i.freeHit && 'fh'].filter(s => s && !ff && !M.autoplay && !quiet);
   celebrate = { out: o.out || null, runs: o.runs || 0, milestone: !!milestone, signals };
+  // streaks: boundaries in a row (a wide doesn't break it), and a bowler's wickets on his balls in a row (the hat-trick)
+  const boundary = !o.out && o.runs >= 4;
+  if (!o.wide) i.bStreak = boundary ? (i.bStreak || 0) + 1 : 0;
+  const bwl = bowlerP().name, bowlerWkt = o.out && o.out.how !== 'run out';
+  if (bowlerWkt) i.hat = { b: bwl, n: i.hat && i.hat.b === bwl ? i.hat.n + 1 : 1 };
+  else if (!o.wide && !o.noBall && i.hat && i.hat.b === bwl) i.hat = null;
+  const hatN = bowlerWkt ? i.hat.n : 0, bs = i.bStreak || 0;
+  const streak = boundary && bs >= 3 ? '🔥 ' + bs + ' IN A ROW!' : boundary && bs === 2 ? '2 IN A ROW' : hatN === 2 ? 'ON A HAT-TRICK!' : '';
   if (o.out) {
-    showBanner('OUT!', chaseMode ? line : line + ' · ' + who + c.runs + ' (' + c.balls + ')', 'bw');
-    if (ours) { sndOoh(1, true); sndClap(0.25, 3); } else { sndCrowd(0.9, 3); sndClap(0.7); cheer = 0.8; }
+    showBanner(hatN >= 3 ? 'HAT-TRICK!' : 'OUT!', chaseMode ? line : line + ' · ' + who + c.runs + ' (' + c.balls + ')', 'bw', 0, streak);
+    if (ours) { sndOoh(1, true); sndClap(0.25, 3); fxResult('out'); }
+    else { sndCrowd(0.9, 3); sndCheer(1); sndClap(0.7); cheer = 0.8; fxResult(hatN >= 3 ? 'milestone' : 'wicket'); }
   } else if (o.wide) showBanner('WIDE', line, 'small');
   else if (o.notOut) showBanner(o.noBall ? 'NO BALL' : 'NOT OUT', line, o.noBall ? 'small bnb' : 'small');
   else if (o.noBall && o.runs < 4) showBanner('NO BALL', line, 'small bnb');
-  else if (o.runs === 6) { showBanner('SIX!', line, 'b6'); if (ours) { sndCrowd(1, 3.5); sndClap(0.8, 5); sndHorn(); cheer = 1; } else { sndCrowd(0.3, 2); sndClap(0.35); } }
-  else if (o.runs === 4) { showBanner('FOUR!', line, 'b4'); if (ours) { sndCrowd(0.7, 2.6); sndClap(0.6); cheer = 0.7; } else { sndCrowd(0.2, 1.5); sndClap(0.3); } }
-  else {
-    showBanner(o.runs === 0 ? 'DOT BALL' : o.runs + (o.runs === 1 ? ' RUN' : ' RUNS'), line, 'small');
-  }
-  if (milestone) { showBanner(milestone === 100 ? 'HUNDRED!' : 'FIFTY!', who + c.runs + ' off ' + c.balls, 'b6'); sndClap(1, 7); sndCrowd(0.6, 4); }
+  else if (o.runs === 6) { showBanner('SIX!', line, 'b6', 0, streak); fxResult('six', ours, i.bat.col); if (ours) { sndCrowd(1, 3.5); sndCheer(1); sndClap(0.8, 5); sndHorn(); cheer = 1; } else { sndCrowd(0.3, 2); sndClap(0.35); } }
+  else if (o.runs === 4) { showBanner('FOUR!', line, 'b4', 0, streak); fxResult('four', ours); if (ours) { sndCrowd(0.5, 2.2); sndCheer(0.6); sndClap(0.6); cheer = 0.7; } else { sndCrowd(0.2, 1.5); sndClap(0.3); } }
+  else if (o.runs === 0) showBanner('', line || 'Dot ball', 'small quiet');   // a dot ball is the commonest ball: no big word for it
+  else showBanner(o.runs + (o.runs === 1 ? ' RUN' : ' RUNS'), line, 'small');
+  if (boundary && bs >= 3 && ours) fxResult('streak');
+  if (milestone) { showBanner(milestone === 100 ? 'HUNDRED!' : 'FIFTY!', who + c.runs + ' off ' + c.balls, 'bmil pop'); sndClap(1, 7); sndCrowd(0.6, 4); sndCheer(0.9); fxResult('milestone'); }
   phase = 'result'; phaseT = 0;
 }
 
@@ -3391,7 +3693,7 @@ function endMatch() {
   commentaryCall('match',{text});
   const t = $('endTitle');
   if (!winner) { t.textContent = 'TIED'; t.className = 'result'; }
-  else if (winner === you) { t.textContent = 'YOU WON'; t.className = 'result win'; }
+  else if (winner === you) { t.textContent = 'YOU WON'; t.className = 'result win'; if (!quiet) { confettiRain(); sndStinger('win'); sndCheer(1); sndClap(0.9, 6); } }
   else { t.textContent = 'YOU LOST'; t.className = 'result lose'; }
   $('endSub').textContent = text;
   const sr = M.series;
@@ -3562,7 +3864,7 @@ function renderTabs(tabsId, cardId, sel) {
 
 // ----------------------------------------------------------------------- screens
 const SCREENS = ['menu', 'setup', 'chaseMenu', 'toss', 'break', 'pause', 'end', 'stats', 'tournament', 'settings'];
-function showScreen(id) { for (const s of SCREENS) $(s).hidden = s !== id; }
+function showScreen(id) { for (const s of SCREENS) $(s).hidden = s !== id; if (id === 'menu') renderQuickLine(); }
 function toMenu() {
   M = null; inn = null; ball = null; phase = 'menu'; paused = false; setFF(false);
   $('pick').hidden = true; $('meter').hidden = true; $('batline').hidden = true;
@@ -3712,14 +4014,21 @@ const TROPHY_SVG='<svg viewBox="0 0 110 128" aria-hidden="true"><defs><linearGra
   '<path d="M48 74 H62 L60 92 H50 Z" fill="url(#gold)"/><rect x="34" y="92" width="42" height="10" rx="2" fill="url(#gold)"/><rect x="26" y="102" width="58" height="18" rx="3" fill="#3a2a12"/>'+
   '<rect x="26" y="102" width="58" height="4" fill="url(#gold)"/><path d="M55 24 l4 9 10 1 -8 6 3 10 -9 -5 -9 5 3 -10 -8 -6 10 -1 Z" fill="#fff6c8" opacity="0.85"/></svg>';
 // Winning a tournament: the trophy on the end screen, confetti and the crowd. Stops when the end screen closes.
+let confettiOn=false;
 function celebrateCup(){
   $('trophy').innerHTML=TROPHY_SVG;$('trophy').hidden=false;
+  confettiRain();
+  sndCrowd(1,7);sndClap(1,8);setTimeout(()=>sndClap(0.8,6),2500);
+}
+// confetti over the end screen (a match won, a cup lifted)
+function confettiRain(){
+  if(confettiOn||quiet)return;confettiOn=true;
   const cv=$('confetti');cv.hidden=false;const g=cv.getContext('2d'),cols=['#ffb02e','#2ec4b6','#f3efe4','#e63946','#ffe27a','#4c8dff'];
   let w=0,h=0;const size=()=>{w=cv.width=cv.clientWidth;h=cv.height=cv.clientHeight;};size();
-  const bits=Array.from({length:160},()=>({x:Math.random()*w,y:-Math.random()*h,vx:(Math.random()-0.5)*60,vy:60+Math.random()*120,a:Math.random()*6,va:(Math.random()-0.5)*8,s:5+Math.random()*7,c:cols[Math.floor(Math.random()*cols.length)]}));
+  const bits=Array.from({length:160},()=>({x:Math.random()*(w||innerWidth),y:-Math.random()*(h||innerHeight),vx:(Math.random()-0.5)*60,vy:60+Math.random()*120,a:Math.random()*6,va:(Math.random()-0.5)*8,s:5+Math.random()*7,c:cols[Math.floor(Math.random()*cols.length)]}));
   let t0=performance.now(),prev=t0;
   const step=now=>{
-    if($('end').hidden||now-t0>9000){cv.hidden=true;return;}
+    if($('end').hidden||now-t0>9000){cv.hidden=true;confettiOn=false;return;}
     if(cv.clientWidth!==w||cv.clientHeight!==h)size();
     const dt=Math.min(0.05,(now-prev)/1000);prev=now;g.clearRect(0,0,w,h);
     const fade=Math.min(1,(9000-(now-t0))/1500);g.globalAlpha=fade;
@@ -3728,7 +4037,6 @@ function celebrateCup(){
     requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
-  sndCrowd(1,7);sndClap(1,8);setTimeout(()=>sndClap(0.8,6),2500);
 }
 function playTournament(){
   const f=tournamentNext();if(!f)return showTournament();
@@ -4122,7 +4430,7 @@ function update(dt) {
     showBanner('FREE HIT', "Can't be out bowled, caught or stumped", 'bfh', 1.8);
   }
   const fb = $('fhBadge'); if (fb.hidden === (fhOn && !gapOn && !$('banner').classList.contains('bfh'))) fb.hidden = !fb.hidden;
-  if (phase === 'wait' && phaseT >= 0) { phase = 'runup'; phaseT = 0; $('delivery').classList.remove('show'); sndBuzz(0.07); }
+  if (phase === 'wait' && phaseT >= 0) { phase = 'runup'; phaseT = 0; $('delivery').classList.remove('show'); sndBuzz(0.16); }
   else if (phase === 'aim') {
     const [x, y] = keyAxes();
     if (x || y) { marker.x = clamp(marker.x + x * MIR * 0.8 * dt, -1.3, 1.1); marker.z = clamp(marker.z - y * 3.5 * dt, -0.4, 11); }
@@ -5450,6 +5758,10 @@ document.addEventListener('fullscreenchange', fsButtons); document.addEventListe
 $('fsBtn').addEventListener('click', toggleFull);
 $('fsMenu').addEventListener('click', toggleFull);
 $('pauseBtn').addEventListener('click', () => { if (paused) resume(); else openPause(); });
+// PLAY NOW: straight to the toss with the last match's teams and overs (a single match)
+function renderQuickLine() { const a = TEAMS[setup.a], b = TEAMS[setup.b]; if (a && b) $('quickLine').textContent = a.name + ' v ' + b.name + ' · ' + (setup.overs === 50 ? 'ODI' : setup.overs === 20 ? 'T20' : setup.overs + ' overs'); }
+$('goQuick').addEventListener('click', () => { audio(); setup.series = 0; setup.tournament = false; cupReplaceArmed = false; startTossOne(); });
+renderQuickLine();
 $('goMatch').addEventListener('click', () => { audio(); setup.series = 0; setup.tournament=false; cupReplaceArmed=false; renderSetup(); showScreen('setup'); });
 $('goChase').addEventListener('click', () => { audio(); renderLevels(); showScreen('chaseMenu'); });
 $('setupBack').addEventListener('click', toMenu);

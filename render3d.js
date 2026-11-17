@@ -333,6 +333,9 @@ window.Cricket3D = function (G) {
   trailGeo.setAttribute('position', new T.BufferAttribute(trailPos, 3));
   const trail = new T.Line(trailGeo, new T.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, blending: T.AdditiveBlending }));
   trail.frustumCulled = false; scene.add(trail);
+  // a faint comet behind the ball on a six only (the owner found a glowing ball on every big hit too much)
+  const COMET = 12, comet = Array.from({ length: COMET }, () => { const sp = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: 0xfff2d0, transparent: true, opacity: 0, depthWrite: false, blending: T.AdditiveBlending }));
+    sp.visible = false; scene.add(sp); return sp; });
 
   // ---------------------------------------------------------------- players
   const SKIN = ['#8d5a3b', '#b07650', '#c99872', '#e0b48f', '#6b4029'].map(c => new T.MeshStandardMaterial({ color: c, roughness: 0.7 }));
@@ -1767,6 +1770,10 @@ window.Cricket3D = function (G) {
       trailGeo.attributes.position.needsUpdate = true;
     }
     if (bp && G.ball && G.ball.play) { const t2 = G.ball.trail || (G.ball.trail = []); t2.push(bp.slice()); if (t2.length > 12) t2.shift(); }
+    { const b = G.ball, d = b && b.decision, big = !!(tr && b.play && d && d.kind === 'hit' && b.play.res && b.play.res.kind === 'six' && b.play.t < 2.5);
+      comet.forEach((sp, i) => { const q = big && tr[tr.length - 1 - i]; sp.visible = !!q; if (!q) return;
+        const k = 1 - i / COMET; sp.position.set(q[0], q[1], q[2]); sp.material.color.setHex(0xfff2d0);
+        sp.material.opacity = 0.18 * k; sp.scale.setScalar(Math.max(0.12, camera.position.distanceTo(sp.position) * 0.006) * k); }); }
     if (perf) renderer.info.reset();
     const perfSubmit = perf ? performance.now() : 0;
     if (composer) composer.render(); else renderer.render(scene, camera);

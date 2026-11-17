@@ -6,7 +6,7 @@
   function create(options={}) {
     const synth=options.synth||root.speechSynthesis;
     const Utterance=options.Utterance||root.SpeechSynthesisUtterance;
-    const now=options.now||(()=>Date.now()),onSpeaking=options.onSpeaking||(()=>{});
+    const now=options.now||(()=>Date.now()),onSpeaking=options.onSpeaking||(()=>{}),onCaption=options.onCaption||null;
     const rnd=options.random||Math.random;
     let enabled=false,muted=false,suspended=false,unlocked=false,current=null,pending=null,serial=0,lastLow=-Infinity;
     const seen=new Set(),history=[],recent=[];
@@ -211,7 +211,9 @@
     }
 
     function emit(event,data={}) {
-      if(!enabled||muted||suspended||!unlocked||!supported||data.skip)return false;
+      // the voice needs the player to have turned it on; the on-screen line (onCaption) shows either way
+      const voice=enabled&&!muted&&!suspended&&unlocked&&supported;
+      if((!voice&&!onCaption)||data.skip)return false;
       if(data.id&&seen.has(data.id))return false;
       let call=null;
       if(event==='result')call=resultCall(data);
@@ -223,6 +225,8 @@
       else return false;
       if(!call||!call.text)return false;
       const {text,priority}=call;
+      if(onCaption){try{onCaption(text,priority,event);}catch(e){}}
+      if(!voice){if(data.id){seen.add(data.id);if(seen.size>200)seen.delete(seen.values().next().value);}return false;}
       if(priority<50&&now()-lastLow<6500)return false;
       if(data.id){seen.add(data.id);if(seen.size>200)seen.delete(seen.values().next().value);}
       if(priority<50)lastLow=now();
