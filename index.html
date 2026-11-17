@@ -2508,8 +2508,40 @@ const autoBowling = () => !!(M && M.mode === 'match' && inn && !inn.userBats && 
 let shotType = touch ? 'loft' : 'shot', swipeVis = null;   // on phones and tablets LOFT is the starting choice (the owner asked)
 const isSpin = p => !!BOWL_TYPES[btype(p)].turn;
 
+// the computer captain reacts to where YOU hit boundaries: once two (three on Easy) of your last eight boundaries went to the
+// same area and nobody is deep there, a fielder goes back to it. Within the limits: two outside the circle in the powerplay,
+// five after it; if the deep is full, the deep fielder in the area you hit least moves across. Only when you bat in a match.
+const ADAPT = { look: 8, near: 25, covered: 15, deep: 45, rope: 62 };
+const wrapD = a => ((a + 540) % 360) - 180;
+function deepName(a) {
+  if (Math.abs(a) <= 7) return a < 0 ? 'long-off' : 'long-on';
+  const r = regionName(a, 60);
+  return /^(point|square leg)$/.test(r) ? 'deep ' + r : r;
+}
+function adaptField(preset) {
+  if (inn) inn.fieldNote = null;   // set again below while the change stands
+  if (!inn || !inn.userBats || !M || M.mode !== 'match' || quiet || M.autoplay || !(inn.hits && inn.hits.length)) return preset;
+  const hits = inn.hits.slice(-ADAPT.look), need = (M.diff.plan ?? 1) === 0 ? 3 : 2;
+  const weight = (a, w = ADAPT.near) => hits.reduce((t, h) => t + (Math.abs(wrapD(h.a - a)) <= w ? (h.six ? 1.5 : 1) : 0), 0);
+  let best = null, bs = 0;
+  for (const h of hits) { const sc = weight(h.a); if (sc > bs) { bs = sc; best = h.a; } }
+  const near = best === null ? [] : hits.filter(h => Math.abs(wrapD(h.a - best)) <= ADAPT.near);
+  if (near.length < need) return preset;
+  const a = Math.round(best + near.reduce((t, h) => t + wrapD(h.a - best), 0) / near.length);
+  const f = preset.map(x => x.slice()), isDeep = x => x[2] > ADAPT.deep && x[0] !== 'wicketkeeper';
+  if (f.some(x => isDeep(x) && Math.abs(wrapD(x[1] - a)) <= ADAPT.covered)) return preset;   // already someone there
+  const room = f.filter(isDeep).length < (inPP() ? 2 : 5);
+  // who goes: an infielder if there is room in the deep (never the keeper, or the first slip in the powerplay), else a deep fielder
+  const cands = f.map((x, i) => i).filter(i => f[i][0] !== 'wicketkeeper' && (room ? !isDeep(f[i]) && !(inPP() && f[i][0] === 'first slip') : isDeep(f[i])));
+  if (!cands.length) return preset;
+  cands.sort((i, j) => weight(f[i][1], 30) - weight(f[j][1], 30) || Math.abs(wrapD(f[j][1] - a)) - Math.abs(wrapD(f[i][1] - a)));
+  const name = deepName(a);
+  f[cands[0]] = [name, a, ADAPT.rope];
+  inn.fieldNote = name; if (inn.fieldSaid !== name) { inn.fieldSaid = name; inn.fieldNew = true; }
+  return f;
+}
 function newFielders() {
-  const preset = FIELDS[inn ? inn.field : 'balanced'];
+  const preset = adaptField(FIELDS[inn ? inn.field : 'balanced']);
   const haveBowler = inn && inn.bowler !== null;
   const spin = haveBowler && isSpin(bowlerP());
   const team = inn ? inn.bowl : null;
@@ -2691,10 +2723,22 @@ function userSpec(bp, e) {
 // ----------------------------------------------------------------------- the shot
 const naturalAngle = (atBat, short) => clamp(-atBat[0] * 120, -70, 70) + (short ? 35 : 0);
 // your timing window: difficulty, and in a match the batter's skill
-const userWin = () => M.diff.win * (M.mode === 'chase' ? 1 : (0.78 + 0.32 * batterP(inn.striker).bat / 100) * (1 - BOWL_EDGE.you * bowlEdge()));
+// how much the bowler's rating matters when YOU bat (owner: "I hit sixes off every bowler with the same ease"): -0.1 for a
+// part-timer (65 and under), 0.07 for a typical frontline bowler (82), 0.17 for the best (92). A better bowler narrows your
+// timing window (win), and a lofted shot off a better-than-typical one needs cleaner timing to clear the rope (sky: more of
+// them go up instead of out) and goes a little less far (power; a weak bowler gives no extra). Only your own shots (ball.decision.you).
+const BOWL_YOU = { mid: 75, win: 1.0, sky: 1.6, skyFrom: 0.05, power: 0.5 };
+const bowlQ = () => !M || M.mode !== 'match' || !inn || inn.bowler === null ? 0 : clamp((bowlerP().bowl - BOWL_YOU.mid) / 100, -0.1, 0.25);
+// your batter's rating (owner: a top batter slightly easier than a normal one, a bowler batting clearly harder to time, but
+// still able to hit it if you time it well): the timing window is about 1.03 at 90, 0.95 at 60, 0.73 at 25 (YOU_BAT.win), and
+// the power hardly drops for a tail-ender (YOU_BAT.power: 0.93 at 25), so a middled slog by him can still clear the rope.
+const YOU_BAT = { top: 1.04, drop: 0.55, min: 0.62, plo: 0.9, pk: 0.12 };
+const youBatWin = bat => Math.max(YOU_BAT.min, YOU_BAT.top - YOU_BAT.drop * Math.pow((100 - bat) / 100, 2));
+const youPower = () => !M || M.mode !== 'match' || !inn ? 1 : clamp(YOU_BAT.plo + YOU_BAT.pk * batterP(inn.striker).bat / 100, 0.9, 1.02);
+const userWin = () => M.diff.win * (M.mode === 'chase' ? 1 : youBatWin(batterP(inn.striker).bat) * (1 - BOWL_YOU.win * bowlQ()));
 
 // aim: null (timing decides the direction, as in Stick Cricket), { angle } (degrees, + = leg side) or { defend: true }
-function swing(loft, pressT, aim, w) {
+function swing(loft, pressT, aim, w, you = false) {   // you: the player's own swing (not the computer batting for him)
   if (phase !== 'flight' || !ball || ball.swing) return;
   const tc = pressT + SWING_LAG;           // when the bat gets to the ball
   const dtTiming = tc - ball.Tstar;        // < 0 early, > 0 late
@@ -2745,7 +2789,7 @@ function swing(loft, pressT, aim, w) {
     const side = atBat[0] < 0.1 ? 1 : -1, m = kind === 'miss' ? 1 : 0.35;
     ball.swing.target = [atBat[0] + side * 0.16 * m, clamp(atBat[1] + (high ? -0.3 : 0.07) * m, 0.12, 1.9), 1.02]; }
   ball.swing.how = { kind, e: clamp(-dtTiming / okW, -1.5, 1.5) };   // how it looks: hit / edge / miss, and how early (+) or late (-)
-  ball.decision = { kind, q, angle, fam: ball.swing.fam, loft: ball.swing.loft, defend: ball.swing.defend, push: !!(aim && aim.defend && aimed), dtTiming, power: ((aim && aim.power) || 1) * (ball.charge && !(aim && aim.defend) ? 1.1 : 1) };
+  ball.decision = { you, kind, q, angle, fam: ball.swing.fam, loft: ball.swing.loft, defend: ball.swing.defend, push: !!(aim && aim.defend && aimed), dtTiming, power: ((aim && aim.power) || 1) * (ball.charge && !(aim && aim.defend) ? 1.1 : 1) };
   // the bat meets the ball in front of the batter (early) or beside the stumps (late), never behind them
   ball.contactT = kind === 'miss' ? Infinity : ball.Tstar + clamp(dtTiming, -0.05, 0.015);
   ball.swing.contactAge = ball.contactT - pressT;
@@ -3105,7 +3149,7 @@ function nearestTo(p) { let b = null, d = 1e9; for (const f of fielders) { const
 const POWER = { lo: 0.78, k: 0.26, min: 0.8, max: 1.02 };
 const batPower = () => !M || M.mode !== 'match' || !inn ? 1 : clamp(POWER.lo + POWER.k * batterP(inn.striker).bat / 100, POWER.min, POWER.max);
 function strike() {
-  const d = ball.decision, atBat = samplePath(ball.path, ball.contactT), pw = batPower();
+  const d = ball.decision, atBat = samplePath(ball.path, ball.contactT), pw = d && d.you ? youPower() : batPower();
   let v, angle, elev, airborne;
   if (d.kind === 'hit' && d.defend) {
     angle = d.angle; v = (d.push ? rand(6, 11) : rand(3, 7)) * (0.6 + 0.4 * d.q); elev = 0; airborne = false;
@@ -3117,9 +3161,10 @@ function strike() {
       else { v = (15 + 15 * d.q) * pw + pace + rand(-1.2, 1.2); elev = rand(28, 40); }
       airborne = true;
     } else if (d.loft) {
-      const sky = d.fam === 'hook' ? 0.4 : 0.3;   // a hook not quite middled goes straight up
+      const ub = d.you ? bowlQ() : 0;   // your own shot: the bowler's rating (BOWL_YOU)
+      const sky = (d.fam === 'hook' ? 0.4 : 0.3) + BOWL_YOU.sky * Math.max(0, ub - BOWL_YOU.skyFrom);   // (above a typical bowler only)   // a hook not quite middled goes straight up
       if (d.q < sky) { v = rand(15, 21); elev = rand(50, 63); }
-      else { v = (17 + 16 * d.q) * pw + rand(-1.2, 1.2) + (d.fam === 'hook' ? 2 : 0); elev = rand(24, 34); }
+      else { v = (17 + 16 * d.q) * pw * (1 - BOWL_YOU.power * Math.max(0, ub)) + rand(-1.2, 1.2) + (d.fam === 'hook' ? 2 : 0); elev = rand(24, 34); }
       airborne = true;
     } else {
       const k = { lcut: 0.72, glance: 0.75, rsweep: 0.85, hook: 1.08 }[d.fam] || 1;   // deflections run slower, the hook flies
@@ -3311,7 +3356,7 @@ function skipGap() {
   phaseT = GAP_END; return true;
 }
 function beginBall(delay, announce) {
-  newFielders();
+  newFielders(); if (announce) inn.fieldNew = false;
   pending = null; ball = null; preBall = null; celebrate = null; wantCharge = false; guard = 0; camMode = 'bowl'; meter = null; swipeVis = null;
   endReplay(); recReset();
   setFF(!!(M.watchFast && autoBowling()));
@@ -3320,7 +3365,10 @@ function beginBall(delay, announce) {
     const b = bowlerP(), f = inn.bowlers[inn.bowler], ov = Math.floor(inn.balls / 6);
     const fig = f && f.balls ? ' · ' + f.wkts + '–' + f.runs + ' (' + ovStr(f.balls) + ')' : '';
     const last = inn.lastOver ? 'Last over ' + plural(inn.lastOver.runs, 'run') + (inn.lastOver.wkts ? ', ' + plural(inn.lastOver.wkts, 'wicket') : '') + ' · ' : '';
-    tvCard('Over ' + (ov + 1) + ' · ' + b.name, last + BOWL_TYPES[btype(b)].name + fig + ' · ' + FIELD_INFO[inn.field][0] + ' field', inn.bowl.col);
+    tvCard('Over ' + (ov + 1) + ' · ' + b.name, last + BOWL_TYPES[btype(b)].name + fig + ' · ' + FIELD_INFO[inn.field][0] + ' field' + (inn.fieldNote ? ', ' + inn.fieldNote + ' back' : ''), inn.bowl.col);
+  } else if (inn.fieldNew && M.mode === 'match' && !quiet) {
+    inn.fieldNew = false;
+    tvCard('Field change', inn.fieldNote.charAt(0).toUpperCase() + inn.fieldNote.slice(1) + ' goes back to cut off your shots', inn.bowl.col);
   } else if (M.mode === 'match' && inn.balls > 0 && inn.cards[inn.striker].balls === 0 && !inn.cards[inn.striker].out && inn.lastIn !== inn.striker) {
     inn.lastIn = inn.striker;
     const p = batterP(inn.striker);
@@ -3388,9 +3436,9 @@ function simBall() {
   return o;
 }
 // the outcome of the current ball for a shot plan (null = no shot), without animation
-function resolveBall(plan, w) {
+function resolveBall(plan, w, you = false) {   // you: a simulated player batting (tools/sim.py), not the computer
   phase = 'flight';
-  if (plan) swing(plan.loft, plan.t, plan.aim, w);
+  if (plan) swing(plan.loft, plan.t, plan.aim, w, you);
   let o;
   const d = ball.decision;
   if (!d || d.kind === 'miss') o = ball.stumps ? { runs: 0, out: { how: 'bowled' } } : ball.wide ? { runs: 0, wide: true } : { runs: 0 };
@@ -3597,6 +3645,7 @@ function finishBall(o, line) {
   celebrate = { out: o.out || null, runs: o.runs || 0, milestone: !!milestone, signals };
   // streaks: boundaries in a row (a wide doesn't break it), and a bowler's wickets on his balls in a row (the hat-trick)
   const boundary = !o.out && o.runs >= 4;
+  if (boundary && ball && ball.play && ball.decision && ball.decision.you && !o.wide) (i.hits || (i.hits = [])).push({ a: Math.round(ball.play.angle), six: o.runs === 6 });   // for the captain (adaptField)
   if (!o.wide) i.bStreak = boundary ? (i.bStreak || 0) + 1 : 0;
   const bwl = bowlerP().name, bowlerWkt = o.out && o.out.how !== 'run out';
   if (bowlerWkt) i.hat = { b: bwl, n: i.hat && i.hat.b === bwl ? i.hat.n + 1 : 1 };
@@ -5599,7 +5648,7 @@ function finishPress(dir) {
   const p = pending; pending = null;
   const aim = shotType === 'defend' ? { defend: true, angle: dir } : dir === null ? null : { angle: dir };
   if (swipeVis) { swipeVis.dir = dir; swipeVis.t0 = clock; swipeVis.kind = shotType; }
-  swing(shotType === 'loft', p.t, aim, userWin());
+  swing(shotType === 'loft', p.t, aim, userWin(), true);
   M.batBalls = (M.batBalls || 0) + 1;
 }
 function slideAim(dx, dy) { return Math.hypot(dx, dy) < SLIDE ? null : Math.atan2(dx * MIR, dy) / deg; }
@@ -5625,7 +5674,7 @@ function keyShot(shift) {
   const kind = shift ? 'loft' : dir === null ? 'defend' : 'shot';
   const aim = kind === 'defend' ? { defend: true, angle: null } : { angle: dir === null ? 0 : dir };
   swipeVis = { keys: true, t0: clock, label: '', dir: kind === 'defend' ? null : aim.angle, kind };
-  swing(kind === 'loft', ball.t, aim, userWin());
+  swing(kind === 'loft', ball.t, aim, userWin(), true);
   M.batBalls = (M.batBalls || 0) + 1;
 }
 function keyCharge(shift) {
