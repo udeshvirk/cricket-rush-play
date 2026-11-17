@@ -115,15 +115,16 @@
         :typeof a[k]==='number'?mix(a[k],b[k]??a[k],u):a[k]]));
     const angle=clamp(aim,-100,35),rad=angle*Math.PI/180,dx=Math.sin(rad),dz=Math.max(.12,Math.cos(rad));
     // angle, stride x, stride z, hip/shoulder contact, finish height, finish shoulder
-    const profiles=[[-100,.12,1.12,-88,-108,1.08,-80],[-45,.20,1.30,-76,-94,1.36,-56],
-      [0,.34,1.43,-62,-78,1.62,-18],[35,.50,1.34,-44,-60,1.53,20]];
+    // (strides shortened November 2026: from the side it was nearly the splits, hips low between the feet, back leg locked)
+    const profiles=[[-100,.12,1.02,-88,-108,1.08,-80],[-45,.20,1.18,-76,-94,1.36,-56],
+      [0,.34,1.29,-62,-78,1.62,-18],[35,.50,1.21,-44,-60,1.53,20]];
     let i=0;while(i<profiles.length-2&&angle>profiles[i+1][0])i++;
     const a=profiles[i],b=profiles[i+1],u=clamp((angle-a[0])/(b[0]-a[0]),0,1),p=a.map((v,k)=>mix(v,b[k],u));
     const low=clamp((.5-target[1])*.35,0,.10),fr=[clamp(target[0]+p[1],-.18,.9),0,p[2]+.12];   // a long stride that reads from the bowler's end
     const bd=unit([-.04+dx*.30,-1,-.08]),h=add(target,scale(bd,-.48));
-    const pelvis=[mix(start.pel[0],fr[0],.7),.65-low*.5,1.08-.14*Math.max(0,(-angle-45)/55)];   // deep into the front knee
-    const contact={...start,fr,pel:pelvis,hy:p[3],sy:p[4],lean:29+low*50,side:4,h,bd,...(start.bk?{bk:add(start.bk,[0,0,.16])}:{}),
-      kpL:[dx*.65-.10,0,1],rearFootPitch:.45};   // the back toe drags after the front foot
+    const pelvis=[mix(start.pel[0],fr[0],.7),.71-low*.5,1.0-.12*Math.max(0,(-angle-45)/55)];   // into the front knee
+    const contact={...start,fr,pel:pelvis,hy:p[3],sy:p[4],lean:29+low*50,side:4,h,bd,...(start.bk?{bk:add(start.bk,[0,0,.06])}:{}),
+      kpL:[dx*.65-.10,0,1],...(start.kpR?{kpR:[-.85,-.12,.5]}:{}),rearFootPitch:.5};   // the back knee softens toward the pitch, up on the back toe
     const load={...start,pel:add(start.pel,[0,-.015,.025]),hy:start.hy+6,sy:start.sy-5,
       h:add(start.h,[.01,.025,-.025]),bd:slerp(unit(start.bd),unit([-.4,.76,-.51]),.3)};
     const slot={...blend(start,contact,.65),hy:mix(start.hy,contact.hy,.85),sy:mix(start.sy,contact.sy,.45),
@@ -135,10 +136,11 @@
     // along the ground the drive is checked: the bat stops pointing up in front, at the shoulders; lofted, it goes right through
     const height=loft?Math.max(1.60,p[5]+.15):p[5]-.1;
     // weight stays on the bent front knee, head and front shoulder over it (a lofted drive comes up taller)
-    const finish={...contact,pel:[pelvis[0]+.015,loft?.80:.70,1.1-.12*Math.max(0,(-angle-45)/55)],
+    const finish={...contact,pel:[pelvis[0]+.015,loft?.83:.75,1.04-.12*Math.max(0,(-angle-45)/55)],
       hy:p[3]+30,sy:p[6],lean:loft?10:16,side:loft?2:5,rearFootPitch:.38,
-      h:[pelvis[0]-.06+dx*.25,height,1.25-.15*Math.abs(dx)],
-      bd:loft?unit([dx*.9-.12,.86,.30]):unit([dx*.55-.1,mix(.55,.95,Math.max(0,1-Math.abs(angle)/100)),.55])};
+      // hands up beside the head on its off side, not in front of the face (it hid the face from the bowler's end)
+      h:[pelvis[0]-.24+dx*.18,height,1.08-.1*Math.abs(dx)],
+      bd:loft?unit([dx*.9-.12,.86,.30]):unit([dx*.45-.2,mix(.55,.95,Math.max(0,1-Math.abs(angle)/100)),.3])};
     const settle={...finish,pel:add(finish.pel,[0,.03,-.02]),h:add(finish.h,[0,-.06,loft?0:.06]),lean:loft?8:12,side:loft?1:3,rearFootPitch:.25};
     return [[0,start],[impact*.26,load],[impact*.63,slot],[impact,contact],
       [impact+.075,through],[impact+.18,extension],[impact+.42,finish],
@@ -149,21 +151,24 @@
   function cutKeys({start,target,stance,impact=.15}) {
     const bd=unit([-.94,-.15,-.3]),h=add(target,scale(bd,-.48));
     const shift=clamp(target[0],-.35,.25),dip=clamp((1-target[1])*.35,0,.22);
-    const contact={...start,fr:[.88+shift,0,1.12],bk:[.54+shift,0,.4],pel:[.66+shift,.75-dip,.85],
-      hy:-80,sy:-92,lean:21+dip*40,side:8,h,bd,kpL:[-.65,0,.65],kpR:[-1,0,.05],rearFootPitch:0};   // low, leaning out over the ball
-    const upPel=[.68+shift,.79-dip,.85],upLean=20+dip*40;   // the body stays up until the bat comes through
+    // the back foot goes back and across toward off stump and takes the weight (knee bent over it), the front foot stays
+    // near its guard and the front leg straightens a little; he leans out over the ball toward point (November 2026: the
+    // front foot used to step 30 cm to the leg side and both knees bowed out toward point)
+    const contact={...start,fr:[.58+shift*.5,0,1.02],bk:[.34+shift*.8,0,.44],pel:[.48+shift*.75,.79-dip,.72],
+      hy:-84,sy:-94,lean:22+dip*40,side:6,h,bd,kpL:[-.35,0,.95],kpR:[-.9,0,.45],rearFootPitch:0};   // low, leaning out over the ball
+    const upPel=[.58+shift*.5,.80-dip,.74],upLean=11+dip*40;   // the body stays up until the bat comes through
     const load={...contact,pel:start.pel.map((v,i)=>v+(upPel[i]-v)*.4),
       hy:start.hy+(contact.hy-start.hy)*.4,sy:start.sy+(contact.sy-start.sy)*.25,
       lean:start.lean+(upLean-start.lean)*.4,
       h:start.h.map((v,i)=>v+(h[i]-v)*.3+(i===1?.03:0)),
       bd:slerp(unit(start.bd),unit([-.7,.32,-.64]),.2)};   // already on its way down (it used to lift first and wait)
-    const slot={...contact,pel:upPel,lean:upLean,sy:-105,h:add(h,[.025,.09,-.12]),bd:unit([-.7,.32,-.64])};   // drops into the shot only as the bat comes through
+    const slot={...contact,pel:upPel,lean:upLean,sy:-105,h:add(h,[.06,.09,-.02]),bd:unit([-.7,.32,-.64])};   // drops into the shot only as the bat comes through
     const through={...contact,hy:-72,sy:-72,h:add(h,[-.08,-.07,.13]),bd:unit([-.96,-.2,.2])};
     const extension={...contact,hy:-64,sy:-52,lean:16,
-      h:[.52+shift,h[1]-.1,1.3],bd:unit([-.7,-.15,.7])};
+      h:[.38+shift,h[1]-.1,1.26],bd:unit([-.7,-.15,.7])};
     // held out toward point, arms long, the face rolled over (reads from the bowler's end)
-    const finish={...contact,pel:[.66+shift,.79,.85],hy:-62,sy:-46,lean:18,side:4,
-      h:[.4+shift,1.17,1.16],bd:unit([-.9,.22,.36])};
+    const finish={...contact,pel:[.50+shift,.80,.74],hy:-62,sy:-46,lean:18,side:4,
+      h:[.24+shift,1.17,1.12],bd:unit([-.9,.22,.36])};
     const settle={...finish,sy:-50,lean:14,h:add(finish.h,[.04,-.08,-.02])};
     return [[0,start],[impact*.33,load],[impact*.68,slot],[impact,contact],
       [impact+.075,through],[impact+.17,extension],[impact+.38,finish],[impact+.85,settle],[impact+1.5,stance]];
