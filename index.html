@@ -2675,6 +2675,8 @@ function samplePath(path, t) {
 
 // the computer chooses a ball; mult < 1 makes it bowl worse (difficulty)
 const PRACTICE = new URLSearchParams(location.search).get('balls');   // ?balls=short|spin|full: practice deliveries when you bat
+const SLOWER = new Set(['Slower', 'Cutter', 'Flighted']), SLOWER_QUOTA = [0, 1, 3];   // easy, medium, hard: per match
+const nameFrac = n => { let h = 7; for (const c of String(n || '')) h = (h * 31 + c.charCodeAt(0)) % 9973; return h / 9973; };
 function aiSpec(bp, mult) {
   const type = btype(bp), T = BOWL_TYPES[type], spin = !!T.turn, chase = M.mode === 'chase';
   const s = chase ? 1 : clamp(bp.bowl / 100 * mult, 0.25, 1);
@@ -2702,8 +2704,16 @@ function aiSpec(bp, mult) {
     else if (PRACTICE === 'full') { pz = rand(2.2, 4); line = rand(-0.4, 0.1); }
     if (type2 !== type) return { type: type2, kmh: rand(BOWL_TYPES[type2].speed[0], BOWL_TYPES[type2].speed[1]), pz, px: lineToPitch(line, pz), vi: 0 };
   }
-  const kmh = M.diff.speed ? rand(M.diff.speed[0], M.diff.speed[1]) : rand(T.speed[0], T.speed[1]) * (0.95 + 0.05 * clamp(mult, 0, 1.2));
-  const vi = chase ? 0 : quicker ? 2 : Math.random() < [0.12, 0.25, 0.38][plan] ? 1 + ((Math.random() * (T.vars.length - 1)) | 0) : 0;
+  // each bowler has his own steady pace (from his name) and varies it only a little ball to ball (owner: the pace jumping
+  // across the whole range felt like a slower ball every other ball)
+  const own = T.speed[0] + (T.speed[1] - T.speed[0]) * nameFrac(bp.name);
+  const kmh = M.diff.speed ? rand(M.diff.speed[0], M.diff.speed[1]) : (own + rand(-1.5, 1.5)) * (0.95 + 0.05 * clamp(mult, 0, 1.2));
+  let vi = chase ? 0 : quicker ? 2 : Math.random() < [0.12, 0.25, 0.38][plan] ? 1 + ((Math.random() * (T.vars.length - 1)) | 0) : 0;
+  // slower balls against YOU are rationed per match (owner: none on Easy, one on Medium, three on Hard); other variations stay
+  if (vi && SLOWER.has(T.vars[vi]) && inn && inn.userBats && !chase) {
+    if ((M.slowers || 0) >= SLOWER_QUOTA[plan]) { const others = T.vars.map((v, k) => k).filter(k => k && !SLOWER.has(T.vars[k])); vi = others.length ? others[(Math.random() * others.length) | 0] : 0; }
+    else M.slowers = (M.slowers || 0) + 1;
+  }
   return { type, kmh, pz, px: lineToPitch(line, pz), vi };
 }
 
@@ -2728,12 +2738,14 @@ const naturalAngle = (atBat, short) => clamp(-atBat[0] * 120, -70, 70) + (short 
 // timing window (win), and a lofted shot off a better-than-typical one needs cleaner timing to clear the rope (sky: more of
 // them go up instead of out) and goes a little less far (power; a weak bowler gives no extra). Only your own shots (ball.decision.you).
 const BOWL_YOU = { mid: 75, win: 1.0, sky: 1.6, skyFrom: 0.05, power: 0.5 };
-const bowlQ = () => !M || M.mode !== 'match' || !inn || inn.bowler === null ? 0 : clamp((bowlerP().bowl - BOWL_YOU.mid) / 100, -0.1, 0.25);
+const RATE_K = [0.35, 0.5, 1];   // how strongly the ratings bite when you bat: Easy, Medium, Hard (owner: Medium had become too hard)
+const rateK = () => RATE_K[M && M.diff ? (M.diff.plan ?? 1) : 1];
+const bowlQ = () => !M || M.mode !== 'match' || !inn || inn.bowler === null ? 0 : clamp((bowlerP().bowl - BOWL_YOU.mid) / 100, -0.1, 0.25) * rateK();
 // your batter's rating (owner: a top batter slightly easier than a normal one, a bowler batting clearly harder to time, but
 // still able to hit it if you time it well): the timing window is about 1.03 at 90, 0.95 at 60, 0.73 at 25 (YOU_BAT.win), and
 // the power hardly drops for a tail-ender (YOU_BAT.power: 0.93 at 25), so a middled slog by him can still clear the rope.
 const YOU_BAT = { top: 1.04, drop: 0.55, min: 0.62, plo: 0.9, pk: 0.12 };
-const youBatWin = bat => Math.max(YOU_BAT.min, YOU_BAT.top - YOU_BAT.drop * Math.pow((100 - bat) / 100, 2));
+const youBatWin = bat => Math.max(YOU_BAT.min, YOU_BAT.top - YOU_BAT.drop * (0.5 + 0.5 * rateK()) * Math.pow((100 - bat) / 100, 2));
 const youPower = () => !M || M.mode !== 'match' || !inn ? 1 : clamp(YOU_BAT.plo + YOU_BAT.pk * batterP(inn.striker).bat / 100, 0.9, 1.02);
 const userWin = () => M.diff.win * (M.mode === 'chase' ? 1 : youBatWin(batterP(inn.striker).bat) * (1 - BOWL_YOU.win * bowlQ()));
 
@@ -3162,7 +3174,7 @@ function strike() {
       airborne = true;
     } else if (d.loft) {
       const ub = d.you ? bowlQ() : 0;   // your own shot: the bowler's rating (BOWL_YOU)
-      const sky = (d.fam === 'hook' ? 0.4 : 0.3) + BOWL_YOU.sky * Math.max(0, ub - BOWL_YOU.skyFrom);   // (above a typical bowler only)   // a hook not quite middled goes straight up
+      const sky = (d.fam === 'hook' ? 0.4 : 0.3) + BOWL_YOU.sky * Math.max(0, ub - BOWL_YOU.skyFrom * rateK());   // (above a typical bowler only)   // a hook not quite middled goes straight up
       if (d.q < sky) { v = rand(15, 21); elev = rand(50, 63); }
       else { v = (17 + 16 * d.q) * pw * (1 - BOWL_YOU.power * Math.max(0, ub)) + rand(-1.2, 1.2) + (d.fam === 'hook' ? 2 : 0); elev = rand(24, 34); }
       airborne = true;
@@ -3316,7 +3328,7 @@ function saveMatch() {
   if (!M || M.mode !== 'match' || quiet) return;
   try {
     const t = x => TEAMS.indexOf(x);
-    localStorage.setItem(MATCH_KEY, JSON.stringify({ a: t(M.teams[0]), b: t(M.teams[1]), overs: M.overs, diff: DIFFS.indexOf(M.diff), cur: M.cur, series: !!M.series, tournamentId: M.tournamentId, fixtureId: M.fixtureId, noBall: nbRule(), cond: M.cond,
+    localStorage.setItem(MATCH_KEY, JSON.stringify({ a: t(M.teams[0]), b: t(M.teams[1]), overs: M.overs, diff: DIFFS.indexOf(M.diff), cur: M.cur, series: !!M.series, tournamentId: M.tournamentId, fixtureId: M.fixtureId, noBall: nbRule(), cond: M.cond, slowers: M.slowers || 0,
       innings: allInnings().map(i => ({ ...i, bat: t(i.bat), bowl: t(i.bowl) })) }));
   } catch (e) {}
   renderMatchLine();
@@ -3338,7 +3350,7 @@ function resumeMatch() {
   M = { mode: 'match', overs: d.overs, diff: DIFFS[d.diff] || DIFFS[1], teams: [TEAMS[d.a], TEAMS[d.b]], cur: d.cur, autoplay: null,
         autoBowl: setup.autoBowl !== false, watchFast: false, series: d.series && series && !seriesState(series).done ? series : null,
         innings: all.slice(0, 2), so: all.slice(2),
-        tournamentId: d.tournamentId===tournament?.id?d.tournamentId:undefined, fixtureId:d.fixtureId, noBall: d.noBall || 0, cond: d.cond || null };
+        tournamentId: d.tournamentId===tournament?.id?d.tournamentId:undefined, fixtureId:d.fixtureId, noBall: d.noBall || 0, cond: d.cond || null, slowers: d.slowers || 0 };
   startInnings(M.cur);
 }
 function startOver() {
