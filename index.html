@@ -1053,7 +1053,7 @@ const FIELDS = {
               ['mid-on', 20, 25], ['midwicket', 62, 27], ['square leg', 100, 25], ['fine leg', 158, 50], ['wicketkeeper', 180, 13]],
   balanced: [['third man', -145, 58], ['point', -95, 26], ['cover', -55, 29], ['mid-off', -22, 26], ['mid-on', 22, 26],
              ['midwicket', 68, 28], ['deep square leg', 102, 60], ['long-on', 18, 62], ['fine leg', 160, 52], ['wicketkeeper', 180, 13]],
-  defensive: [['third man', -145, 60], ['deep point', -95, 61], ['cover', -55, 29], ['long-off', -14, 62], ['long-on', 14, 62],
+  defensive: [['third man', -145, 60], ['point', -95, 24], ['cover', -55, 29], ['long-off', -14, 62], ['long-on', 14, 62],
               ['deep midwicket', 62, 61], ['square leg', 100, 27], ['fine leg', 158, 55], ['mid-on', 26, 26], ['wicketkeeper', 180, 13]],
 };
 const FIELD_INFO = { attacking: ['Attacking', 'Slip and gully for edges. Few fielders on the boundary.'],
@@ -1744,7 +1744,7 @@ function strokeFamily(a, loft, defend, push, short, spin, at) {
   const h = at ? at[1] : 0.5, wide = at ? at[0] < -0.12 : false;
   if (short || h > 1.05) {   // short, or chest high off a good length: a back-foot shot
     const off = short ? -45 : -40, leg = short ? 25 : 20;
-    if (a < off) return (loft || h > 1.4 || (a < -115 && h > 1.05)) ? 'ucut'   // lofted, shoulder high, or steered fine: the upper cut
+    if (a < off) return ((loft && h > 1.05) || h > 1.4 || (a < -115 && h > 1.05)) ? 'ucut'   // an upper cut needs height, even when loft is selected
       : a < -115 && a >= -155 ? 'lcut' : 'cut';
     if (a > leg) return h > 1.4 ? 'hook' : 'pull';   // shoulder high or above: the hook
     return 'bdrive';
@@ -1830,12 +1830,9 @@ function waitMove(k) {
       const tx = ball.atBat ? clamp(ball.atBat[0] - guard, -0.9, 0.9) : 0;
       const to = back
         ? { ...P, bk: [0.42, 0, 0.3], fr: [0.5, 0, 0.96], pel: [0.5, 0.92, 0.62], lean: 8, h: [0.3, 1.38, 0.74] }
-        : { ...P, fr: [clamp(tx + 0.32, 0.1, 0.72), 0, lerp(1.08, 1.32, front)], pel: [lerp(0.6, 0.55, front), 0.85 - 0.04 * front, lerp(0.78, 0.94, front)],
-            lean: 20 + 8 * front, rearFootPitch: 0.25 * front, kpL: [-0.4, 0, 1] };
-      if (!back && ball.atBat[1]<=1.05 && (BOWL_TYPES[ball.type]||{}).turn) {
-        to.pel=[to.pel[0],.72,to.pel[2]-.06];
-        to.lean=30; to.h=[.25,1.12,.85];
-      }
+        : { ...P, fr: [clamp(tx + 0.32, 0.1, 0.72), 0, lerp(1.08, 1.24, front)], pel: [lerp(0.6, 0.55, front), 0.87 - 0.02 * front, lerp(0.78, 0.90, front)],
+            lean: 14 + 2 * front, rearFootPitch: 0.25 * front, kpL: [-0.4, 0, 1] };
+      // Stay ready until a stroke is chosen. A full spinner must not force every shot into a sweep-like crouch.
       P = mixPose(P, to, w);
       const step = 0.08 * Math.sin(Math.PI * w);   // the moving foot comes off the ground
       if (back) P.bk = add(P.bk, [0, step, 0]); else P.fr = add(P.fr, [0, step, 0]);
@@ -1892,6 +1889,13 @@ const ROLL = { drive: 0.45, cut: 0.6, pull: 0.8, hook: 0.45, sweep: 0.6, rsweep:
 const ROLL_K = +(new URLSearchParams(location.search).get('roll') ?? 1);   // ?roll=0: no wrist roll
 const WHIP = +(new URLSearchParams(location.search).get('whip') ?? 0.45);   // ?whip=0 for the swing as authored
 const CHAIN = { hips: +(new URLSearchParams(location.search).get('hips') || 0.04), shoulders: 0.025 };
+// Right-handed canonical pose: glance back over the off shoulder, then mirror the whole pose for a left-hander.
+// Keep the yaw unwrapped through the turn; wrapping at 180 can flip the neck to the opposite shoulder.
+function missedBallGaze(shoulderYaw, after, shadowWeight=0) {
+  const turn=smooth(clamp((after-.12)/.5,0,1))*(1-shadowWeight);
+  const yaw=lerp(0,-165,turn);
+  return facing(shoulderYaw+clamp(yaw-shoulderYaw,-90,90));
+}
 function batterPose(sw) {
   let k, motionTime = sw ? sw.t : 0, gripTurn = 0;
   if (sw) {
@@ -1983,7 +1987,7 @@ function batterPose(sw) {
   if (sw && sw.how && motionTime > SWING_LAG) {
     const after = motionTime - SWING_LAG;
     if (sw.how.kind === 'miss')   // beaten: he turns his head to see where it went (and back for a practice shot)
-      gaze = facing(lerp(0, 165, smooth(clamp((after - 0.12) / 0.3, 0, 1)) * (1 - (sw.shadowW || 0))));
+      gaze = missedBallGaze(k.sy, after, sw.shadowW || 0);
     else if (ball && ball.swing === sw && ball.play && ball.play.res.kind === 'six')   // and up, watching it go
       gaze = norm(add(gaze, [0, 0.9 * smooth(clamp((after - 0.2) / 0.4, 0, 1)), 0]));
   }
@@ -2509,8 +2513,23 @@ const isSpin = p => !!BOWL_TYPES[btype(p)].turn;
 
 // the computer captain reacts to where YOU hit boundaries: once two (three on Easy) of your last eight boundaries went to the
 // same area and nobody is deep there, a fielder goes back to it. Within the limits: two outside the circle in the powerplay,
-// five after it; if the deep is full, the deep fielder in the area you hit least moves across. Only when you bat in a match.
+// four in the middle overs, five at the death; if full, an existing outfielder moves across. Only when you bat in a match.
 const ADAPT = { look: 8, near: 25, covered: 15, deep: 45, rope: 62 };
+const FIELD_CIRCLE = 27.43; // 30-yard semicircles about the wickets, joined along the pitch
+function outsideFieldCircle(p) {
+  return Math.hypot(p[0],p[2]-clamp(p[2],0,PITCH)) > FIELD_CIRCLE;
+}
+function fieldPosition(a,r) { return polar(a,r>45?r+ropeR()-ROPE:r); }
+function limitField(preset) {
+  let outside=0;
+  const max=fieldRestriction().max;
+  return preset.map(([name,a,r])=>{
+    if(name!=='wicketkeeper' && outsideFieldCircle(fieldPosition(a,r)) && ++outside>max) {
+      r=25; name=regionName(a,r); // safely inside the circle on the same bearing
+    }
+    return [name,a,r];
+  });
+}
 const wrapD = a => ((a + 540) % 360) - 180;
 function deepName(a) {
   if (Math.abs(a) <= 7) return a < 0 ? 'long-off' : 'long-on';
@@ -2527,9 +2546,9 @@ function adaptField(preset) {
   const near = best === null ? [] : hits.filter(h => Math.abs(wrapD(h.a - best)) <= ADAPT.near);
   if (near.length < need) return preset;
   const a = Math.round(best + near.reduce((t, h) => t + wrapD(h.a - best), 0) / near.length);
-  const f = preset.map(x => x.slice()), isDeep = x => x[2] > ADAPT.deep && x[0] !== 'wicketkeeper';
+  const f = preset.map(x => x.slice()), isDeep = x => x[0] !== 'wicketkeeper' && outsideFieldCircle(fieldPosition(x[1],x[2]));
   if (f.some(x => isDeep(x) && Math.abs(wrapD(x[1] - a)) <= ADAPT.covered)) return preset;   // already someone there
-  const room = f.filter(isDeep).length < (inPP() ? 2 : 5);
+  const room = f.filter(isDeep).length < fieldRestriction().max;
   // who goes: an infielder if there is room in the deep (never the keeper, or the first slip in the powerplay), else a deep fielder
   const cands = f.map((x, i) => i).filter(i => f[i][0] !== 'wicketkeeper' && (room ? !isDeep(f[i]) && !(inPP() && f[i][0] === 'first slip') : isDeep(f[i])));
   if (!cands.length) return preset;
@@ -2540,7 +2559,7 @@ function adaptField(preset) {
   return f;
 }
 function newFielders() {
-  const preset = adaptField(FIELDS[inn ? inn.field : 'balanced']);
+  const preset = limitField(adaptField(limitField(FIELDS[inn ? inn.field : 'balanced'])));
   const haveBowler = inn && inn.bowler !== null;
   const spin = haveBowler && isSpin(bowlerP());
   const team = inn ? inn.bowl : null;
@@ -2548,7 +2567,7 @@ function newFielders() {
   let pi = 0;
   fielders = preset.map(([name, a, r]) => {
     const keeper = name === 'wicketkeeper';
-    const p = polar(a, keeper && spin ? 2.4 : r > 45 ? r + ropeR() - ROPE : r);   // the deep fielders stand in or out with the rope
+    const p = keeper && spin ? polar(a,2.4) : fieldPosition(a,r);   // the deep fielders stand in or out with the rope
     return { name, who: keeper ? (team ? team.wk : null) : (pool[pi++] ?? null), home: p.slice(), pos: p.slice(),
              face: Math.atan2(-p[0], -p[2]), run: 0, phase: Math.random() * 6, crouch: 0.6, target: null,
              speed: rand(6.6, 7.6), keeper };
@@ -2569,9 +2588,17 @@ function newInnings(bat, bowl, maxBalls, maxWkts, target, userBats) {
 }
 const inningsOver = () => inn.wkts >= inn.maxWkts || inn.balls >= inn.maxBalls || (inn.target && inn.runs >= inn.target);
 const overLimit = () => M.mode === 'chase' ? 99 : Math.max(1, Math.ceil(M.overs / 5));
-// powerplay: the first overs of a longer match, when the fielding side must keep the field up (the attacking field)
-const ppOvers = () => M && M.mode === 'match' && M.overs >= 10 ? (M.overs >= 50 ? 10 : Math.round(M.overs * 0.3)) : 0;
-const inPP = () => !!inn && !inn.superOver && Math.floor(inn.balls / 6) < ppOvers();
+// Owner's ODI-style phases, proportionally scaled to every match length (not the separate T20 rule).
+function fieldRestriction() {
+  if(!M || M.mode!=='match' || inn?.superOver)return {phase:0,max:5,end:0};
+  const total=Math.max(1,Math.ceil((inn?.maxBalls || M.overs*6)/6));
+  const first=Math.max(1,Math.round(total*.2));
+  const middle=Math.max(first,Math.min(total-1,Math.round(total*.8)));
+  const over=Math.floor((inn?.balls || 0)/6);
+  return over<first?{phase:1,max:2,end:first}:over<middle?{phase:2,max:4,end:middle}:{phase:3,max:5,end:total};
+}
+const ppOvers = () => M && M.mode==='match' && !inn?.superOver ? Math.max(1,Math.round((inn?.maxBalls/6 || M.overs)*.2)) : 0;
+const inPP = () => !!inn && fieldRestriction().phase===1;
 const oversBy = k => inn.bowlers[k] ? Math.floor(inn.bowlers[k].balls / 6) : 0;
 // no-balls (match setup): 0 = off, 1 = no-balls, 2 = no-balls and the next ball is a free hit
 const nbRule = () => (M && M.mode === 'match' && M.noBall) || 0;
@@ -2774,7 +2801,7 @@ function swing(loft, pressT, aim, w, you = false) {   // you: the player's own s
   else if (a <= okW) kind = 'hit';
   else if (a <= edgeW) kind = 'edge';
   else kind = 'miss';
-  const q = clamp(1 - a / okW, 0, 1);
+  let q = clamp(1 - a / okW, 0, 1);
   let angle;
   if (aim && aim.defend) {
     // a block, or a push into a gap if you swiped
@@ -2787,7 +2814,6 @@ function swing(loft, pressT, aim, w, you = false) {   // you: the player's own s
     if (ball.short && dtTiming < 0) angle += 22;          // pull or hook
   }
   angle = aimed ? wrapA(angle) : clamp(angle, -140, 140);
-  ball.swing.angle = kind === 'hit' ? angle : (atBat[0] < 0.1 ? -150 : 150);
   ball.swing.aimDir = aimed ? aim.angle : null;
   // how it looks: the stroke, and where the bat meets the ball (relative to the batter's guard)
   ball.swing.intent = wrapA(aimed ? aim.angle : angle);
@@ -2795,10 +2821,17 @@ function swing(loft, pressT, aim, w, you = false) {   // you: the player's own s
   ball.swing.fam = strokeFamily(ball.swing.intent, ball.swing.loft, ball.swing.defend, ball.swing.push, ball.short, !!(BOWL_TYPES[ball.type] || {}).turn, atBat);
   if (ball.swing.fam === 'ucut') ball.swing.loft = true;   // an upper cut always goes in the air
   ball.swing.short = !!ball.short;   // (looks: up on the toes for the upper cut to a short ball)
-  ball.swing.target = [atBat[0], clamp(atBat[1], 0.12, 1.9), 1.02];
-  if (kind !== 'hit') {   // beaten: the bat passes the ball (inside the line outside off, outside it at the pads, under a bouncer); an edge just shaves it
+  const reach = shotReach(ball.swing.fam, atBat, ball.swing.intent, ball.swing.loft);
+  ball.swing.target = reach.target;
+  ball.swing.reachable = reach.reachable;
+  // Timing cannot rescue the wrong shot or a ball beyond this stroke's comfortable reach.
+  // Keep the bounded swing path; do not stretch the hands/body to manufacture contact.
+  if (!reach.reachable) { kind = 'miss'; q = 0; }
+  if (kind !== 'hit' && reach.reachable) {   // a timing miss/edge stays inside the stroke's reach too
     const side = atBat[0] < 0.1 ? 1 : -1, m = kind === 'miss' ? 1 : 0.35;
-    ball.swing.target = [atBat[0] + side * 0.16 * m, clamp(atBat[1] + (high ? -0.3 : 0.07) * m, 0.12, 1.9), 1.02]; }
+    ball.swing.target = shotReach(ball.swing.fam,
+      [atBat[0] + side * 0.16 * m, atBat[1] + (high ? -0.3 : 0.07) * m, 1.02],ball.swing.intent,ball.swing.loft).target; }
+  ball.swing.angle = kind === 'hit' ? angle : (atBat[0] < 0.1 ? -150 : 150);
   ball.swing.how = { kind, e: clamp(-dtTiming / okW, -1.5, 1.5) };   // how it looks: hit / edge / miss, and how early (+) or late (-)
   ball.decision = { you, kind, q, angle, fam: ball.swing.fam, loft: ball.swing.loft, defend: ball.swing.defend, push: !!(aim && aim.defend && aimed), dtTiming, power: ((aim && aim.power) || 1) * (ball.charge && !(aim && aim.defend) ? 1.1 : 1) };
   // the bat meets the ball in front of the batter (early) or beside the stumps (late), never behind them
@@ -2811,6 +2844,35 @@ function swing(loft, pressT, aim, w, you = false) {   // you: the player's own s
   if (swipeVis) swipeVis.label = sn;
   ball.perfect = kind === 'hit' && inn.userBats && Math.abs(dtTiming) < 0.03 * w;   // shown as a moment at contact (fxPerfect)
   if (!quiet) showTiming(dtTiming, kind, kind === 'hit' ? sn : '', w);
+}
+
+// Comfortable contact zones in the batter's local frame, after moving across/stepping out.
+// These are limits, not extra timing forgiveness: outside the zone the selected stroke must miss.
+// In particular, a leg-side loft cannot chase a wide off-side ball or scoop a yorker by folding the torso.
+// Disabled at the owner's request: the experimental zones still reject shots that feel playable.
+// Retain the prototype for later work, but use normal timing-based contact in the game.
+let SHOT_REACH_ENABLED = false;
+function shotReach(family, at, intent=0, loft=false) {
+  if (!SHOT_REACH_ENABLED) return {target:[at[0],at[1],1.02],reachable:true};
+  const zones = {
+    // Contact heights come from buildDelivery(), not the pitching-length label: a normal full
+    // pace ball is about .21 m high, and a short spinner can still be below waist height.
+    // Include the .036 m ball centre for a grounded defensive block.
+    drive:[-.50,.40,.06,1.05], fdef:[-.50,.45,.03,1.05], push:[-.50,.45,.03,1.05],
+    bdrive:[-.50,.40,.30,1.75], bdef:[-.50,.45,.03,1.75],
+    cut:[-.70,.12,.25,1.50], lcut:[-.65,.12,.25,1.55], ucut:[-.70,.12,1.05,1.90],
+    flick:[-.20,.55,.12,1.05], glance:[-.20,.55,loft?.25:.12,1.05],
+    slog:[-.08,.50,.40,1.05], pull:[-.20,.60,.40,1.45], hook:[-.18,.55,1.25,1.90],
+    sweep:[-.20,.35,.16,1.05], rsweep:[-.45,.15,.16,1.05]
+  };
+  const z=(zones[family] || zones.drive).slice();
+  if(family==='drive') { if(intent<-35)z[1]=.18; else if(intent>10)z[0]=-.18; }
+  const target=[clamp(at[0],z[0],z[1]),clamp(at[1],z[2],z[3]),1.02];
+  const reachable=at[0]>=z[0]&&at[0]<=z[1]&&at[1]>=z[2]&&at[1]<=z[3];
+  // Keep a visible gap on a reach miss, even just outside the boundary; don't scrape along the ball.
+  if(at[0]<z[0]||at[0]>z[1])target[0]=clamp(at[0],z[0]+.10,z[1]-.10);
+  if(at[1]<z[2]||at[1]>z[3])target[1]=clamp(at[1],z[2]+.10,z[3]-.10);
+  return {target,reachable};
 }
 
 // stepping out (D): the batter meets the ball further down the pitch, so earlier and usually before it rises
@@ -2855,7 +2917,9 @@ function showTiming(dtT, kind, shot, w) {
   }
   const a = Math.abs(dtT);
   let txt, col;
-  if (kind === 'miss' && a > 0.2 * w) { txt = dtT < 0 ? 'Way too early' : 'Too late'; col = 'var(--red)'; }
+  if (kind === 'miss' && ball?.swing?.reachable === false) { txt = 'Out of reach'; col = 'var(--red)'; }
+  else if (kind === 'miss' && a > 0.2 * w) { txt = dtT < 0 ? 'Way too early' : 'Too late'; col = 'var(--red)'; }
+  else if (kind === 'miss') { txt = 'Missed'; col = 'var(--red)'; }
   else if (a < 0.03 * w) { txt = 'Perfect'; col = 'var(--teal)'; }
   else if (dtT < 0) { txt = 'Early'; col = 'var(--amber)'; }
   else { txt = 'Late'; col = 'var(--amber)'; }
@@ -2910,7 +2974,8 @@ function aiPlan(b, s, aggr) {
   return plan;
 }
 function aiPlanInner(b, s, aggr) {
-  const atBat = b.atBat;
+  const atBat = b.atBat.slice();
+  if(inn.userBats && !quiet)atBat[0]-=guard; // same local frame as swing(), including player-side auto-play
   if (atBat[1] > 1.75 && Math.random() < 0.8 - aggr * 0.5) return null;   // sway out of the way of a bouncer
   if (b.wide && Math.random() < 0.85) return null;                         // let a wide go
   if (!b.stumps && atBat[0] < -0.42 && Math.random() < (0.6 - aggr * 0.5) * (0.5 + s * 0.6)) return null;   // leave outside off
@@ -2920,13 +2985,28 @@ function aiPlanInner(b, s, aggr) {
   let [sigL, loftL] = LEN_PLAY[b.length];
   if (onTo && b.length === 'Yorker') { sigL = 0.85; loftL = 1.2; }
   const defend = !onTo && b.stumps && !b.short && b.length !== 'Full toss' && Math.random() < 0.55 - aggr * 0.5;
-  const loft = !defend && Math.random() < clamp(aggr * 0.6 * loftL + b.trick.loft * aggr + (onTo ? 0.15 : 0), 0, 0.9);
+  let loft = !defend && Math.random() < clamp(aggr * 0.6 * loftL + b.trick.loft * aggr + (onTo ? 0.15 : 0), 0, 0.9);
   const read = Math.random() < s * 0.45 + b.trick.streak * 0.25;   // picked the variation
   const lineL = atBat[0] > 0.2 ? 0.85 : atBat[0] < -0.45 ? 1.1 : 1;   // easy on the legs, hard well outside off
   const sig = (0.105 - 0.06 * s) * sigL * lineL * habit * (read ? 1 : b.trick.sig) * (1 + BOWL_EDGE.ai * bowlEdge());   // a better bowler is harder to time
   const err = (read ? 0 : b.trick.mu) + gauss() * sig;
-  const aim = defend ? { defend: true } : { angle: findGap(naturalAngle(atBat, b.short), loft) };
-  if (!defend && !loft && Math.random() < 0.55 - aggr * 0.4) aim.power = rand(0.55, 0.85);   // placed for a single
+  let aim = defend ? { defend: true } : { angle: findGap(naturalAngle(atBat, b.short), loft) };
+  // The computer obeys the same reach limits. Choose a playable stroke rather than repeatedly
+  // attempting an impossible loft (especially against yorkers); timing/skill still decide the result.
+  const fits=(a,l)=>{
+    const family=strokeFamily(a.angle||0,l,!!a.defend,false,b.short,!!(BOWL_TYPES[b.type]||{}).turn,atBat);
+    return shotReach(family,atBat,a.angle||0,l).reachable;
+  };
+  if(!fits(aim,loft)){
+    const preferred=aim.angle||0,candidates=[0,-45,45,-90,90,-135,135]
+      .sort((a,b)=>Math.abs(wrapA(a-preferred))-Math.abs(wrapA(b-preferred)));
+    let angle=candidates.find(a=>fits({angle:a},loft));
+    if(angle===undefined && loft){loft=false;angle=candidates.find(a=>fits({angle:a},false));}
+    if(angle!==undefined)aim={angle};
+    else if(fits({defend:true},false)){aim={defend:true};loft=false;}
+    else return null;
+  }
+  if (!aim.defend && !loft && Math.random() < 0.55 - aggr * 0.4) aim.power = rand(0.55, 0.85);   // placed for a single
   return { t: Math.max(0.02, b.Tstar - SWING_LAG + err), loft, aim };
 }
 
@@ -3486,7 +3566,7 @@ function updateScore() {
   const tag = $('teamTag');
   tag.textContent = i.bat.short; tag.style.background = i.bat.col; tag.style.color = onCol(i.bat.col);
   $('scoreText').textContent = i.runs + '/' + i.wkts;
-  $('oversText').textContent = ovStr(i.balls) + (match ? ' / ' + (i.superOver ? 1 : M.overs) : '') + ' ov' + (match && inPP() ? ' · PP' : i.superOver ? ' · Super Over' : '');
+  $('oversText').textContent = ovStr(i.balls) + (match ? ' / ' + (i.superOver ? 1 : M.overs) : '') + ' ov' + (i.superOver ? ' · Super Over' : match ? ' · PP'+fieldRestriction().phase : '');
   const left = i.maxBalls - i.balls, crr = i.balls ? (i.runs / i.balls * 6).toFixed(2) : '0.00';
   const nt = $('needText'); nt.className = 'need';
   if (i.target) {
@@ -4407,7 +4487,9 @@ function renderPick() {
   const pp = inPP(); if (pp) fieldSel = 'attacking';
   optButtons('fieldPick', Object.keys(FIELDS).map(f => ({ f, html: FIELD_INFO[f][0], disabled: pp && f !== 'attacking' })), it => it.f === fieldSel,
     it => { fieldSel = it.f; renderPick(); });
-  $('fieldDesc').textContent = (pp ? 'Powerplay (first ' + ppOvers() + ' overs): the field must stay up. ' : '') + FIELD_INFO[fieldSel][1];
+  const restriction=fieldRestriction();
+  $('fieldDesc').textContent = (restriction.phase ? 'Phase '+restriction.phase+' · Maximum '+restriction.max+' outside the circle. ' : 'Maximum 5 outside the circle. ')
+    + (pp ? 'The field stays up.' : fieldSel==='defensive' ? 'Boundary protection within the current limit.' : FIELD_INFO[fieldSel][1]);
 }
 function pickGo() {
   if (phase !== 'pick') return;
