@@ -405,14 +405,19 @@
   // Push releases the arms after contact; a block absorbs the ball instead.
   function defenceKeys({start,target,stance,aim=0,impact=.15},back=false,push=false) {
     const shift=clamp(target[0],-.3,.3),low=clamp((.55-target[1])/.35,0,1),high=clamp((target[1]-1.15)/.45,0,1);
+    const backTall=clamp((target[1]-.8)/.35,0,1);
+    const mix=(a,b,t)=>a+(b-a)*t;
     const dy=-clamp((1.52-target[1])/.45,.12,.98);
     const bd=back?unit([-Math.sqrt(Math.max(.01,1-dy*dy-.12*.12)),dy,.12]):unit([-.035,-1,-.18]);
-    const reach=back?.45:.52+.06*low,h=add(target,scale(bd,-reach));
+    // Low blocks meet nearer the toe: keep the hands up and the blade above the turf without folding the spine.
+    const baseReach=push?.52+.06*low:back?.45+.20*low:Math.min(.52+.12*low,Math.max(.2,(1.45-target[1])/-bd[1]));
+    const reach=push?baseReach:Math.max(baseReach,Math.min(.82,.85-target[1]/Math.max(.1,-bd[1])));
+    const h=add(target,scale(bd,-reach));
     const contact={...start,
-      fr:back?[.57+shift*.6,0,.92]:[clamp(.34+shift,.05,.72),0,1.39],
-      bk:back?[.54+shift*.6,0,.25]:start.bk.slice(),
-      pel:back?[.54+shift*.6,.90-.07*low+.035*high,.55+.18*high]:[.43+shift*.5,.79-.065*low,1.01],
-      hy:back?-83:-76,sy:back?-88:-82,lean:back?12+low*8:28+low*6,side:3,h,bd,
+      fr:back?[mix(.45,.57,backTall)+shift*.6,0,.92]:push?[clamp(.34+shift,.05,.72),0,1.39]:[clamp(.48+shift*.7,.18,.72),0,1.20],
+      bk:back?[mix(.43,.54,backTall)+shift*.6,0,.25]:start.bk.slice(),
+      pel:back?[mix(.34,.54,backTall)+shift*.6,mix(.85,.90,backTall)-.04*low+.035*high,mix(.85,.55+.18*high,backTall)]:push?[.43+shift*.5,.79-.065*low,1.01]:[.35+shift*.7,.83-.045*low,1.0],
+      hy:back?-83:-76,sy:back?-88:-82,lean:back?12+low*4:push?28+low*6:18+low*4,side:3,h,bd,
       kpL:back?[-.8,0,.5]:[-.2,0,1],kpR:[-1,0,.05],rearFootPitch:back?0:.1,batRoll:0};
     const slot={...contact,lean:contact.lean-2,h:add(h,[-.015,.075,-.055]),
       bd:slerp(unit([-.25,-.4,-.88]),bd,.55)};
