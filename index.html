@@ -1756,10 +1756,9 @@ function strokeFamily(a, loft, defend, push, short, spin, at) {
     if (loft) return a < 120 ? 'slog' : 'glance';   // fine: lifted off the pads over fine leg (the glance keys, lofted)
     return 'flick'; // side-only leg aim stays a standing stroke
   }
-  if (a < -115 && a >= -155) {   // fine on the off side: the reverse sweep to a low ball from a spinner, else the late cut
-    if (sweepableSpin) return 'rsweep';   // Shift: the lofted reverse sweep
-    if (!loft) return 'lcut';
-  }
+  // fine on the off side: the late cut. The reverse sweep (rsweep, spin) is switched off for now: the owner found it
+  // looked wrong after several attempts (November 2026); its keys are still in motion.js
+  if (a < -115 && a >= -155 && !loft) return 'lcut';
   if (a < -100 || (a < -65 && wide)) return 'cut';   // square on the off side to a wide ball: the cut
   return 'drive';
 }

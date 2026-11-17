@@ -173,21 +173,24 @@
   function pullKeys({start,target,stance,loft=false,impact=.15}) {
     const shift=clamp(target[0]*.8,-.28,.25),low=clamp((1.15-target[1])*.4,0,.18);
     const bd=unit([-.97,-.09,.22]),h=add(target,scale(bd,-.48));
-    const contact={...start,fr:[1.06+shift,0,1.06],bk:[.46+shift,0,.36],pel:[.66+shift,.77-low*.8,.74],
-      hy:-42,sy:-54,lean:16+low*40,side:-3,h,bd,kpL:[.6,0,.8],kpR:[-.65,0,.75],rearFootPitch:0};   // down on the back leg, front foot opened
+    // back and across deep in the crease (owner: the legs hardly moved), front foot opened toward the leg side
+    // to a lower ball (a short spinner) he rocks back and stays fairly tall, bending a little more at the knees and reaching
+    // with the arms (it used to splay into a deep crouch)
+    const contact={...start,fr:[1.0+shift-low*.3,0,1.0],bk:[.40+shift,0,.24],pel:[.63+shift,.77-low*.4,.64],
+      hy:-38,sy:-52,lean:14+low*18,side:-3,h,bd,kpL:[.6,0,.8],kpR:[-.65,0,.75],rearFootPitch:0};   // down on the back leg
     const load={...contact,pel:start.pel.map((v,i)=>v+(contact.pel[i]-v)*.45),
       hy:start.hy+(contact.hy-start.hy)*.65,sy:start.sy+(contact.sy-start.sy)*.18,
       h:start.h.map((v,i)=>v+(h[i]-v)*.3+(i===1?.06:0)),bd:slerp(unit(start.bd),unit([-.7,.5,-.5]),.3)};
     const slot={...contact,hy:-48,sy:-76,h:add(h,[-.035,.10,-.12]),bd:unit([-.78,.25,-.57])};
-    const through={...contact,hy:-24,sy:-22,lean:10+low*25,
+    const through={...contact,hy:-24,sy:-22,lean:10+low*12,
       h:add(h,[.13,loft?.06:-.04,.17]),bd:unit([-.48,-.12,.87])};
-    const extension={...contact,pel:[.72+shift,.86,.77],hy:-10,sy:6,lean:8,
-      h:[.92+shift,loft?1.36:1.14,1.14],bd:unit([.48,loft?.25:-.12,.87]),rearFootPitch:.12};
-    // the bat wraps right round: hands up by the front shoulder, blade over its back toward the keeper (reads from the bowler's end)
-    const finish={...contact,pel:[.72+shift,.82,.76],hy:4,sy:42,lean:8,rearFootPitch:.3,
-      h:[.95+shift,loft?1.3:1.16,.72],bd:unit([.75,loft?.6:.53,-.5])};   // (stays well below the hook's finish)
-    // settling, the blade lifts a touch as the hands come down, so it stays over the front shoulder (it went through the upper arm)
-    const settle={...finish,hy:-4,sy:34,h:add(finish.h,[-.03,-.05,.03]),bd:loft?finish.bd:unit([.68,.6,-.42]),rearFootPitch:.15};
+    const extension={...contact,pel:[.70+shift,.84,.68],hy:10,sy:30,lean:7,
+      h:[.95+shift,loft?1.38:1.2,1.0],bd:unit([.5,loft?.45:.3,.8]),rearFootPitch:.2};
+    // the body turns right round to the leg side and the bat wraps over the shoulder, hands up by the shoulder (the owner's
+    // Rohit frames): it used to stop flat at the waist
+    const finish={...contact,pel:[.72+shift,.85,.66],hy:32,sy:75,lean:6,rearFootPitch:.45,
+      h:[.92+shift,loft?1.38:1.26,.64],bd:unit([.2,loft?.55:.45,-.85])};
+    const settle={...finish,hy:24,sy:62,h:add(finish.h,[-.03,-.08,.04]),bd:unit([.3,.5,-.8]),rearFootPitch:.25};
     return [[0,start],[impact*.3,load],[impact*.66,slot],[impact,contact],
       [impact+.08,through],[impact+.20,extension],[impact+.42,finish],[impact+.85,settle],[impact+1.5,stance]];
   }
@@ -320,12 +323,18 @@
     const finish={...contact,pel:add(pel,[.01,.01,0]),hy:-71,sy:-66,lean:15,side:4,
       h:add(h,[.07,.025,-.055]),bd:unit([.36,-.93,.06]),batRoll:-.32};
     const settle={...finish,h:add(finish.h,[0,-.025,.015]),batRoll:-.2};
-    if(loft){   // lifted over fine leg: the blade comes through under the ball and the wrists carry it up beside the leg-side shoulder
-      const lThrough={...through,hy:-64,sy:-58,h:add(h,[.13,.16,-.04]),bd:unit([.62,-.35,-.70]),batRoll:-.15};
-      const lFinish={...finish,pel:add(pel,[.02,.04,0]),hy:-55,sy:-40,lean:9,side:2,
-        h:[pel[0]+.30,1.36,pel[2]-.02],bd:unit([.40,.80,-.45]),batRoll:-.1,rearFootPitch:.25};
-      const lSettle={...lFinish,sy:-46,h:add(lFinish.h,[-.02,-.07,.02]),bd:unit([.35,.72,-.6]),batRoll:-.05};
-      return [[0,{...start,batRoll:0}],[impact*.25,load],[impact*.5,mid],[impact*.75,slot],[impact,contact],
+    if(loft){   // lifted over fine leg (Shift + up + leg side to pace): a stride forward and across onto a bent front knee, then
+      // he rises and opens up as the wrists flick it over fine leg, finishing high beside the leg-side shoulder (owner: the
+      // legs didn't move and he stood stiff while only the arms swung)
+      const lfr=[clamp(target[0]+.22,.02,.6),0,1.34],lpel=[.58+(lfr[0]-.58)*.4,.78-.06*low,.94];
+      const lContact={...contact,fr:lfr,pel:lpel,hy:-72,sy:-74,lean:14,side:12,kpL:[-.3,0,1],rearFootPitch:.3};
+      const lLoad={...load,pel:start.pel.map((v,i)=>v+(lpel[i]-v)*.45),side:(start.side||0)+4};
+      const lSlot={...slot,fr:lfr,pel:lpel,lean:14,side:12};
+      const lThrough={...lContact,hy:-58,sy:-50,lean:12,side:8,h:add(h,[.15,.18,-.05]),bd:unit([.62,-.3,-.72]),batRoll:-.15,rearFootPitch:.4};
+      const lFinish={...lContact,pel:add(lpel,[.04,.08,-.03]),hy:-42,sy:-18,lean:6,side:4,
+        h:[lpel[0]+.32,1.5,lpel[2]-.10],bd:unit([.45,.78,-.43]),batRoll:-.1,rearFootPitch:.5};
+      const lSettle={...lFinish,sy:-26,h:add(lFinish.h,[-.02,-.08,.02]),bd:unit([.40,.70,-.6]),batRoll:-.05,rearFootPitch:.3};
+      return [[0,{...start,batRoll:0}],[impact*.25,lLoad],[impact*.5,between(lLoad,lSlot,.5)],[impact*.75,lSlot],[impact,lContact],
         [impact+.07,lThrough],[impact+.3,lFinish],[impact+.8,lSettle],[impact+1.5,{...stance,batRoll:0}]];
     }
     return [[0,{...start,batRoll:0}],[impact*.25,load],[impact*.5,mid],[impact*.75,slot],[impact,contact],
