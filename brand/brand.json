@@ -1,0 +1,18 @@
+{
+  "name": "Stumpflare",
+  "tagline": "Light up every innings.",
+  "colors": {
+    "night": "#081522",
+    "gold": "#ffd078",
+    "coral": "#f5775e",
+    "chalk": "#f6f3eb",
+    "teal": "#6ce5c0"
+  },
+  "font": {
+    "name": "Barlow Condensed ExtraBold",
+    "license": "../vendor/fonts/OFL-Barlow.txt"
+  },
+  "mark": "Original vector artwork: three stumps, lifted bails, rising trail, seamed ball and flare.",
+  "maskable": "Artwork scaled to remain inside the central 80% safe-zone circle.",
+  "screening": "Name selected by owner. Trademark and domain availability remain unverified."
+}

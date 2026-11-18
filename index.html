@@ -6,16 +6,21 @@
 <meta name="theme-color" content="#0a1024">
 <meta name="description" content="Night cricket under the lights: bat, bowl and chase targets. Plays on phones, tablets and laptops.">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icons/icon-192.png">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="brand/stumpflare-mark.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/stumpflare-apple-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Cricket Rush">
-<title>Cricket Rush</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Saira+Condensed:wght@500;600;700&display=swap">
+<meta name="apple-mobile-web-app-title" content="Stumpflare">
+<title>Stumpflare</title>
+<meta property="og:type" content="website">
+<meta property="og:title" content="Stumpflare — Light up every innings.">
+<meta property="og:description" content="Cricket under the lights. Bat, bowl and chase targets on your phone or desktop.">
+<meta property="og:image" content="https://udeshvirk.github.io/cricket-rush-play/brand/stumpflare-social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Stumpflare cricket: Light up every innings.">
+<meta name="twitter:card" content="summary_large_image">
 <style>
   /* Layout: one full-screen night-match scene; broadcast-style HUD pinned to the corners, thumb controls at the bottom. */
   :root {
@@ -27,8 +32,8 @@
     --red: #ff4d5e;          /* wickets */
     --muted: #9aa6c6;
     --line: rgba(243, 239, 228, 0.18);
-    --display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
-    --ui: "Saira Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+    --display: "Rush Display", "Arial Narrow", Impact, sans-serif;
+    --ui: system-ui, "Arial Narrow", "Helvetica Neue", sans-serif;
     color-scheme: dark;
   }
   html, body { height: 100%; margin: 0; }
@@ -627,6 +632,8 @@
   #pause #resume { min-width: 180px; }
   @media (prefers-reduced-motion: reduce) { #banner .head, #banner .line, #goQuick::after, #menu .levels > *, #needText.hot, #fireTag { animation: none !important; } }
 </style>
+<link rel="preload" href="vendor/fonts/barlow-condensed-800.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="presentation.css">
 </head>
 <body>
 
@@ -701,8 +708,15 @@
 
   <div id="menu" class="screen">
     <div class="card">
-      <div class="title">CRICKET <span>RUSH</span></div>
-      <div class="tag">Hit sixes. Chase targets. Lift the cup.</div>
+      <div class="menu-hero">
+        <div class="eyebrow"><span class="live-light"></span> THE LIGHTS ARE ON. YOU'RE UP.</div>
+        <div class="title" aria-label="Stumpflare">STUMP<span>FLARE</span></div>
+        <div class="tag">Light up every innings.</div>
+        <div class="hero-art" aria-hidden="true"><img src="brand/stumpflare-mark.svg" width="256" height="256" alt=""></div>
+        <div class="hero-caption">FIND THE GAP. <span>OWN THE MOMENT.</span></div>
+      </div>
+      <div class="menu-play">
+      <div class="menu-section-label">YOUR NEXT INNINGS <span>LET'S PLAY</span></div>
       <div class="levels">
         <button type="button" id="goQuick"><span><span class="n">PLAY NOW</span><br><span class="d" id="quickLine">Quick match</span></span><span class="go">▶</span></button>
         <button class="level" type="button" id="goMatch"><span class="n">Play a match</span><span class="d">Bat and bowl, two innings</span>
@@ -710,11 +724,13 @@
         <button class="level" type="button" id="goResume" hidden><span class="n">Continue match</span><span class="d" id="resumeLine"></span></button>
         <button class="level" type="button" id="goSeries"><span class="n">Mini series</span><span class="d">Best of 3 or 5 matches</span>
           <span class="s">One opponent · series trophy · player of the series</span><span class="best" id="seriesLine"></span></button>
-        <button class="level" type="button" id="goTournament"><span class="n">Tournaments</span><span class="d">World Cup · IPL</span><span class="best" id="tournamentLine"></span></button>
+        <button class="level" type="button" id="goTournament"><span class="n">Tournaments</span><span class="d">Nations Cup · Club League</span><span class="best" id="tournamentLine"></span></button>
         <button class="level" type="button" id="goChase"><span class="n">Quick chase</span><span class="d">Chase a target</span>
           <span class="s">Gully · Club · Super Over</span><span class="best"></span></button>
       </div>
       <div class="row"><button class="btn ghost" id="goStats" type="button">Stats &amp; records</button><button class="btn ghost" id="goSettings" type="button">Settings</button><button class="btn ghost" id="fsMenu" type="button" hidden>Play full screen</button></div>
+      <div class="menu-footnote">Bat. Bowl. Chase glory.</div>
+      </div>
     </div>
   </div>
   <div id="stats" class="screen" hidden>
@@ -769,6 +785,15 @@
         <button class="btn ghost" id="runToggle" type="button" title="When you bat: run automatically, or run yourself: RUN (D) for each run, CANCEL (A) to send them back, DIVE (W) at the end of a close run.">Running: automatic</button>
         </div>
       </div>
+      <div class="setsec" id="commentaryVoices">
+        <label class="sechead" for="commentaryVoice">Commentary voice</label>
+        <div class="voice-controls">
+          <select id="commentaryVoice" aria-describedby="commentaryVoiceStatus"><option value="">Automatic</option></select>
+          <button class="btn ghost" id="commentaryListen" type="button">Listen</button>
+        </div>
+        <p class="how" id="commentaryVoiceStatus" aria-live="polite">Uses voices available in your browser.</p>
+      </div>
+      <div class="row"><a class="btn ghost" href="privacy.html" target="_blank" rel="noopener">Privacy</a><a class="btn ghost" href="credits.html" target="_blank" rel="noopener">Credits &amp; licences</a></div>
       <details><summary>How to play · controls</summary>
       <p class="how"><b>Batting:</b> choose <b>Defend</b>, <b>Shot</b> or <b>Loft</b> before the ball arrives. As it reaches the bat,
         <b>swipe anywhere</b> in the direction you want it to go: down the screen is straight back past the bowler, left is the
@@ -776,7 +801,7 @@
       <p class="how"><b>Keyboard (like Cricket 07):</b> hold the <b>arrow keys</b> for the direction (two together for in-between,
         such as Down + Left for a cover drive) and press <b>S</b> as the ball arrives. <b>S</b> with no arrow defends.
         Hold <b>Shift</b> to loft it. <b>D</b> steps out of the crease (then S to hit; miss it and you can be stumped).
-        <b>A</b> leaves the ball, or ducks a bouncer. Before the bowler runs in, <b>Q</b> and <b>E</b> move you across the crease.</p>
+        <b>A</b> leaves the ball, or ducks a bouncer. Before the bowler runs in, <b>Left / Right</b> (or <b>Q / E</b>) move you across the crease.</p>
       <p class="how"><b>Touch:</b> the ◀ ▶ buttons move you across the crease before the bowler runs in; <b>STEP OUT</b> charges down the pitch.
         The circle on the pitch shows where the ball will bounce.</p>
       <p class="how"><b>Bowling yourself:</b> before each over, pick a bowler and a field. Tap the pitch where you want the ball to land,
@@ -903,6 +928,7 @@
 <script src="player-production/motion.js"></script>
 <script src="player-production/diagnostics.js"></script>
 <script src="commentary.js"></script>
+<script src="identity-migration.js"></script>
 <script src="player-production/equipment-preview.js"></script>
 <script src="render3d.js"></script>
 <script>
@@ -965,49 +991,49 @@ const BOWL_TYPES = {
   L: { name: 'Leg-spin', speed: [75, 87], start: 27, turn: -1, vars: ['Stock', 'Flighted', 'Quicker', 'Googly', 'Top-spinner'] },
 };
 
-// Country sides in our own kit colours (no official badges or logos). Player names are made up, styled on today's squads.
+// Country sides in our own kit colours (no official badges or logos). Players have fictional identities; no current national squad is represented.
 // [name, batting 0-100, bowling style, bowling 0-100]; wk = the wicketkeeper's place in the order
 const TEAMS = [
   { id: 'ind', name: 'India', short: 'IND', col: '#3d7dff', dark: '#173f99', wk: 4, players: [
-    ['S. Gilmann', 85], ['Y. Jaiswar', 82], ['V. Kohlee', 88], ['S. Yadhav', 80], ['R. Pantt', 79],
-    ['H. Pandiya', 74, 'F', 72], ['R. Jadeyja', 68, 'L', 78], ['A. Patell', 58, 'L', 76], ['K. Yadev', 22, 'L', 80],
-    ['J. Bumrar', 14, 'F', 92], ['M. Siraaj', 12, 'F', 80]] },
+    ['A. Mehra', 85], ['D. Bhasin', 82], ['N. Talwar', 88], ['K. Vaid', 80], ['T. Bendre', 79],
+    ['E. Saran', 74, 'F', 72], ['B. Kamat', 68, 'L', 78], ['I. Sarin', 58, 'L', 76], ['U. Dugal', 22, 'L', 80],
+    ['O. Raval', 14, 'F', 92], ['Z. Nanda', 12, 'F', 80]] },
   { id: 'aus', name: 'Australia', short: 'AUS', col: '#ffd23c', dark: '#0e6b40', wk: 4, players: [
-    ['T. Hedd', 84], ['M. Marsch', 78, 'M', 55], ['S. Smithe', 86], ['M. Labuchane', 80], ['J. Inglish', 76],
-    ['G. Maxwel', 75, 'O', 62], ['C. Greene', 72, 'F', 66], ['P. Cummings', 40, 'F', 88], ['M. Starke', 32, 'F', 87],
-    ['A. Zamper', 15, 'L', 80], ['J. Hazelwod', 12, 'F', 86]] },
+    ['K. Whitcombe', 84], ['T. Bellamy', 78, 'M', 55], ['E. Fenwick', 86], ['B. Hensley', 80], ['I. Alderton', 76],
+    ['U. Mercer', 75, 'O', 62], ['O. Ransome', 72, 'F', 66], ['Z. Ellery', 40, 'F', 88], ['A. Tarrant', 32, 'F', 87],
+    ['D. Keppel', 15, 'L', 80], ['N. Denholm', 12, 'F', 86]] },
   { id: 'eng', name: 'England', short: 'ENG', col: '#ef4b5b', dark: '#1c2a66', wk: 4, players: [
-    ['P. Salte', 80], ['B. Duckitt', 80], ['J. Roote', 87], ['H. Brooke', 85], ['J. Butlar', 82],
-    ['B. Stoaks', 76, 'F', 70], ['W. Jacques', 70, 'O', 60], ['B. Carsey', 25, 'F', 76], ['A. Rashed', 30, 'L', 82],
-    ['J. Archar', 28, 'F', 87], ['M. Wode', 18, 'F', 84]] },
+    ['B. Fairburn', 80], ['I. Hollis', 80], ['U. Cartwright', 87], ['O. Penrose', 85], ['Z. Bramwell', 82],
+    ['A. Redfern', 76, 'F', 70], ['D. Ashby', 70, 'O', 60], ['N. Langford', 25, 'F', 76], ['K. Wetherby', 30, 'L', 82],
+    ['T. Huxley', 28, 'F', 87], ['E. Selwyn', 18, 'F', 84]] },
   { id: 'pak', name: 'Pakistan', short: 'PAK', col: '#46c95f', dark: '#0d5c2a', wk: 3, players: [
-    ['S. Ayube', 78, 'O', 50], ['F. Zammaan', 79], ['B. Azaam', 86], ['M. Rizwaan', 82], ['S. Aghaa', 75, 'O', 58],
-    ['F. Ashraff', 62, 'F', 70], ['S. Khaan', 64, 'L', 76], ['S. Afridee', 30, 'F', 87], ['N. Shahh', 22, 'F', 84],
-    ['H. Rauff', 14, 'F', 82], ['A. Ahmedd', 10, 'L', 80]] },
+    ['O. Qadri', 78, 'O', 50], ['Z. Nizami', 79], ['A. Raufani', 86], ['D. Kazmi', 82], ['N. Faruqi', 75, 'O', 58],
+    ['K. Hamdani', 62, 'F', 70], ['T. Darani', 64, 'L', 76], ['E. Safiuddin', 30, 'F', 87], ['B. Tanviri', 22, 'F', 84],
+    ['I. Mahdavi', 14, 'F', 82], ['U. Qureshi', 10, 'L', 80]] },
   { id: 'rsa', name: 'South Africa', short: 'RSA', col: '#0d6b45', dark: '#e8b923', wk: 0, players: [
-    ['Q. de Cok', 82], ['A. Markrum', 81, 'O', 55], ['R. Rickleton', 78], ['T. Stubbes', 76], ['H. Klaasan', 84],
-    ['D. Millar', 79], ['M. Jansan', 62, 'F', 80], ['K. Maharajh', 28, 'L', 80], ['K. Rabadaa', 25, 'F', 88],
-    ['L. Ngidee', 12, 'F', 80], ['T. Shamsee', 10, 'L', 78]] },
+    ['D. Mokoena', 82], ['N. Duvenage', 81, 'O', 55], ['K. Venter', 78], ['T. Ndlovu', 76], ['E. Engelbrecht', 84],
+    ['B. Bothma', 79], ['I. Mahlangu', 62, 'F', 80], ['U. Radebe', 28, 'L', 80], ['O. Viljoen', 25, 'F', 88],
+    ['Z. Maseko', 12, 'F', 80], ['A. Dlamini', 10, 'L', 78]] },
   { id: 'nz', name: 'New Zealand', short: 'NZ', col: '#9fb3c8', dark: '#1a1f2b', wk: 4, players: [
-    ['D. Conwey', 80], ['R. Ravindr', 82, 'L', 60], ['K. Williamsen', 86], ['D. Mitchel', 80], ['T. Lathem', 77],
-    ['G. Philipps', 76, 'O', 58], ['M. Santnar', 58, 'L', 78], ['K. Jamiesen', 30, 'F', 80], ['M. Henri', 25, 'F', 84],
-    ['L. Fergusen', 15, 'F', 84], ['W. Rourke', 10, 'F', 80]] },
+    ['T. Kershaw', 80], ['E. Harcourt', 82, 'L', 60], ['B. Taiton', 86], ['I. Fairlie', 80], ['U. Lennox', 77],
+    ['O. Hadley', 76, 'O', 58], ['Z. Calder', 58, 'L', 78], ['A. Riddell', 30, 'F', 80], ['D. Armitage', 25, 'F', 84],
+    ['N. Seddon', 15, 'F', 84], ['K. Whitmore', 10, 'F', 80]] },
   { id: 'sl', name: 'Sri Lanka', short: 'SL', col: '#22337f', dark: '#0e1640', wk: 1, players: [
-    ['P. Nisanka', 82], ['K. Mendiss', 80], ['K. Pereira', 76], ['C. Asalanke', 79, 'O', 40], ['S. Samarawick', 72],
-    ['D. de Silvaa', 72, 'O', 62], ['W. Hasarenga', 60, 'L', 84], ['D. Wellalagey', 45, 'L', 72], ['M. Theekshane', 22, 'O', 80],
-    ['M. Pathirena', 10, 'F', 82], ['D. Madushanke', 10, 'F', 78]] },
+    ['I. Jayakody', 82], ['U. Ranatunga', 80], ['O. Hewage', 76], ['Z. Kuruppu', 79, 'O', 40], ['A. Galappatti', 72],
+    ['D. Senanayake', 72, 'O', 62], ['N. Wijesiri', 60, 'L', 84], ['K. Abeykoon', 45, 'L', 72], ['T. Bandara', 22, 'O', 80],
+    ['E. Kalubowila', 10, 'F', 82], ['B. Dissanayake', 10, 'F', 78]] },
   { id: 'wi', name: 'West Indies', short: 'WI', col: '#7a1430', dark: '#2a0710', wk: 1, players: [
-    ['B. Kingg', 79], ['S. Hoape', 83], ['N. Pooraan', 83], ['S. Hetmyre', 77], ['R. Powel', 75],
-    ['S. Rutherfrd', 72], ['R. Chace', 64, 'O', 70], ['J. Holdar', 58, 'F', 76], ['A. Hossein', 25, 'L', 80],
-    ['A. Josef', 22, 'F', 84], ['G. Motee', 15, 'L', 77]] },
+    ['Z. Brathwaite', 79], ['A. Hinds', 83], ['D. Walcott', 83], ['N. Beckford', 77], ['K. Sealy', 75],
+    ['T. Gittens', 72], ['E. Drayton', 64, 'O', 70], ['B. Cumberbatch', 58, 'F', 76], ['I. Parris', 25, 'L', 80],
+    ['U. Roachford', 22, 'F', 84], ['O. Browne', 15, 'L', 77]] },
   { id: 'ban', name: 'Bangladesh', short: 'BAN', col: '#ff8a3d', dark: '#0f6b3a', wk: 1, players: [
-    ['T. Hassan', 76], ['L. Daas', 78], ['N. Shantoo', 79], ['T. Hridoye', 77], ['M. Raheem', 78],
-    ['M. Mirazz', 70, 'O', 74], ['R. Hossein', 40, 'L', 76], ['T. Islaam', 25, 'F', 74], ['T. Ahmmed', 20, 'F', 80],
-    ['M. Rahmann', 12, 'F', 82], ['N. Raana', 10, 'F', 80]] },
+    ['N. Karim', 76], ['K. Mazumder', 78], ['T. Sikder', 79], ['E. Talukder', 77], ['B. Munshi', 78],
+    ['I. Barua', 70, 'O', 74], ['U. Sarker', 40, 'L', 76], ['O. Haldar', 25, 'F', 74], ['Z. Mollah', 20, 'F', 80],
+    ['A. Chowdhury', 12, 'F', 82], ['D. Kabir', 10, 'F', 80]] },
   { id: 'afg', name: 'Afghanistan', short: 'AFG', col: '#ff6fae', dark: '#7a1846', wk: 0, players: [
-    ['R. Gurbaaz', 80], ['I. Zadraan', 81], ['S. Attal', 74], ['H. Shahidee', 76], ['A. Omarzay', 72, 'F', 74],
-    ['M. Nabbi', 70, 'O', 74], ['G. Naeb', 62, 'M', 60], ['R. Khaan', 50, 'L', 92], ['N. Ahmadd', 18, 'L', 82],
-    ['F. Farooqee', 12, 'F', 82], ['N. Ulhaq', 15, 'F', 78]] },
+    ['E. Waziri', 80], ['B. Rahimi', 81], ['I. Zaryab', 74], ['U. Mehran', 76], ['O. Kohistani', 72, 'F', 74],
+    ['Z. Safdar', 70, 'O', 74], ['A. Baraki', 62, 'M', 60], ['D. Sarwari', 50, 'L', 92], ['N. Zamani', 18, 'L', 82],
+    ['K. Noorzai', 12, 'F', 82], ['T. Payenda', 15, 'F', 78]] },
 ];
 TEAMS.push(...(window.CricketFranchises || []));
 // A side's ratings (0-100): batting = its top seven batters, bowling = its top five bowlers, overall = the two together.
@@ -1020,9 +1046,9 @@ const cupRatings = ids => Object.fromEntries(ids.map(id => { const r = teamRatin
 // text colour that reads on a team colour
 const onCol = c => { const n = parseInt(c.slice(1), 16), l = (0.299 * (n >> 16) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255; return l > 0.55 ? '#0a1024' : '#f3efe4'; };
 // the left-handed batters
-const LEFT_HANDED = new Set(['Y. Jaiswar', 'R. Pantt', 'R. Jadeyja', 'A. Patell', 'T. Hedd', 'M. Starke', 'B. Duckitt', 'B. Stoaks', 'F. Zammaan', 'S. Ayube',
-  'Q. de Cok', 'R. Rickleton', 'D. Millar', 'D. Conwey', 'R. Ravindr', 'T. Lathem', 'M. Santnar', 'K. Pereira', 'C. Asalanke', 'D. Wellalagey',
-  'N. Pooraan', 'S. Hetmyre', 'T. Hassan', 'N. Shantoo', 'I. Zadraan', 'S. Attal']);
+const LEFT_HANDED = new Set(['D. Bhasin', 'T. Bendre', 'B. Kamat', 'I. Sarin', 'K. Whitcombe', 'A. Tarrant', 'I. Hollis', 'A. Redfern', 'Z. Nizami', 'O. Qadri',
+  'D. Mokoena', 'K. Venter', 'B. Bothma', 'T. Kershaw', 'E. Harcourt', 'U. Lennox', 'Z. Calder', 'O. Hewage', 'Z. Kuruppu', 'K. Abeykoon',
+  'D. Walcott', 'N. Beckford', 'N. Karim', 'T. Sikder', 'B. Rahimi', 'I. Zaryab']);
 for (const t of TEAMS) t.players = t.players.map(([name, bat, type, bowl]) => ({ name, bat, type: type || '', bowl: bowl || 0, left: LEFT_HANDED.has(name) || /[?&]lefty=1/.test(location.search) }));   // ?lefty=1: everyone bats left-handed (for testing)
 // Quick chase: you against England's quicks
 const YOU = { id: 'you', name: 'You', short: 'YOU', col: '#2ed3c6', helmet: '#18245a', wk: 0,
@@ -1215,8 +1241,8 @@ function drawScenery(time) {
   fillPoly(ring(STAND_IN, 0, 96), '#1d5a2a');
   if (pathPoly(ring(BOARDS, 0, 96))) {
     ctx.save(); ctx.clip();
-    ctx.fillStyle = '#2a7a36'; ctx.fillRect(0, 0, W, H);
-    for (let x = -72; x < 72; x += 8) fillPoly([[x, 0, -75], [x + 4, 0, -75], [x + 4, 0, 75], [x, 0, 75]], '#23702f');
+    ctx.fillStyle = '#326d47'; ctx.fillRect(0, 0, W, H);
+    for (let x = -72; x < 72; x += 14) fillPoly([[x, 0, -75], [x + 7, 0, -75], [x + 7, 0, 75], [x, 0, 75]], '#2c623f');
     // floodlit centre
     const c = toCam([0, 0, 10]);
     if (c[2] > NEAR) {
@@ -1239,9 +1265,9 @@ function drawScenery(time) {
   }
   boards.sort((a, b) => b.d - a.d).forEach(b => fillPoly(b.q, b.c));
   // square and pitch
-  fillPoly([[-9, 0, -4], [9, 0, -4], [9, 0, 24], [-9, 0, 24]], '#327f3c');
-  fillPoly([[-1.52, 0, -1.6], [1.52, 0, -1.6], [1.52, 0, PITCH + 1.6], [-1.52, 0, PITCH + 1.6]], '#c9b48a');
-  fillPoly([[-1.3, 0, 2], [1.3, 0, 2], [1.3, 0, PITCH - 2], [-1.3, 0, PITCH - 2]], '#d3bf95');
+  fillPoly([[-9, 0, -4], [9, 0, -4], [9, 0, 24], [-9, 0, 24]], '#3a744b');
+  fillPoly([[-1.52, 0, -1.6], [1.52, 0, -1.6], [1.52, 0, PITCH + 1.6], [-1.52, 0, PITCH + 1.6]], '#aa9778');
+  fillPoly([[-1.3, 0, 2], [1.3, 0, 2], [1.3, 0, PITCH - 2], [-1.3, 0, PITCH - 2]], '#bca988');
   const cw = 0.05, chalk = '#f3efe4';
   for (const z of [0, PITCH]) line3([-1.32, 0.01, z], [1.32, 0.01, z], cw, chalk);           // bowling creases
   for (const z of [CREASE, PITCH - CREASE]) line3([-1.8, 0.01, z], [1.8, 0.01, z], cw, chalk); // popping creases
@@ -1889,12 +1915,14 @@ const ROLL = { drive: 0.45, cut: 0.6, pull: 0.8, hook: 0.45, sweep: 0.6, rsweep:
 const ROLL_K = +(new URLSearchParams(location.search).get('roll') ?? 1);   // ?roll=0: no wrist roll
 const WHIP = +(new URLSearchParams(location.search).get('whip') ?? 0.45);   // ?whip=0 for the swing as authored
 const CHAIN = { hips: +(new URLSearchParams(location.search).get('hips') || 0.04), shoulders: 0.025 };
-// Right-handed canonical pose: glance back over the off shoulder, then mirror the whole pose for a left-hander.
-// Keep the yaw unwrapped through the turn; wrapping at 180 can flip the neck to the opposite shoulder.
-function missedBallGaze(shoulderYaw, after, shadowWeight=0) {
-  const turn=smooth(clamp((after-.12)/.5,0,1))*(1-shadowWeight);
-  const yaw=lerp(0,-165,turn);
-  return facing(shoulderYaw+clamp(yaw-shoulderYaw,-90,90));
+// A brief glance past the off shoulder, not a sustained stare directly behind him.
+// Blend from the ordinary shot gaze so a miss cannot snap the head at contact.
+// Return before the practice swing finishes; fading shadow weight must not trigger a second glance.
+function missedBallGaze(shoulderYaw, after, shadowWeight=0, baseYaw=0) {
+  const turn=smooth(clamp((after-.25)/.7,0,1))
+    *(1-smooth(clamp((after-1.15)/.55,0,1)))*(1-clamp(shadowWeight,0,1));
+  const target=shoulderYaw+clamp(-125-shoulderYaw,-55,55);
+  return facing(baseYaw+clamp(target-baseYaw,-125,125)*turn);
 }
 function batterPose(sw) {
   let k, motionTime = sw ? sw.t : 0, gripTurn = 0;
@@ -1987,7 +2015,7 @@ function batterPose(sw) {
   if (sw && sw.how && motionTime > SWING_LAG) {
     const after = motionTime - SWING_LAG;
     if (sw.how.kind === 'miss')   // beaten: he turns his head to see where it went (and back for a practice shot)
-      gaze = missedBallGaze(k.sy, after, sw.shadowW || 0);
+      gaze = missedBallGaze(k.sy, after, sw.shadowW || 0, clamp(sw.intent||0,-70,70)*follow);
     else if (ball && ball.swing === sw && ball.play && ball.play.res.kind === 'six')   // and up, watching it go
       gaze = norm(add(gaze, [0, 0.9 * smooth(clamp((after - 0.2) / 0.4, 0, 1)), 0]));
   }
@@ -2125,14 +2153,37 @@ const commentary=window.CricketCommentary?.create({onSpeaking(speaking){commenta
 let commentaryPreference=false;
 try{commentaryPreference=localStorage.getItem('cricket-rush-commentary-preview')==='on';}catch(e){}
 commentary.setEnabled(commentaryPreference);
-function commentaryCall(event,data){commentary.setSuspended(paused||!!RP||document.hidden||ff);return commentary.emit(event,{...data,skip:quiet||ff||!!RP||paused||!!M?.autoplay});}
+function commentaryCall(event,data){commentary.setSuspended(paused||document.hidden||ff);return commentary.emit(event,{...data,skip:quiet||ff||!!RP||paused||!!M?.autoplay});}
 const commentaryButton=$('commentaryToggle');
 function showCommentarySetting(){commentaryButton.textContent=commentary.supported?'Commentary: '+(commentary.enabled?'on':'off'):'Commentary: not on this device';commentaryButton.disabled=!commentary.supported;commentaryButton.setAttribute('aria-pressed',String(commentary.enabled));}
 showCommentarySetting();
 commentaryButton.addEventListener('click',()=>{commentary.unlock();commentary.setEnabled(!commentary.enabled);try{localStorage.setItem('cricket-rush-commentary-preview',commentary.enabled?'on':'off');}catch(e){}showCommentarySetting();});
+const voiceSelect=$('commentaryVoice'),voiceStatus=$('commentaryVoiceStatus');
+let savedCommentaryVoice='';
+try{savedCommentaryVoice=localStorage.getItem('cricket-rush-commentary-voice')||'';}catch(e){}
+commentary.setVoice?.(savedCommentaryVoice);
+function showCommentaryVoices(){
+  const info=commentary.voiceInfo?.()||{voices:[],selected:null};
+  voiceSelect.replaceChildren(new Option('Automatic',''));
+  for(const v of info.voices)voiceSelect.add(new Option(v.name+' · '+v.lang,v.voiceURI||v.name));
+  voiceSelect.value=info.voices.some(v=>(v.voiceURI||v.name)===savedCommentaryVoice)?savedCommentaryVoice:'';
+  voiceSelect.disabled=!commentary.supported;
+  $('commentaryListen').disabled=!commentary.supported;
+  voiceStatus.textContent=info.selected?'Using '+info.selected.name+'. Try Listen to compare voices.':'Uses your browser’s default voice. Available voices may take a moment to load.';
+}
+voiceSelect.addEventListener('change',()=>{
+  savedCommentaryVoice=voiceSelect.value;commentary.setVoice?.(savedCommentaryVoice);
+  try{localStorage.setItem('cricket-rush-commentary-voice',savedCommentaryVoice);}catch(e){}
+  showCommentaryVoices();
+});
+$('commentaryListen').addEventListener('click',()=>{
+  if(!commentary.preview?.())voiceStatus.textContent='Turn sound on to listen to a sample.';
+});
+window.speechSynthesis?.addEventListener('voiceschanged',showCommentaryVoices);
+showCommentaryVoices();
 document.addEventListener('pointerdown',()=>commentary.unlock(),{capture:true,once:true});
 document.addEventListener('keydown',()=>commentary.unlock(),{capture:true,once:true});
-document.addEventListener('visibilitychange',()=>commentary.setSuspended(document.hidden||paused||!!RP));
+document.addEventListener('visibilitychange',()=>{if(document.hidden)commentary.stop?.();commentary.setSuspended(document.hidden||paused);});
 let NOISE = null, CLAPS = null;
 function noiseLoop(sec, band, wobble) {   // stereo crowd noise: filtered, with a slow swell like many voices
   const n = Math.floor(actx.sampleRate * sec), buf = actx.createBuffer(2, n, actx.sampleRate);
@@ -2393,6 +2444,18 @@ function fxStep(now, manual) {
       g.globalCompositeOperation = 'lighter'; g.globalAlpha = k;
       const rr = Math.max(1, p.size * (1.4 - 0.4 * k)), gr = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, rr);
       gr.addColorStop(0, p.col); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(p.x - rr, p.y - rr, 2 * rr, 2 * rr);
+    } else if (p.kind === 'ribbon') {
+      // A short curved light trail arriving from the edges, clear of the central batter.
+      g.globalCompositeOperation = 'lighter'; g.globalAlpha = Math.sin(Math.PI * (1-k)) * .55;
+      g.strokeStyle=p.col;g.lineWidth=p.size*k+1;g.lineCap='round';
+      g.beginPath();g.moveTo(p.x-p.vx*.22,p.y+18);
+      g.quadraticCurveTo(p.x-p.vx*.1,p.y-12,p.x,p.y);g.stroke();
+    } else if (p.kind === 'star') {
+      g.globalCompositeOperation='lighter';g.globalAlpha=Math.sin(Math.PI*(1-k))*.8;
+      const s=p.size*(.65+.35*k);g.save();g.translate(p.x,p.y);g.rotate(p.a);
+      g.fillStyle=p.col;g.beginPath();g.moveTo(0,-s);g.lineTo(s*.22,-s*.22);
+      g.lineTo(s,0);g.lineTo(s*.22,s*.22);g.lineTo(0,s);g.lineTo(-s*.22,s*.22);
+      g.lineTo(-s,0);g.lineTo(-s*.22,-s*.22);g.closePath();g.fill();g.restore();
     } else if (p.kind === 'confetti') {
       g.globalCompositeOperation = 'source-over'; g.globalAlpha = Math.min(1, k * 3);
       g.save(); g.translate(p.x + Math.sin(p.a) * 6, p.y); g.rotate(p.a); g.scale(1, Math.cos(p.a * 1.7));
@@ -2410,6 +2473,24 @@ function fxSparks(x, y, cols, n = 40, speed = 380, grav = 260, delay = 0) {
 }
 function fxRing(x, y, col, r1 = 140, delay = 0) { fxAdd({ kind: 'ring', x, y, r0: 8, r1, life: 0.55, size: 6, col, delay }); }
 function fxGlow(x, y, col, size = 120, delay = 0) { fxAdd({ kind: 'glow', x, y, size, life: 0.5, col, delay }); }
+function fxAccents(kind) {
+  const gold=kind==='six'||kind==='milestone'||kind==='streak', col=gold?'#ffe2a0':kind==='four'?'#88f5d5':'#ff9b99';
+  const scale=Math.min(W,H)/700;
+  // Two small fans travel inward from the sides. They end before reaching the middle.
+  if(kind==='six'||kind==='four'||kind==='streak')for(const side of [-1,1])for(let i=0;i<3;i++){
+    fxAdd({kind:'ribbon',x:W*(side<0?.06:.94),y:H*(.35+i*.025),vx:-side*W*.22,
+      vy:-H*.05,life:.85,size:2*scale,col,delay:i*.09});
+  }
+  const wicket=kind==='wicket'||kind==='out';
+  const cx=wicket&&W/H>=1.2?W*.27:W*.5,cy=wicket?H*(W/H>=1.2?.58:.76):H*.38;
+  const count=kind==='milestone'?16:wicket?8:10;
+  for(let i=0;i<count;i++){
+    const a=i/count*Math.PI*2,rx=Math.min(W*.3,180),ry=Math.min(H*.12,80);
+    fxAdd({kind:'star',x:cx+Math.cos(a)*rx,y:cy+Math.sin(a)*ry,vx:Math.cos(a)*14,
+      vy:Math.sin(a)*10-8,life:wicket?.65:1.15,size:(wicket?5:7)*Math.max(.6,scale),
+      a:a*.4,va:.25,col,delay:(i%4)*.07});
+  }
+}
 function fxFlash(bg) { const f = $('flash'); f.style.background = bg; f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
 function fxConfetti(n = 120, x = null, y = null) {   // from a point (a burst), or raining from the top
   const w = FX.w || W, cols = FX_COLS.party;
@@ -2448,6 +2529,7 @@ function fxPerfect() {   // kept small (owner's request): a soft glow, one ring,
 // the result of a ball, as a moment: fireworks for a six, a ring for a four, a burst for a wicket you took
 function fxResult(kind, ours, teamCol) {
   if (!fxOn()) return;
+  if (['six','four','wicket','out','milestone','streak'].includes(kind)) fxAccents(kind);
   const bx = W / 2, by = H * 0.38;
   if (kind === 'six') {
     // kept subtle (owner's request): a soft ring, a few sparks, three small fireworks, no screen flash
@@ -4025,6 +4107,7 @@ function optButtons(boxId, items, isOn, onPick) {
   items.forEach((it, k) => {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'opt' + (isOn(it, k) ? ' on' : '');
+    b.setAttribute('aria-pressed', String(!!isOn(it, k)));
     b.innerHTML = it.html;
     if (it.disabled) b.disabled = true;
     b.addEventListener('click', () => onPick(it, k));
@@ -4036,9 +4119,9 @@ function renderSetup() {
   const pool=teamPool(setup.league);
   if(!pool.some(x=>x.id===setup.a))setup.a=pool[0].id;
   if(!pool.some(x=>x.id===setup.b)||setup.a===setup.b)setup.b=pool.find(x=>x.id!==setup.a).id;
-  optButtons('leaguePick',[{v:'international',html:'International'},{v:'ipl',html:'IPL teams'}],it=>it.v===setup.league,
+  optButtons('leaguePick',[{v:'international',html:'International'},{v:'ipl',html:'Club teams'}],it=>it.v===setup.league,
     it=>{setup.league=it.v;saveSetup();renderSetup();});
-  optButtons('formatPick',[{v:0,html:'One match'},{v:3,html:'3-match series'},{v:5,html:'5-match series'},{v:'cup',html:setup.league==='ipl'?'IPL season':'World Cup'}],
+  optButtons('formatPick',[{v:0,html:'One match'},{v:3,html:'3-match series'},{v:5,html:'5-match series'},{v:'cup',html:setup.league==='ipl'?'Club League':'Nations Cup'}],
     it=>it.v===(setup.tournament?'cup':setup.series||0),it=>{setup.tournament=it.v==='cup';setup.series=setup.tournament?0:it.v;saveSetup();renderSetup();});
   $('toToss').textContent=setup.tournament?'Start tournament':setup.series?'Start series':'Go to toss';
   $('setupTitle').innerHTML=(setup.tournament?'TOURNAMENT':setup.series?'SERIES':'MATCH')+' <span>SETUP</span>';
@@ -4085,7 +4168,7 @@ try { const saved=JSON.parse(localStorage.getItem(CUP_KEY)||'null');
   if(tournament&&!tournament.ratings)tournament.ratings=cupRatings(tournament.teamIds);   // saved before ratings: the rest of it follows them now
 } catch(e) {}
 function saveTournament(){try{localStorage.setItem(CUP_KEY,JSON.stringify(tournament));}catch(e){}renderTournamentLine();}
-function renderTournamentLine(){const el=$('tournamentLine');if(el)el.textContent=tournament&&!tournament.finished?'Continue '+(tournament.kind==='ipl'?'IPL':'World Cup')+' · '+TEAMS[tournament.userId].short:'';}
+function renderTournamentLine(){const el=$('tournamentLine');if(el)el.textContent=tournament&&!tournament.finished?'Continue '+(tournament.kind==='ipl'?'Club League':'Nations Cup')+' · '+TEAMS[tournament.userId].short:'';}
 function tournamentNext(){
   if(!tournament)return null;
   let fixture=CricketTournament.next(tournament),guard=0;
@@ -4103,7 +4186,7 @@ function newTournament(){
 function fixtureLabel(f){return f.stage==='league'?(f.group!==undefined?'Group '+'AB'[f.group]:'League')+' · Round '+f.round:({sf1:'Semifinal 1',sf2:'Semifinal 2',q1:'Qualifier 1',eliminator:'Eliminator',q2:'Qualifier 2',final:'Final'}[f.stage]||f.stage);}
 function showTournament(){
   if(!tournament){setup.tournament=true;setup.series=0;renderSetup();showScreen('setup');return;}
-  RP=null;toMenu();const f=tournamentNext(),name=tournament.kind==='ipl'?'IPL':'WORLD CUP';
+  RP=null;toMenu();const f=tournamentNext(),name=tournament.kind==='ipl'?'CLUB LEAGUE':'NATIONS CUP';
   $('tournamentTitle').textContent=name;
   $('tournamentStatus').textContent=tournament.finished?'Champions: '+TEAMS[tournament.winner].name:
     'You: '+TEAMS[tournament.userId].name+' · Next: '+TEAMS[f.a].short+' v '+TEAMS[f.b].short+' · '+fixtureLabel(f);
@@ -4196,7 +4279,7 @@ function recordTournamentMatch(winner){
   CricketTournament.next(tournament);saveTournament();
   if(tied){const advanced=f.result.advance??f.result.winner;if(advanced!==null&&advanced!==undefined)$('endSub').textContent+=' '+TEAMS[advanced].name+' advance on league position.';}
   // where this leaves you: champions, runners-up, out, or through to the next round
-  const cup=tournament.kind==='ipl'?'the IPL':'the World Cup',you=tournament.userId,t=$('endTitle'),add=x=>{$('endSub').textContent+=' '+x;};
+  const cup=tournament.kind==='ipl'?'the Club League':'the Nations Cup',you=tournament.userId,t=$('endTitle'),add=x=>{$('endSub').textContent+=' '+x;};
   if(f.stage==='final'){
     if(tournament.winner===you){t.textContent='CHAMPIONS';t.className='result win';add(TEAMS[you].name+' win '+cup+'!');if(!quiet)celebrateCup();}
     else {t.textContent='RUNNERS-UP';t.className='result lose';add(TEAMS[tournament.winner].name+' win '+cup+'.');}
@@ -5480,7 +5563,7 @@ function drawSwipe() {
   const fade = clamp(1.6 - (clock - v.t0), 0, 1);
   if (fade <= 0) return;
   ctx.globalAlpha = fade;
-  ctx.font = '700 18px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.font = '700 18px system-ui, "Arial Narrow", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
   const tx = clamp(v.x1, 60, W - 60), ty = clamp(Math.min(v.y0, v.y1) - 16, 24, H - 20), tw = ctx.measureText(v.label).width + 16;
   ctx.fillStyle = 'rgba(10,16,36,0.85)'; ctx.fillRect(tx - tw / 2, ty - 24, tw, 26);
   ctx.fillStyle = '#f3efe4'; ctx.fillText(v.label, tx, ty);
@@ -5526,7 +5609,7 @@ function drawBounceMark() {
   const c = toCam([s[0] - 0.75 * MIR, 0, s[2]]);
   if (c[2] > NEAR) {
     const q = proj(c);
-    ctx.globalAlpha = fade; ctx.font = '800 15px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.globalAlpha = fade; ctx.font = '800 15px system-ui, "Arial Narrow", sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     const t = band[3].toUpperCase(), tw = ctx.measureText(t).width + 10;
     ctx.fillStyle = 'rgba(10,16,36,0.75)'; ctx.fillRect(q[0] - tw, q[1] - 10, tw, 20);
     ctx.fillStyle = 'rgb(' + col + ')'; ctx.fillText(t, q[0] - tw + 5, q[1] + 1); ctx.globalAlpha = 1;
@@ -5539,7 +5622,7 @@ function drawAimGuide() {
     fillPoly(pts, 'rgba(70,45,20,0.55)');
   }
   if (!userBowling() || (phase !== 'aim' && phase !== 'runup')) return;
-  ctx.font = '600 12px "Saira Condensed", "Arial Narrow", sans-serif';
+  ctx.font = '600 12px system-ui, "Arial Narrow", sans-serif';
   ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
   for (const [z0, z1, col, name] of BANDS) {
     fillPoly([[-1.3, 0.004, z0], [1.3, 0.004, z0], [1.3, 0.004, z1], [-1.3, 0.004, z1]], col);
@@ -5675,17 +5758,19 @@ function replayCam() {
 function setGuide(on) {
   timingGuide = on; try { localStorage.setItem(GUIDE_KEY, on ? 'on' : 'off'); } catch (e) {}
   $('guideToggle').textContent = 'Timing guide: ' + (on ? 'on' : 'off');
+  $('guideToggle').setAttribute('aria-pressed', String(on));
 }
 setGuide(timingGuide); $('guideToggle').addEventListener('click', () => setGuide(!timingGuide));
 function setReplays(on) {
   replaysOn = on; try { localStorage.setItem(REPLAY_KEY, on ? 'on' : 'off'); } catch (e) {}
   $('replayToggle').textContent = 'Replays: ' + (on ? 'on' : 'off');
+  $('replayToggle').setAttribute('aria-pressed', String(on));
 }
 // tap or press a key to skip a replay
 for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, e => { if (RP) { e.preventDefault(); e.stopPropagation(); endReplay(); } }, true);
 
 function frame(now) {
-  commentary.setSuspended(paused||!!RP||document.hidden||ff);
+  commentary.setSuspended(paused||document.hidden||ff);
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   // slow motion: drops to 30% at the hit, then eases back to full speed
   let s = 1;
@@ -5810,6 +5895,7 @@ for (const [id, fn] of [['btnRun', callRun], ['btnDive', diveRun], ['btnCancel',
 function setRunning(own) {
   runOwn = own; try { localStorage.setItem(RUN_KEY, own ? 'own' : 'auto'); } catch (e) {}
   $('runToggle').textContent = 'Running: ' + (own ? 'I call the runs' : 'automatic');
+  $('runToggle').setAttribute('aria-pressed', String(own));
 }
 setRunning(runOwn); $('runToggle').addEventListener('click', () => setRunning(!runOwn));
 $('btnFast').addEventListener('click', () => { M.watchFast = !M.watchFast; setFF(M.watchFast); showControls(); });
@@ -5899,6 +5985,7 @@ fsButtons();
 document.addEventListener('fullscreenchange', fsButtons); document.addEventListener('webkitfullscreenchange', fsButtons);
 $('fsBtn').addEventListener('click', toggleFull);
 $('fsMenu').addEventListener('click', toggleFull);
+document.addEventListener('stumpflare-background',()=>{openPause();commentary.stop?.();if(actx?.state==='running')actx.suspend();});
 $('pauseBtn').addEventListener('click', () => { if (paused) resume(); else openPause(); });
 // PLAY NOW: straight to the toss with the last match's teams and overs (a single match)
 function renderQuickLine() { const a = TEAMS[setup.a], b = TEAMS[setup.b]; if (a && b) $('quickLine').textContent = a.name + ' v ' + b.name + ' · ' + (setup.overs === 50 ? 'ODI' : setup.overs === 20 ? 'T20' : setup.overs + ' overs'); }

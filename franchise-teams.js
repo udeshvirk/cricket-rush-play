@@ -1,17 +1,17 @@
-// Franchise names verified against https://www.iplt20.com/teams (2026-11-14).
-// Original kit palettes and fictional squads; no official logos or player likenesses.
+// Original fictional clubs for Stumpflare. Legacy IDs/league values retain saved-game compatibility.
+// Original palettes and fictional squads; no affiliation with real clubs or leagues.
 (function(root){
  const clubs=[
- ['csk','Chennai Super Kings','CSK','#ebcb3a','#215177'],
- ['dc','Delhi Capitals','DC','#d0313f','#1d3f8f'],
- ['gt','Gujarat Titans','GT','#0f5f6e','#d0ac68'],
- ['kkr','Kolkata Knight Riders','KKR','#5a2d91','#d7b566'],
- ['lsg','Lucknow Super Giants','LSG','#55a0c1','#d75a32'],
- ['mi','Mumbai Indians','MI','#3975bd','#d2a54b'],
- ['pbks','Punjab Kings','PBKS','#c9ccd3','#c8202f'],
- ['rr','Rajasthan Royals','RR','#e36aa6','#443e9b'],
- ['rcb','Royal Challengers Bengaluru','RCB','#24242c','#d1323e'],
- ['srh','Sunrisers Hyderabad','SRH','#e9843d','#383c4d']];
+ ['csk','Chennai Lanterns','CLN','#cf6849','#263b53'],
+ ['dc','Delhi Kites','DKT','#3aa79c','#26324b'],
+ ['gt','Gujarat Saltwinds','GSW','#b5c9ce','#473e67'],
+ ['kkr','Kolkata Fireflies','KFF','#b6cb55','#263d4b'],
+ ['lsg','Lucknow Moonstones','LMS','#a18ccc','#24394e'],
+ ['mi','Mumbai Breakwater','MBW','#66b6c8','#33395b'],
+ ['pbks','Punjab Copperfields','PCF','#bd8948','#344d47'],
+ ['rr','Rajasthan Sandgliders','RSG','#c6ab8c','#514b78'],
+ ['rcb','Bengaluru Rainbirds','BRB','#688ed0','#263e48'],
+ ['srh','Hyderabad Nightjars','HNJ','#b96f9b','#30364e']];
  const names=['Varan','Darev','Keshan','Mirov','Talven','Nayak','Ravell','Joren','Sahvin','Deyran','Kovell'];
  const initials=['A','B','C','D','E','F','G','H','J','K'];
  const roles=[['',0],['',0],['',0],['O',54],['',0],['F',72],['L',76],['O',79],['F',82],['F',85],['L',80]];

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="Stumpflare" ><path d="M43 179C58 126 94 85 143 69C104 93 78 128 65 167Z" fill="#ffd078"/>
+<path d="M77 191V113H93V191Z M109 191V113H125V191Z M141 191V113H157V191Z" fill="#ffd078"/>
+<path d="M75 97H110V107H75Z M119 99L150 87L154 97L123 109Z" fill="#ffd078"/>
+<circle cx="177" cy="67" r="25" fill="#f5775e"/>
+<path d="M165 47Q191 64 187 89" fill="none" stroke="#fff2dd" stroke-width="3.5"/>
+<path d="M171 44Q197 62 194 85" fill="none" stroke="#fff2dd" stroke-width="2" stroke-dasharray="2 4"/>
+<path d="M176 109L180 119L190 123L180 127L176 137L172 127L162 123L172 119Z" fill="#ffd078"/></svg>

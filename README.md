@@ -1,4 +1,4 @@
-# Cricket Rush
+# Stumpflare
 
 Play: https://udeshvirk.github.io/cricket-rush-play/
 

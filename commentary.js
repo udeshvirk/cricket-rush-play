@@ -9,10 +9,11 @@
     const now=options.now||(()=>Date.now()),onSpeaking=options.onSpeaking||(()=>{}),onCaption=options.onCaption||null;
     const rnd=options.random||Math.random;
     let enabled=false,muted=false,suspended=false,unlocked=false,current=null,pending=null,serial=0,lastLow=-Infinity;
+    let voiceURI=options.voiceURI||'';
     const seen=new Set(),history=[],recent=[];
     // what has happened lately (for streaks: boundaries in a row, wickets in a row for a bowler, a collapse)
     let track=freshTrack();
-    function freshTrack(){return {boundaries:0,lastBoundaryBatter:'',bowlerSeq:{},wicketBalls:[],ball:0,dots:0};}
+    function freshTrack(){return {boundaries:0,lastBoundaryBatter:'',bowlerSeq:{},wicketBalls:[],ball:0,dots:0,scoreless:0,sinceBoundary:0};}
     const supported=!!(synth&&Utterance);
 
     // pick one of several lines, avoiding the last 30 lines spoken
@@ -27,16 +28,33 @@
     }
     const chance=p=>rnd()<p;
 
+    // Voice quality first, accent second. The first local English voice is often
+    // an older synthesizer even when the browser offers a natural voice.
+    function chooseVoice(voices){
+      const score=v=>{
+        const name=v.name||'';
+        let quality=/natural|neural|premium|enhanced/i.test(name)?100:0;
+        if(/Google|Samantha|Daniel|Karen|Moira|Rishi/i.test(name))quality+=25;
+        if(/compact|eSpeak|Microsoft (David|Zira|Hazel) Desktop/i.test(name))quality-=30;
+        return quality+(/^en[-_](IN|GB|AU)/i.test(v.lang)?8:0)+(v.default?2:0);
+      };
+      return voices.filter(v=>/^en(?:[-_]|$)/i.test(v.lang)).sort((a,b)=>score(b)-score(a))[0];
+    }
+
     function cancel(){serial++;current=null;pending=null;if(supported)synth.cancel();onSpeaking(false);}
     function speak(call){
-      if(!enabled||muted||suspended||!unlocked||!supported||now()>call.expires)return;
+      if((!call.preview&&(!enabled||suspended))||muted||!unlocked||!supported||now()>call.expires)return;
       const id=++serial,utterance=new Utterance(call.text);
       let voices=[];try{voices=synth.getVoices()||[];}catch(e){}
-      // prefer a natural-sounding English voice: Indian or British English, then any local English voice
-      const voice=voices.find(v=>/^en-(IN|GB)$/i.test(v.lang)&&v.localService)||voices.find(v=>/^en-(IN|GB|AU)$/i.test(v.lang))||voices.find(v=>/^en/i.test(v.lang));
+      // Re-read on each call: browsers often load their better voices after startup.
+      const voice=voices.find(v=>(v.voiceURI||v.name)===voiceURI)||chooseVoice(voices);
       if(voice)utterance.voice=voice;
-      utterance.lang=voice?.lang||'en-GB';utterance.rate=call.priority>=85?1.04:.98;utterance.pitch=call.priority>=85?1.08:1;utterance.volume=.82;
-      current={...call,id};history.push({event:call.event,text:call.text});if(history.length>30)history.shift();onSpeaking(true);
+      utterance.lang=voice?.lang||'en-GB';
+      // Let the voice retain its natural pitch. Raising pitch on every boundary
+      // made the old delivery sound synthetic; excitement comes from the words.
+      utterance.rate=call.priority>=85?1.02:1;
+      utterance.pitch=1;utterance.volume=.82;
+      current={...call,id,utterance};history.push({event:call.event,text:call.text});if(history.length>30)history.shift();onSpeaking(true);
       const done=()=>{if(current?.id!==id)return;current=null;onSpeaking(false);const next=pending;pending=null;if(next)speak(next);};
       utterance.onend=done;utterance.onerror=done;
       try{synth.speak(utterance);}catch(e){done();}
@@ -53,7 +71,7 @@
     const plural=(n,w)=>n+' '+w+(n===1?'':'s');
 
     function wicketLine(d){
-      const b=d.batter||'The batter',w=d.bowler||'the bowler',f=d.fielder,how=d.out.how;
+      const b=d.batter||'The batter',w=d.bowler||'the bowler',f=d.fielder||'the fielder',how=d.out.how;
       let t;
       if(how==='bowled'){
         if(d.playedOn)t=pick([`Played on! ${b} drags it back onto the stumps.`,`Off the inside edge and onto the stumps! ${b} is bowled.`,`Chopped on! That's a horrible way to go for ${b}.`]);
@@ -70,7 +88,7 @@
         t=pick([f?`Run out! A fine throw in from ${f}, and ${b} is short of his ground.`:`Run out! ${b} is short of his ground.`,`They went for one too many! ${b} is run out.`,`Brilliant work in the field! ${b} is run out.`,`Mix-up in the middle, and ${b} is run out.`]);
       } else t=`That's out! ${b} has to go.`;
       // how the batter's innings ended
-      if(d.batRuns===0&&d.batBalls<=1)t+=' '+pick(['First ball, gone for a golden duck.','Out first ball!']);
+      if(d.batRuns===0&&d.batBalls===1)t+=' '+pick(['First ball, gone for a golden duck.','Out first ball!']);
       else if(d.batRuns===0)t+=' '+pick(['Out for a duck.','Gone without scoring.']);
       else if(d.batRuns>=25)t+=' '+pick([`${b} goes for ${d.batRuns}.`,`A fine knock of ${d.batRuns} comes to an end.`,`${d.batRuns} off ${d.batBalls} for ${b}.`]);
       return t;
@@ -78,17 +96,30 @@
 
     function boundaryLine(d){
       const b=d.batter||'The batter',w=d.bowler||'the bowler',r=d.region,s=d.shot?lc(d.shot):'',edge=d.contact==='edge';
+      // Prefer a call about the actual stroke; leave room for a short crowd-style reaction.
+      if(!edge&&s&&chance(.65)){
+        const finish=d.runs===6?'Six!':'Four!';
+        const destination=r?(d.runs===6?over(r):through(r)): 'away';
+        let strokes=[];
+        if(/reverse/.test(s))strokes=[`Changes the angle with the reverse sweep. ${finish}`,`Inventive from ${b}! Reverse sweep ${destination}. ${finish}`];
+        else if(/sweep/.test(s))strokes=[`Down on one knee, swept ${destination}. ${finish}`,`${b} gets underneath it. Swept away! ${finish}`];
+        else if(/pull|hook/.test(s))strokes=[`${b} rocks back and pulls ${destination}. ${finish}`,`Picks up the length early. What a ${s}! ${finish}`];
+        else if(/cut/.test(s))strokes=[`Width to work with, and ${b} cuts ${destination}. ${finish}`,`Quick hands! Cut away by ${b}. ${finish}`];
+        else if(/drive/.test(s))strokes=[`${cap(s)} ${destination}. Beautiful from ${b}! ${finish}`,`Through the line, right out of the middle. ${finish}`];
+        else if(/flick|glance/.test(s))strokes=[`Lovely wrists from ${b}, ${destination}. ${finish}`,`Helped on its way with a ${s}. ${finish}`];
+        if(strokes.length)return pick(strokes);
+      }
       if(d.runs===6){
         if(edge)return pick([`Off the edge, and it carries all the way! Six for ${b}.`,`That's flown off the edge for six! Lucky ${b}.`]);
         return pick([
           r?`${b} launches that ${over(r)}. Six!`:'',
           `Huge hit from ${b}! Six, into the crowd.`,
           s?`${cap(a(s))} from ${b}, and that's out of here. Six!`:'',
-          r?`Up, up, and ${over(r)}. Six runs!`:'',
+          r?`That’s sailed ${over(r)} for six!`:'',
           d.carry>=85?`That's gone ${d.carry} metres! A massive six.`:'',
           `Off the middle and into the stands. Six for ${b}.`,
           `That's a monster! Six more for ${b}.`,
-          `Clean as you like. Six!`,
+          `Oh, that’s clean. All the way for six!`,
           `${b} stands tall and clears the rope. Six.`,
           r?`Six! That's landed deep in the crowd ${r===STRAIGHT?'straight down the ground':'at '+r}.`:'',
           `Get that ball back! ${b} has hit it for six.`,
@@ -103,14 +134,14 @@
         `Beautifully timed by ${b}. Four runs.`,
         r?`Pierces the gap ${through(r)}. Four!`:'',
         `No need to run for that one. Four to ${b}.`,
-        `Cracking shot! Four more for ${b}.`,
-        `The fielder had no chance. Four.`,
-        `Too good to stop. Four runs.`,
+        `What a shot from ${b}. That’s four!`,
+        `No stopping that one. Four runs!`,
+        `That’s found the gap beautifully. Four runs.`,
         r?`Four! Placed perfectly ${through(r)}.`:'',
         `${b} picks the gap and gets four.`,
         r?`${b} finds the boundary ${through(r)}.`:'',
         d.length==='Short'?`Short from ${w}, and punished. Four.`:'',
-        d.length==='Full'||d.length==='Full toss'?`Too full from ${w}, and ${b} drives it for four.`:'',
+        d.length==='Full'||d.length==='Full toss'?`Full from ${w}, and ${b} puts it away for four.`:'',
         s?`Lovely ${s} from ${b}. That's four.`:'',
         r?`Just a touch, and it's away ${to(r)} for four.`:'',
       ]);
@@ -132,23 +163,25 @@
       }
       if(d.wide)return {priority:35,text:pick([`Wide. One added to the score.`,`Too wide from ${w}. That's a wide.`,`Wide called. An extra run.`,`${w} strays too wide.`])};
       if(d.runs===0){
-        if(d.ducked)return {priority:30,text:pick([`Bouncer, and ${b} ducks under it.`,`Short one, and ${b} sways out of the way.`,`${b} gets well underneath that bouncer.`])};
+        if(d.ducked)return {priority:30,text:pick([`That gets up! ${b} ducks underneath it.`,`Short one, and ${b} sways out of the way.`,`${b} gets well underneath that bouncer.`])};
         if(d.left)return {priority:20,text:pick([`Left alone.`,`${b} leaves it outside off.`,`No shot offered.`,`Well left by ${b}.`])};
         if(d.contact==='miss')return {priority:30,text:pick([`Beaten! Lovely ball from ${w}.`,`Past the outside edge!`,`${b} played and missed.`,`Beauty from ${w}. Just past the bat.`,`Swing and a miss from ${b}.`])};
         if(d.contact==='edge')return {priority:30,text:pick([`Off the edge, but safe. No run.`,`Inside edge, and no damage done.`])};
         if(d.defend)return {priority:20,text:pick([`Solid defence from ${b}.`,`Blocked.`,`${b} gets right behind that one.`,`Defended back to ${w}.`])};
-        return {priority:20,text:pick([f?`Straight to ${f}. No run.`:'',f?`Good stop at ${f}. No run.`:'',`Good fielding. No run.`,`${w} keeps it tight. Dot ball.`,`No run there.`,`Well bowled. No run.`,`Nothing doing. Dot ball.`,`${b} can't get that one away.`])};
+        return {priority:20,text:pick([f?`Straight to ${f}. No run.`:'',f?`Good stop at ${f}. No run.`:'',`Good fielding. No run.`,`${w} keeps it tight. Dot ball.`,`No run there.`,`Well bowled. No run.`,`Can’t find a way through this time.`,`${b} can't get that one away.`])};
       }
-      if(d.runs===1)return {priority:20,text:pick([r?`Pushed ${to(r)} for a single.`:'',`Quick single taken.`,`${b} rotates the strike.`,r?`Worked ${to(r)}. One run.`:'',`Just the one.`,`Nudged away for a single.`])};
-      if(d.runs===2)return {priority:25,text:pick([r?`Into the gap ${to(r)}, and they come back for two.`:'',`Good running. Two.`,`They hurry back for the second.`,`Two more to ${b}.`])};
+      if(d.runs===1)return {priority:20,text:pick([r?`Pushed ${to(r)} for a single.`:'',`They’re through for a quick single.`,`${b} rotates the strike.`,r?`Worked ${to(r)}. One run.`:'',`Just the one.`,`Nudged away for a single.`])};
+      if(d.runs===2)return {priority:25,text:pick([r?`Into the gap ${to(r)}, and they come back for two.`:'',`They’ll get two here. Good running.`,`They hurry back for the second.`,`Two more to ${b}.`])};
       return {priority:30,text:pick([`They run hard. Three!`,`Three runs. Excellent running between the wickets.`,r?`Chased down just short of the rope ${to(r)}. Three.`:''])};
     }
 
     // a short word on the state of the match, said after some balls
     function situation(d,important){
-      if(d.chase===undefined)return '';
+      if(!d.chase)return '';
       const need=d.need,left=d.ballsLeft;
       if(d.target&&need>0&&left>0){
+        if(need===1)return pick(['Scores level. Just one to win.',`One run needed, ${plural(left,'ball')} remaining.`]);
+        if(left===6)return pick([`The final over. ${plural(need,'run')} needed.`,`${need} to win from the last six balls.`]);
         if(left===1)return pick([`${plural(need,'run')} needed off the last ball!`,`It all comes down to the last ball. ${plural(need,'run')} needed.`]);
         if(need<=left&&left<=12)return pick([`${plural(need,'run')} needed from ${plural(left,'ball')}.`,`${need} to win, ${left} balls left.`]);
         if(left<=18)return pick([`${need} needed off ${left}.`,`They need ${need} from ${left} balls.`]);
@@ -171,16 +204,23 @@
       track.ball++;
       const bw=d.bowler||'?';
       const seq=track.bowlerSeq[bw]||(track.bowlerSeq[bw]=[]);
-      if(!d.wide&&!d.noBall)seq.push(d.out?'W':'.');if(seq.length>3)seq.shift();
+      const bowlerWicket=d.out&&d.out.how!=='run out';
+      if(!d.wide&&!d.noBall)seq.push(bowlerWicket?'W':'.');if(seq.length>3)seq.shift();
+      const legal=!d.wide&&!d.noBall;
+      const drought=track.sinceBoundary;
+      if(legal){track.scoreless=!d.out&&d.runs===0?track.scoreless+1:0;track.sinceBoundary++;}else track.scoreless=0;
       if(d.out)track.wicketBalls.push(track.ball);
       track.wicketBalls=track.wicketBalls.filter(n=>track.ball-n<12);
       const boundary=!d.out&&(d.runs===4||d.runs===6);
-      if(boundary&&track.lastBoundaryBatter===d.batter)track.boundaries++;else track.boundaries=boundary?1:0;
-      track.lastBoundaryBatter=boundary?d.batter:'';
+      if(!d.wide){
+        if(boundary&&track.lastBoundaryBatter===d.batter)track.boundaries++;else track.boundaries=boundary?1:0;
+        track.lastBoundaryBatter=boundary?d.batter:'';
+      }
+      if(boundary)track.sinceBoundary=0;
       if(d.out){
         let t=wicketLine(d);
-        if(seq.length>=3&&seq.every(x=>x==='W'))t=pick([`A hat-trick for ${bw}! Unbelievable!`,`Three in three! ${bw} has a hat-trick!`])+' '+t;
-        else if(seq.slice(-2).join('')==='WW')t+=' '+pick([`Two in two! ${bw} is on a hat-trick.`,`${bw} is on a hat-trick!`]);
+        if(bowlerWicket&&seq.length>=3&&seq.every(x=>x==='W'))t=pick([`A hat-trick for ${bw}! Unbelievable!`,`Three in three! ${bw} has a hat-trick!`])+' '+t;
+        else if(bowlerWicket&&seq.slice(-2).join('')==='WW')t+=' '+pick([`Two in two! ${bw} is on a hat-trick.`,`${bw} is on a hat-trick!`]);
         else if(track.wicketBalls.length>=3)t+=' '+pick(['Wickets are tumbling here!','This is a collapse!']);
         return {priority:100,text:t};
       }
@@ -193,15 +233,21 @@
         if(d.noBall)t+=' '+pick([`And it's a no-ball too.`,`A no-ball as well!`])+(d.freeHitNext?' Free hit next.':'');
         if(track.boundaries===3)t+=' '+pick([`That's three in a row!`,`Three boundaries on the trot for ${d.batter}!`]);
         else if(track.boundaries>=4)t+=' '+pick([`Another one! ${d.batter} is on fire.`,`${d.batter} is taking ${d.bowler||'the bowler'} apart!`]);
+        else if(drought>=12)t+=' '+pick(['That breaks the boundary drought.','A welcome boundary after a quiet spell.']);
         const s=situation(d,true);
         return {priority:d.runs===6?90:85,text:s?t+' '+s:t};
       }
-      if(d.overDone){
+      // A chance or an illegal delivery matters more than the over summary.
+      if(d.overDone&&!d.dropped&&!d.missedStumping&&!d.notOut){
         const s=situation(d,false);
         return {priority:55,text:overLine(d)+(s?' '+s:'')};
       }
       const q=quietLine(d);
-      if(q.priority<50){
+      if(q.priority<50&&track.scoreless>=3&&!d.wide&&!d.noBall){
+        q.text=pick([`${track.scoreless} dot balls in a row. ${d.bowler||'The bowler'} is building pressure.`,`${d.batter||'The batter'} needs to find a gap. ${track.scoreless} dots in a row.`]);
+        q.priority=50;
+      }
+      if(q.priority<=50){
         // quiet balls: say most of them, but a dot now and then is left to the crowd
         if(d.runs===0&&!d.wide&&!d.noBall&&!d.notOut&&!d.ducked&&q.priority<30&&(track.dots=(track.dots+1)%3)===2)return null;
         const s=situation(d,false);
@@ -215,6 +261,8 @@
       const voice=enabled&&!muted&&!suspended&&unlocked&&supported;
       if((!voice&&!onCaption)||data.skip)return false;
       if(data.id&&seen.has(data.id))return false;
+      if(data.id){seen.add(data.id);if(seen.size>200)seen.delete(seen.values().next().value);}
+      pending=null; // A queued call from an earlier ball is now stale.
       let call=null;
       if(event==='result')call=resultCall(data);
       else if(event==='innings'){
@@ -226,20 +274,33 @@
       if(!call||!call.text)return false;
       const {text,priority}=call;
       if(onCaption){try{onCaption(text,priority,event);}catch(e){}}
-      if(!voice){if(data.id){seen.add(data.id);if(seen.size>200)seen.delete(seen.values().next().value);}return false;}
+      if(!voice)return false;
       if(priority<50&&now()-lastLow<6500)return false;
-      if(data.id){seen.add(data.id);if(seen.size>200)seen.delete(seen.values().next().value);}
       if(priority<50)lastLow=now();
       const c={event,text,priority,expires:now()+4500};
       if(current){
-        if(priority>=85&&priority>current.priority){cancel();speak(c);}
-        else if(priority>=55&&(!pending||priority>pending.priority))pending=c;
+        // Finish the sentence already playing, including over a replay.
+        if(priority>=55&&(!pending||priority>pending.priority))pending=c;
         else return false;
       } else speak(c);
       return true;
     }
     return {
       supported,emit,history,unlock(){unlocked=true;},
+      stop(){cancel();},
+      setVoice(value){voiceURI=value||'';},
+      voiceInfo(){
+        let voices=[];try{voices=synth?.getVoices()||[];}catch(e){}
+        const english=voices.filter(v=>/^en(?:[-_]|$)/i.test(v.lang));
+        const selected=english.find(v=>(v.voiceURI||v.name)===voiceURI)||chooseVoice(english);
+        return {voices:english,selected};
+      },
+      preview(){
+        if(!supported||muted)return false;
+        unlocked=true;cancel();
+        speak({event:'preview',text:"Beautifully timed, straight down the ground. That's four!",priority:85,preview:true,expires:now()+4500});
+        return true;
+      },
       setEnabled(value){enabled=!!value;if(!enabled)cancel();return enabled;},
       setMuted(value){muted=!!value;if(muted)cancel();},
       setSuspended(value){const changed=suspended!==!!value;suspended=!!value;if(changed&&suspended)cancel();},

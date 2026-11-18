@@ -1,0 +1,77 @@
+{
+  "source": "Actual game renderer with automated batting inputs; no replaced scoring or simulated marketing scene.",
+  "viewport": [
+    1280,
+    720
+  ],
+  "fps": 24,
+  "frames": 336,
+  "audio": "Silent capture; no recorded commentary or music.",
+  "renderer": "Headless Chrome / SwiftShader; not a physical-device performance claim.",
+  "states": [
+    {
+      "frame": 0,
+      "phase": "wait",
+      "replay": false,
+      "runs": 0,
+      "wickets": 0,
+      "balls": 0,
+      "body": true
+    },
+    {
+      "frame": 48,
+      "phase": "wait",
+      "replay": false,
+      "runs": 0,
+      "wickets": 0,
+      "balls": 0,
+      "body": true
+    },
+    {
+      "frame": 96,
+      "phase": "runup",
+      "replay": false,
+      "runs": 0,
+      "wickets": 0,
+      "balls": 0,
+      "body": true
+    },
+    {
+      "frame": 144,
+      "phase": "play",
+      "replay": false,
+      "runs": 0,
+      "wickets": 0,
+      "balls": 0,
+      "body": true
+    },
+    {
+      "frame": 192,
+      "phase": "play",
+      "replay": false,
+      "runs": 0,
+      "wickets": 0,
+      "balls": 0,
+      "body": true
+    },
+    {
+      "frame": 240,
+      "phase": "result",
+      "replay": true,
+      "runs": 6,
+      "wickets": 0,
+      "balls": 1,
+      "body": true
+    },
+    {
+      "frame": 288,
+      "phase": "result",
+      "replay": true,
+      "runs": 6,
+      "wickets": 0,
+      "balls": 1,
+      "body": true
+    }
+  ],
+  "errors": []
+}

@@ -199,8 +199,12 @@
     // the body turns right round to the leg side and the bat wraps over the shoulder, hands up by the shoulder (the owner's
     // Rohit frames): it used to stop flat at the waist
     const finish={...contact,pel:[.72+shift,.85,.66],hy:32,sy:75,lean:6,rearFootPitch:.45,
-      h:[.92+shift,loft?1.38:1.26,.64],bd:unit([.2,loft?.55:.45,-.85])};
-    const settle={...finish,hy:24,sy:62,h:add(finish.h,[-.03,-.08,.04]),bd:unit([.3,.5,-.8]),rearFootPitch:.25};
+      h:[(fineLeg?.92:.98)+shift,loft?1.38:1.26,fineLeg?.64:.82],
+      // Reference pull frames: the blade rises beside the shoulder instead of
+      // pointing almost straight behind the torso and disappearing from the match camera.
+      bd:fineLeg?unit([.2,loft?.55:.45,-.85]):unit([.65,loft?.75:.65,-.35])};
+    const settle={...finish,hy:24,sy:62,h:add(finish.h,[-.03,-.08,.04]),
+      bd:fineLeg?unit([.3,.5,-.8]):unit([.65,.65,-.3]),rearFootPitch:.25};
     return [[0,start],[impact*.3,load],[impact*.66,slot],[impact,contact],
       [impact+.08,through],[impact+.20,extension],[impact+.42,finish],[impact+.85,settle],[impact+1.5,stance]];
   }

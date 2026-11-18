@@ -1,0 +1,24 @@
+// Stumpflare display-identity migration. Legacy strings here are compatibility data, not game branding.
+(function(root){
+  'use strict';
+  const names={"S. Gilmann": "A. Mehra", "Y. Jaiswar": "D. Bhasin", "V. Kohlee": "N. Talwar", "S. Yadhav": "K. Vaid", "R. Pantt": "T. Bendre", "H. Pandiya": "E. Saran", "R. Jadeyja": "B. Kamat", "A. Patell": "I. Sarin", "K. Yadev": "U. Dugal", "J. Bumrar": "O. Raval", "M. Siraaj": "Z. Nanda", "T. Hedd": "K. Whitcombe", "M. Marsch": "T. Bellamy", "S. Smithe": "E. Fenwick", "M. Labuchane": "B. Hensley", "J. Inglish": "I. Alderton", "G. Maxwel": "U. Mercer", "C. Greene": "O. Ransome", "P. Cummings": "Z. Ellery", "M. Starke": "A. Tarrant", "A. Zamper": "D. Keppel", "J. Hazelwod": "N. Denholm", "P. Salte": "B. Fairburn", "B. Duckitt": "I. Hollis", "J. Roote": "U. Cartwright", "H. Brooke": "O. Penrose", "J. Butlar": "Z. Bramwell", "B. Stoaks": "A. Redfern", "W. Jacques": "D. Ashby", "B. Carsey": "N. Langford", "A. Rashed": "K. Wetherby", "J. Archar": "T. Huxley", "M. Wode": "E. Selwyn", "S. Ayube": "O. Qadri", "F. Zammaan": "Z. Nizami", "B. Azaam": "A. Raufani", "M. Rizwaan": "D. Kazmi", "S. Aghaa": "N. Faruqi", "F. Ashraff": "K. Hamdani", "S. Khaan": "T. Darani", "S. Afridee": "E. Safiuddin", "N. Shahh": "B. Tanviri", "H. Rauff": "I. Mahdavi", "A. Ahmedd": "U. Qureshi", "Q. de Cok": "D. Mokoena", "A. Markrum": "N. Duvenage", "R. Rickleton": "K. Venter", "T. Stubbes": "T. Ndlovu", "H. Klaasan": "E. Engelbrecht", "D. Millar": "B. Bothma", "M. Jansan": "I. Mahlangu", "K. Maharajh": "U. Radebe", "K. Rabadaa": "O. Viljoen", "L. Ngidee": "Z. Maseko", "T. Shamsee": "A. Dlamini", "D. Conwey": "T. Kershaw", "R. Ravindr": "E. Harcourt", "K. Williamsen": "B. Taiton", "D. Mitchel": "I. Fairlie", "T. Lathem": "U. Lennox", "G. Philipps": "O. Hadley", "M. Santnar": "Z. Calder", "K. Jamiesen": "A. Riddell", "M. Henri": "D. Armitage", "L. Fergusen": "N. Seddon", "W. Rourke": "K. Whitmore", "P. Nisanka": "I. Jayakody", "K. Mendiss": "U. Ranatunga", "K. Pereira": "O. Hewage", "C. Asalanke": "Z. Kuruppu", "S. Samarawick": "A. Galappatti", "D. de Silvaa": "D. Senanayake", "W. Hasarenga": "N. Wijesiri", "D. Wellalagey": "K. Abeykoon", "M. Theekshane": "T. Bandara", "M. Pathirena": "E. Kalubowila", "D. Madushanke": "B. Dissanayake", "B. Kingg": "Z. Brathwaite", "S. Hoape": "A. Hinds", "N. Pooraan": "D. Walcott", "S. Hetmyre": "N. Beckford", "R. Powel": "K. Sealy", "S. Rutherfrd": "T. Gittens", "R. Chace": "E. Drayton", "J. Holdar": "B. Cumberbatch", "A. Hossein": "I. Parris", "A. Josef": "U. Roachford", "G. Motee": "O. Browne", "T. Hassan": "N. Karim", "L. Daas": "K. Mazumder", "N. Shantoo": "T. Sikder", "T. Hridoye": "E. Talukder", "M. Raheem": "B. Munshi", "M. Mirazz": "I. Barua", "R. Hossein": "U. Sarker", "T. Islaam": "O. Haldar", "T. Ahmmed": "Z. Mollah", "M. Rahmann": "A. Chowdhury", "N. Raana": "D. Kabir", "R. Gurbaaz": "E. Waziri", "I. Zadraan": "B. Rahimi", "S. Attal": "I. Zaryab", "H. Shahidee": "U. Mehran", "A. Omarzay": "O. Kohistani", "M. Nabbi": "Z. Safdar", "G. Naeb": "A. Baraki", "R. Khaan": "D. Sarwari", "N. Ahmadd": "N. Zamani", "F. Farooqee": "K. Noorzai", "N. Ulhaq": "T. Payenda", "Chennai Super Kings": "Chennai Lanterns", "Delhi Capitals": "Delhi Kites", "Gujarat Titans": "Gujarat Saltwinds", "Kolkata Knight Riders": "Kolkata Fireflies", "Lucknow Super Giants": "Lucknow Moonstones", "Mumbai Indians": "Mumbai Breakwater", "Punjab Kings": "Punjab Copperfields", "Rajasthan Royals": "Rajasthan Sandgliders", "Royal Challengers Bengaluru": "Bengaluru Rainbirds", "Sunrisers Hyderabad": "Hyderabad Nightjars"}, shorts={"CSK": "CLN", "DC": "DKT", "GT": "GSW", "KKR": "KFF", "LSG": "LMS", "MI": "MBW", "PBKS": "PCF", "RR": "RSG", "RCB": "BRB", "SRH": "HNJ"};
+  function migrate(value){
+    if(typeof value==='string'){
+      if(names[value])return names[value];
+      if(shorts[value])return shorts[value];
+      // Saved dismissal descriptions may contain the former full player name.
+      for(const [old,name] of Object.entries(names))if(value.includes(old))value=value.split(old).join(name);
+      return value;
+    }
+    if(Array.isArray(value))return value.map(migrate);
+    if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([key,v])=>[names[key]||key,migrate(v)]));
+    return value;
+  }
+  function migrateStorage(storage){
+    for(const key of ['cricket-rush-match','cricket-rush-stats','cricket-rush-tournament','cricket-rush-series']){
+      try{const raw=storage.getItem(key);if(!raw)continue;const next=JSON.stringify(migrate(JSON.parse(raw)));if(next!==raw)storage.setItem(key,next);}catch(e){} // Retain unreadable saves; never delete progress.
+    }
+  }
+  if(typeof module!=='undefined')module.exports={migrate,migrateStorage};
+  if(root.document){try{migrateStorage(root.localStorage);}catch(e){}}
+})(typeof window==='undefined'?globalThis:window);

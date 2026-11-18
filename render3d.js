@@ -1,4 +1,4 @@
-// Cricket Rush: the 3D view (three.js). The game itself (index.html) runs the match and the 2D guides;
+// Stumpflare: the 3D view (three.js). The game itself (index.html) runs the match and the 2D guides;
 // this file only draws the world from the game's state: the same camera, ball and player joints.
 // The game calls Cricket3D(G) with a view of its state; it returns null if WebGL isn't available (the game keeps its 2D picture).
 window.Cricket3D = function (G) {
@@ -145,13 +145,13 @@ window.Cricket3D = function (G) {
   outside.rotation.x = -Math.PI / 2; outside.position.y = -0.06; scene.add(outside);
 
   const grassTex = canvasTex(1024, 1024, (g, w, h) => {
-    g.fillStyle = '#1d6424'; g.fillRect(0, 0, w, h);
-    const k = w / (BOARDS * 2), band = 5 * k;
-    for (let x = 0; x < w; x += band * 2) { g.fillStyle = 'rgba(16,44,20,0.10)'; g.fillRect(x, 0, band, h); }   // a faint cut the other way: a chequered outfield
+    g.fillStyle = '#295f3b'; g.fillRect(0, 0, w, h);
+    const k = w / (BOARDS * 2), band = 7 * k;
+    for (let x = 0; x < w; x += band * 2) { g.fillStyle = 'rgba(16,44,20,0.035)'; g.fillRect(x, 0, band, h); }
     // mowing stripes across the field (light, dark, light ...), with soft edges
     for (let y = 0; y < h; y += band * 2) {
       const gr = g.createLinearGradient(0, y, 0, y + band);
-      gr.addColorStop(0, 'rgba(8,34,12,0)'); gr.addColorStop(0.08, 'rgba(8,34,12,0.36)'); gr.addColorStop(0.92, 'rgba(8,34,12,0.36)'); gr.addColorStop(1, 'rgba(8,34,12,0)');
+      gr.addColorStop(0, 'rgba(8,34,12,0)'); gr.addColorStop(0.12, 'rgba(8,34,12,0.17)'); gr.addColorStop(0.88, 'rgba(8,34,12,0.17)'); gr.addColorStop(1, 'rgba(8,34,12,0)');
       g.fillStyle = gr; g.fillRect(0, y, w, band);
     }
     noise(g, w, h, 26000, ['rgba(255,255,255,0.035)', 'rgba(0,0,0,0.05)', 'rgba(20,60,20,0.08)'], 2);
@@ -169,12 +169,28 @@ window.Cricket3D = function (G) {
   const pitchTex = canvasTex(256, 2048, (g, w, h) => {
     const X = x => (x + PW / 2) / PW * w, Z = z => (z - z0) / PL * h;
     g.clearRect(0, 0, w, h);
-    g.fillStyle = '#b89c6c'; g.fillRect(X(-1.52), 0, X(1.52) - X(-1.52), h);
-    g.fillStyle = '#c4aa7a'; g.fillRect(X(-1.2), Z(2), X(1.2) - X(-1.2), Z(PITCH - 2) - Z(2));
+    g.fillStyle = '#aa9778'; g.fillRect(X(-1.52), 0, X(1.52) - X(-1.52), h);
+    const clay=g.createLinearGradient(0,0,w,0);
+    clay.addColorStop(0,'#a59373');clay.addColorStop(.28,'#b8a584');clay.addColorStop(.65,'#bca988');clay.addColorStop(1,'#a79677');
+    g.fillStyle=clay; g.fillRect(X(-1.4),0,X(1.4)-X(-1.4),h);
     g.save(); g.beginPath(); g.rect(X(-1.52), 0, X(1.52) - X(-1.52), h); g.clip();
     noise(g, w, h, 9000, ['rgba(120,90,50,0.10)', 'rgba(255,255,240,0.06)'], 2); g.restore();
-    // worn patches where the bowlers land and the batters stand
-    for (const zc of [1.2, 3.5, PITCH - 1.2, PITCH - 3.5]) { g.fillStyle = 'rgba(130,100,60,0.16)'; g.beginPath(); g.ellipse(X(0), Z(zc), w * 0.16, h * 0.035, 0, 0, Math.PI * 2); g.fill(); }
+    // Soft, irregular wear in the landing/guard areas rather than painted oval spots.
+    g.save();g.beginPath();g.rect(X(-1.5),0,X(1.5)-X(-1.5),h);g.clip();
+    let soilSeed=47;const soilRand=()=>((soilSeed=Math.imul(soilSeed,1664525)+1013904223>>>0)/4294967296);
+    for(const zc of [1.2,3.5,PITCH-1.2,PITCH-3.5]){
+      for(let i=0;i<32;i++){
+        const x=X((soilRand()-.5)*1.4),z=Z(zc+(soilRand()-.5)*1.6),r=5+soilRand()*15;
+        const scuff=g.createRadialGradient(x,z,0,x,z,r);scuff.addColorStop(0,'rgba(92,72,43,.13)');scuff.addColorStop(1,'rgba(92,72,43,0)');
+        g.fillStyle=scuff;g.fillRect(x-r,z-r,r*2,r*2);
+      }
+    }
+    g.strokeStyle='rgba(80,67,46,.14)';g.lineWidth=.7;
+    for(let i=0;i<50;i++){
+      const x=X((soilRand()-.5)*2.7),z=soilRand()*h;g.beginPath();g.moveTo(x,z);
+      g.lineTo(x+soilRand()*5-2,z+4+soilRand()*9);g.lineTo(x+soilRand()*8-4,z+12+soilRand()*10);g.stroke();
+    }
+    g.restore();
     g.fillStyle = '#f6f2e6';
     const t = 0.05;   // crease lines are 5 cm wide
     const line = (xa, za, xb, zb) => za === zb ? g.fillRect(X(xa), Z(za - t / 2), X(xb) - X(xa), Z(za + t / 2) - Z(za - t / 2))
@@ -190,13 +206,13 @@ window.Cricket3D = function (G) {
   // rope, advertising boards, sight screens
   const rope = new T.Mesh(new T.TorusGeometry(ROPE, 0.09, 6, 220), new T.MeshStandardMaterial({ color: 0xf2eee2, roughness: 0.6 }));
   rope.rotation.x = Math.PI / 2; rope.position.y = 0.09; scene.add(rope);
-  const ADS = [['CRICKET RUSH', '#0a1024', '#ffb02e'], ['FLOODLIGHT FM', '#13306e', '#f3efe4'], ['SIXER COLA', '#c43a4d', '#ffffff'],
+  const ADS = [['STUMPFLARE', '#0a1024', '#ffb02e'], ['FLOODLIGHT FM', '#13306e', '#f3efe4'], ['SIXER COLA', '#c43a4d', '#ffffff'],
                ['GULLY BANK', '#0f5b57', '#f6d36b'], ['NIGHT OWL TEA', '#ffb02e', '#0a1024'], ['SPIN KING', '#5a47b8', '#ffffff']];
   const adTex = canvasTex(3072, 64, (g, w, h) => {
     const pw = w / ADS.length;
     ADS.forEach(([t, bg, fg], i) => {
       g.fillStyle = bg; g.fillRect(i * pw, 0, pw, h);
-      g.fillStyle = fg; g.font = '900 40px "Big Shoulders Display", Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillStyle = fg; g.font = '900 40px "Rush Display", Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.fillText(t, i * pw + pw / 2, h / 2 + 2);
     });
   }, true);
@@ -266,6 +282,7 @@ window.Cricket3D = function (G) {
       const x = Math.sin(a) * r, z = Math.cos(a) * r, k = 1.25 + Math.random() * 0.3;   // drawn large, so rows overlap and the stand looks full
       m.compose(ps.set(x, y, z), q.setFromAxisAngle(Y, Math.atan2(-x, -z)), sc.set(k, k, k)); mesh.setMatrixAt(i, m);
       c.set(SHIRTS[(Math.random() * SHIRTS.length) | 0]).multiplyScalar(0.7 + Math.random() * 0.3);
+      if(!window.CR_PLAYER_PRODUCTION?.reference)c.lerp(new T.Color('#526479'),.18);
       if(LOOK_PLAYER)c.lerp(new T.Color('#53616d'),.46).multiplyScalar(.75);
       c.toArray(shirtA, i * 3);
       c.set(SKINS[(Math.random() * SKINS.length) | 0]).multiplyScalar(0.95); c.toArray(skinA, i * 3);
@@ -437,7 +454,7 @@ window.Cricket3D = function (G) {
       g.fillStyle = '#10131c'; g.beginPath(); g.moveTo(14, 150); g.lineTo(114, 110); g.lineTo(114, 150); g.lineTo(14, 190); g.closePath(); g.fill();
       g.fillStyle = '#f6c945'; g.beginPath(); g.moveTo(14, 196); g.lineTo(114, 156); g.lineTo(114, 166); g.lineTo(14, 206); g.closePath(); g.fill();
       g.save(); g.translate(64, 62); g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.font = '900 34px "Big Shoulders Display", Impact, sans-serif'; g.fillText('RUSH', 0, 0); g.font = '700 13px "Big Shoulders Display", Impact, sans-serif'; g.fillText('SIXER PRO', 0, 30); g.restore();
+      g.font = '900 34px "Rush Display", Impact, sans-serif'; g.fillText('FLARE', 0, 0); g.font = '700 13px "Rush Display", Impact, sans-serif'; g.fillText('SIXER PRO', 0, 30); g.restore();
     });
     const st = (z, flip) => { const p = new T.PlaneGeometry(0.066, 0.2); if (flip) p.rotateY(Math.PI); p.translate(0, -0.455, z); return p; };
     const g = new T.Group(), M = (geo, m) => { const x = new T.Mesh(geo, m); x.castShadow = true; x.frustumCulled = false; g.add(x); return x; };
@@ -601,8 +618,8 @@ window.Cricket3D = function (G) {
     if (!name) { b.t.needsUpdate = true; return; }   // a plain shirt (the umpires)
     const sur = (name.split(' ').pop() || '').toUpperCase().slice(0, 10), num = 1 + (hash(name) % 98);
     g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = ink;
-    g.font = '800 30px "Big Shoulders Display", Impact, sans-serif'; g.fillText(sur, 128, 62);
-    g.font = '900 118px "Big Shoulders Display", Impact, sans-serif'; g.fillText(String(num), 128, 150);
+    g.font = '800 30px "Rush Display", Impact, sans-serif'; g.fillText(sur, 128, 62);
+    g.font = '900 118px "Rush Display", Impact, sans-serif'; g.fillText(String(num), 128, 150);
     b.t.needsUpdate = true;
   }
 
@@ -696,8 +713,8 @@ window.Cricket3D = function (G) {
     const t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; t.anisotropy = 4; t.flipY = false;
     const g = c.getContext('2d'), name = (team && team.name || '').toUpperCase();
     g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = inkFor(shirt);
-    let px = 46; g.font = '900 ' + px + 'px "Big Shoulders Display", Impact, sans-serif';
-    while (px > 16 && g.measureText(name).width > 150) { px -= 2; g.font = '900 ' + px + 'px "Big Shoulders Display", Impact, sans-serif'; }
+    let px = 46; g.font = '900 ' + px + 'px "Rush Display", Impact, sans-serif';
+    while (px > 16 && g.measureText(name).width > 150) { px -= 2; g.font = '900 ' + px + 'px "Rush Display", Impact, sans-serif'; }
     g.fillText(name, 128, 112);
     return (CHEST[key] = t);
   }
@@ -1793,7 +1810,7 @@ window.Cricket3D = function (G) {
   }
 
   // ---------------------------------------------------------------- switch
-  function apply() { view.style.display = on ? 'block' : 'none'; const b = $('gfxToggle'); if (b) b.textContent = on ? 'Graphics: 3D' : 'Graphics: 2D'; }
+  function apply() { view.style.display = on ? 'block' : 'none'; const b = $('gfxToggle'); if (b) { b.textContent = on ? 'Graphics: 3D' : 'Graphics: 2D'; b.setAttribute('aria-pressed',String(on)); } }
   const btn = $('gfxToggle');
   if (btn) {
     btn.hidden = false;
