@@ -49,10 +49,12 @@ window.Cricket3D = function (G) {
   }
   const V = (a) => new T.Vector3(a[0], a[1], a[2]);
 
-  // canvas textures
+  // canvas textures. Kept in ordinary memory (willReadFrequently): a phone that drops the GPU while the game is in the
+  // background also wipes GPU-backed canvases, and the grass and pitch came back black when 3D was turned on again.
+  const SOFT2D = { willReadFrequently: true };
   function canvasTex(w, h, draw, repeat) {
     const c = document.createElement('canvas'); c.width = w; c.height = h;
-    draw(c.getContext('2d'), w, h);
+    draw(c.getContext('2d', SOFT2D), w, h);
     const t = new T.CanvasTexture(c);
     t.encoding = T.sRGBEncoding;
     t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
@@ -325,7 +327,7 @@ window.Cricket3D = function (G) {
 
   // ---------------------------------------------------------------- the ball
   // the toss coin (G.coin): gold, a star on the heads side and stumps on the tails side; drawn larger than life so it reads on screen
-  const coinFace = draw => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  const coinFace = draw => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d', SOFT2D);
     const gr = g.createRadialGradient(48, 44, 6, 64, 64, 64); gr.addColorStop(0, '#ffe7a3'); gr.addColorStop(0.6, '#f0b43c'); gr.addColorStop(1, '#b8801f');
     g.fillStyle = gr; g.beginPath(); g.arc(64, 64, 64, 0, Math.PI * 2); g.fill();
     g.strokeStyle = '#ffe08a'; g.lineWidth = 4; g.beginPath(); g.arc(64, 64, 54, 0, Math.PI * 2); g.stroke();
@@ -614,7 +616,7 @@ window.Cricket3D = function (G) {
   }
   function drawBack(b, name, ink, key) {   // key: the player's own name, for a number that stays with him
     if (b.who === name + ink) return; b.who = name + ink;
-    const g = b.c.getContext('2d'); g.clearRect(0, 0, 256, 256);
+    const g = b.c.getContext('2d', SOFT2D); g.clearRect(0, 0, 256, 256);
     if (!name) { b.t.needsUpdate = true; return; }   // a plain shirt (the umpires)
     const sur = (name.split(' ').pop() || '').toUpperCase().slice(0, 10), num = 1 + (hash(key || name) % 98);
     g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = ink;
@@ -711,7 +713,7 @@ window.Cricket3D = function (G) {
     if (CHEST[key]) return CHEST[key];
     const c = document.createElement('canvas'); c.width = 256; c.height = 256;
     const t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; t.anisotropy = 4; t.flipY = false;
-    const g = c.getContext('2d'), name = (team && team.name || '').toUpperCase();
+    const g = c.getContext('2d', SOFT2D), name = (team && team.name || '').toUpperCase();
     g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = inkFor(shirt);
     let px = 46; g.font = '900 ' + px + 'px "Rush Display", Impact, sans-serif';
     while (px > 16 && g.measureText(name).width > 150) { px -= 2; g.font = '900 ' + px + 'px "Rush Display", Impact, sans-serif'; }
@@ -1621,6 +1623,7 @@ window.Cricket3D = function (G) {
   // glow around the floodlights and the ball, filmic tone mapping, a slightly calmer colour grade and a soft vignette
   const PP = window.POSTPROCESSING;
   let composer = null, portraitFocus = null;
+  const nearFwd = new T.Vector3(), nearRay = new T.Vector3();
   function makeComposer() {
     if (!PP || new URLSearchParams(location.search).get('postfx')==='off') return null;
     try {
@@ -1745,7 +1748,18 @@ window.Cricket3D = function (G) {
     // A long broadcast lens needs a tighter depth range: the old 0.3 m near
     // plane quantised close garment/hair surfaces into the same depth at 80 m.
     // The near plane follows the camera's distance to what it looks at, so the depth buffer's precision goes where the players are.
-    const near = Math.max(.3, Math.min(12, Math.hypot(cam.pos[0] - cam.tgt[0], cam.pos[1] - cam.tgt[1], cam.pos[2] - cam.tgt[2]) * .22));
+    let near = Math.max(.3, Math.min(12, Math.hypot(cam.pos[0] - cam.tgt[0], cam.pos[1] - cam.tgt[1], cam.pos[2] - cam.tgt[2]) * .22));
+    // ...but never past the grass at the bottom of the picture: a replay aimed at a far catch from 8.5 m up cut the
+    // nearby grass away, and the sky showed through as a coloured band along the bottom of a phone's tall screen.
+    if (near > .3 && camera.position.y > 0) {
+      camera.getWorldDirection(nearFwd);
+      for (const x of [-1, 0, 1]) {
+        nearRay.set(x, -1, .5).unproject(camera).sub(camera.position);
+        if (nearRay.y >= 0) continue;
+        const depth = -camera.position.y / nearRay.y * nearRay.dot(nearFwd);
+        near = Math.max(.3, Math.min(near, depth * .8));
+      }
+    }
     if(camera.near !== near){camera.near=near;camera.updateProjectionMatrix();}
     if(portraitFocus) {
       portraitFocus.target.fromArray(cam.tgt);
@@ -1816,7 +1830,17 @@ window.Cricket3D = function (G) {
     btn.hidden = false;
     btn.addEventListener('click', () => { on = !on; try { localStorage.setItem(KEY, on ? '3d' : '2d'); } catch (e) {} apply(); });
   }
-  view.addEventListener('webglcontextlost', e => { e.preventDefault(); on = false; apply(); });
+  // A phone may take the GPU away while the game is in the background: show 2D meanwhile, and go back to 3D by itself
+  // when the browser gives it back (unless the player picked 2D in between). Textures are uploaded again from their images.
+  let lostOn = false;
+  view.addEventListener('webglcontextlost', e => { e.preventDefault(); lostOn = lostOn || on; on = false; apply(); });
+  view.addEventListener('webglcontextrestored', () => {
+    scene.traverse(o => { for (const m of [].concat(o.material || [])) { m.needsUpdate = true; for (const k in m) { const v = m[k]; if (v && v.isTexture) v.needsUpdate = true; } } });
+    lastW = lastH = 0;   // size() sets the renderer and the TV look's buffers up again on the next frame
+    let pref = '3d'; try { pref = localStorage.getItem(KEY) || '3d'; } catch (e) {}
+    if (lostOn && pref !== '2d') on = true;
+    lostOn = false; apply();
+  });
   apply();
   return { active: () => on, render: render3d };
 };
