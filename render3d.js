@@ -612,11 +612,11 @@ window.Cricket3D = function (G) {
     const t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; t.anisotropy = 4; t.flipY = false;
     return { c, t, who: '' };
   }
-  function drawBack(b, name, ink) {
+  function drawBack(b, name, ink, key) {   // key: the player's own name, for a number that stays with him
     if (b.who === name + ink) return; b.who = name + ink;
     const g = b.c.getContext('2d'); g.clearRect(0, 0, 256, 256);
     if (!name) { b.t.needsUpdate = true; return; }   // a plain shirt (the umpires)
-    const sur = (name.split(' ').pop() || '').toUpperCase().slice(0, 10), num = 1 + (hash(name) % 98);
+    const sur = (name.split(' ').pop() || '').toUpperCase().slice(0, 10), num = 1 + (hash(key || name) % 98);
     g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = ink;
     g.font = '800 30px "Rush Display", Impact, sans-serif'; g.fillText(sur, 128, 62);
     g.font = '900 118px "Rush Display", Impact, sans-serif'; g.fillText(String(num), 128, 150);
@@ -1384,7 +1384,7 @@ window.Cricket3D = function (G) {
       if (P.RB_Body) {
         const team = G.inn && !pr.umpire ? G.inn[pr.team === 'bat' ? 'bat' : 'bowl'] : null, ub = P.RB_Body.material.userData.u, uh = P.RB_Head.material.userData.u;
         ub.uShirt.value.copy(shirt.color); ub.uPants.value.copy(pants.color); ub.uTrim.value.copy(shirt === M3.batShirt ? M3.batTrim.color : shirt === M3.umpShirt ? M3.umpPants.color : M3.bowlTrim.color);
-        const pool = pr.umpire ? UMP : (team && FACE_POOL[team.id]) || MIX, at = team ? team.players.findIndex(p => p.name === pr.pid) : -1;
+        const pool = pr.umpire ? UMP : (team && FACE_POOL[team.id]) || MIX, at = team ? team.players.findIndex(p => (p.key || p.name) === pr.pid) : -1;
         const [fi, shade] = pool[(pr.faceKey ?? (at >= 0 ? at + hash(team.id) : skinIdx)) % pool.length], face = RIG.faces[fi % RIG.faces.length];
         if (face && face.map && P.RB_Head.material.map !== face.map) { P.RB_Head.material.map = face.map; P.RB_Head.material.needsUpdate = true; }
         // a darker tone from a lighter photo: take away more blue than red, as real darker skin has (an even darkening goes grey)
@@ -1393,7 +1393,7 @@ window.Cricket3D = function (G) {
         uh.uBeard.value.copy(look.beard); uh.uHair.value.copy(look.hair);
         if (face && RIG.bodySkin) ub.uSkin.value.setRGB(face.skin.r / RIG.bodySkin.r, face.skin.g / RIG.bodySkin.g, face.skin.b / RIG.bodySkin.b).multiply(uh.uSkin.value);
         const ink = inkFor(shirt.color);
-        drawBack(this.back, pr.umpire ? '' : pr.pid || '', ink);
+        drawBack(this.back, pr.umpire ? '' : at >= 0 ? team.players[at].name : pr.pid || '', ink, pr.pid);   // the name shown (a names file may change it)
         const ct = chestTex(team, shirt.color);
         if (P.RB_Chest.material.map !== ct) { P.RB_Chest.material.map = ct; P.RB_Chest.material.needsUpdate = true; }
       }

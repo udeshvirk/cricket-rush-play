@@ -793,6 +793,12 @@
         </div>
         <p class="how" id="commentaryVoiceStatus" aria-live="polite">Uses voices available in your browser.</p>
       </div>
+      <div class="setsec" id="namesSec">
+        <div class="sechead">Player names</div>
+        <p class="how" id="namesStatus" aria-live="polite">The game's own names.</p>
+        <div class="row"><button class="btn ghost" id="namesLoad" type="button">Load names file</button><button class="btn ghost" id="namesReset" type="button" hidden>Use the game's names</button></div>
+        <input type="file" id="namesFile" accept=".json,application/json" hidden>
+      </div>
       <div class="row"><a class="btn ghost" href="privacy.html" target="_blank" rel="noopener">Privacy</a><a class="btn ghost" href="credits.html" target="_blank" rel="noopener">Credits &amp; licences</a></div>
       <details><summary>How to play · controls</summary>
       <p class="how"><b>Batting:</b> choose <b>Defend</b>, <b>Shot</b> or <b>Loft</b> before the ball arrives. As it reaches the bat,
@@ -991,49 +997,50 @@ const BOWL_TYPES = {
   L: { name: 'Leg-spin', speed: [75, 87], start: 27, turn: -1, vars: ['Stock', 'Flighted', 'Quicker', 'Googly', 'Top-spinner'] },
 };
 
-// Country sides in our own kit colours (no official badges or logos). Players have fictional identities; no current national squad is represented.
+// Country sides in our own kit colours (no official badges or logos). Player names are the game's own spellings, styled on today's
+// squads. A names file (Settings → Player names, stored on the device only) can show other names; see applyRoster below.
 // [name, batting 0-100, bowling style, bowling 0-100]; wk = the wicketkeeper's place in the order
 const TEAMS = [
   { id: 'ind', name: 'India', short: 'IND', col: '#3d7dff', dark: '#173f99', wk: 4, players: [
-    ['A. Mehra', 85], ['D. Bhasin', 82], ['N. Talwar', 88], ['K. Vaid', 80], ['T. Bendre', 79],
-    ['E. Saran', 74, 'F', 72], ['B. Kamat', 68, 'L', 78], ['I. Sarin', 58, 'L', 76], ['U. Dugal', 22, 'L', 80],
-    ['O. Raval', 14, 'F', 92], ['Z. Nanda', 12, 'F', 80]] },
+    ['S. Gilmann', 85], ['R. Sharmaa', 90], ['V. Kohlee', 92], ['S. Yadhav', 80], ['R. Pantt', 79],
+    ['H. Pandiya', 74, 'F', 72], ['R. Jadeyja', 68, 'L', 78], ['A. Patell', 58, 'L', 76], ['K. Yadev', 22, 'L', 80],
+    ['J. Bumrar', 14, 'F', 92], ['M. Siraaj', 12, 'F', 80]] },
   { id: 'aus', name: 'Australia', short: 'AUS', col: '#ffd23c', dark: '#0e6b40', wk: 4, players: [
-    ['K. Whitcombe', 84], ['T. Bellamy', 78, 'M', 55], ['E. Fenwick', 86], ['B. Hensley', 80], ['I. Alderton', 76],
-    ['U. Mercer', 75, 'O', 62], ['O. Ransome', 72, 'F', 66], ['Z. Ellery', 40, 'F', 88], ['A. Tarrant', 32, 'F', 87],
-    ['D. Keppel', 15, 'L', 80], ['N. Denholm', 12, 'F', 86]] },
+    ['T. Hedd', 84], ['M. Marsch', 78, 'M', 55], ['S. Smithe', 86], ['M. Labuchane', 80], ['J. Inglish', 76],
+    ['G. Maxwel', 75, 'O', 62], ['C. Greene', 72, 'F', 66], ['P. Cummings', 40, 'F', 88], ['M. Starke', 32, 'F', 87],
+    ['A. Zamper', 15, 'L', 80], ['J. Hazelwod', 12, 'F', 86]] },
   { id: 'eng', name: 'England', short: 'ENG', col: '#ef4b5b', dark: '#1c2a66', wk: 4, players: [
-    ['B. Fairburn', 80], ['I. Hollis', 80], ['U. Cartwright', 87], ['O. Penrose', 85], ['Z. Bramwell', 82],
-    ['A. Redfern', 76, 'F', 70], ['D. Ashby', 70, 'O', 60], ['N. Langford', 25, 'F', 76], ['K. Wetherby', 30, 'L', 82],
-    ['T. Huxley', 28, 'F', 87], ['E. Selwyn', 18, 'F', 84]] },
+    ['P. Salte', 80], ['B. Duckitt', 80], ['J. Roote', 87], ['H. Brooke', 85], ['J. Butlar', 82],
+    ['B. Stoaks', 76, 'F', 70], ['W. Jacques', 70, 'O', 60], ['B. Carsey', 25, 'F', 76], ['A. Rashed', 30, 'L', 82],
+    ['J. Archar', 28, 'F', 87], ['M. Wode', 18, 'F', 84]] },
   { id: 'pak', name: 'Pakistan', short: 'PAK', col: '#46c95f', dark: '#0d5c2a', wk: 3, players: [
-    ['O. Qadri', 78, 'O', 50], ['Z. Nizami', 79], ['A. Raufani', 86], ['D. Kazmi', 82], ['N. Faruqi', 75, 'O', 58],
-    ['K. Hamdani', 62, 'F', 70], ['T. Darani', 64, 'L', 76], ['E. Safiuddin', 30, 'F', 87], ['B. Tanviri', 22, 'F', 84],
-    ['I. Mahdavi', 14, 'F', 82], ['U. Qureshi', 10, 'L', 80]] },
+    ['S. Ayube', 78, 'O', 50], ['F. Zammaan', 79], ['B. Azaam', 86], ['M. Rizwaan', 82], ['S. Aghaa', 75, 'O', 58],
+    ['F. Ashraff', 62, 'F', 70], ['S. Khaan', 64, 'L', 76], ['S. Afridee', 30, 'F', 87], ['N. Shahh', 22, 'F', 84],
+    ['H. Rauff', 14, 'F', 82], ['A. Ahmedd', 10, 'L', 80]] },
   { id: 'rsa', name: 'South Africa', short: 'RSA', col: '#0d6b45', dark: '#e8b923', wk: 0, players: [
-    ['D. Mokoena', 82], ['N. Duvenage', 81, 'O', 55], ['K. Venter', 78], ['T. Ndlovu', 76], ['E. Engelbrecht', 84],
-    ['B. Bothma', 79], ['I. Mahlangu', 62, 'F', 80], ['U. Radebe', 28, 'L', 80], ['O. Viljoen', 25, 'F', 88],
-    ['Z. Maseko', 12, 'F', 80], ['A. Dlamini', 10, 'L', 78]] },
+    ['Q. de Cok', 82], ['A. Markrum', 81, 'O', 55], ['R. Rickleton', 78], ['T. Stubbes', 76], ['H. Klaasan', 84],
+    ['D. Millar', 79], ['M. Jansan', 62, 'F', 80], ['K. Maharajh', 28, 'L', 80], ['K. Rabadaa', 25, 'F', 88],
+    ['L. Ngidee', 12, 'F', 80], ['T. Shamsee', 10, 'L', 78]] },
   { id: 'nz', name: 'New Zealand', short: 'NZ', col: '#9fb3c8', dark: '#1a1f2b', wk: 4, players: [
-    ['T. Kershaw', 80], ['E. Harcourt', 82, 'L', 60], ['B. Taiton', 86], ['I. Fairlie', 80], ['U. Lennox', 77],
-    ['O. Hadley', 76, 'O', 58], ['Z. Calder', 58, 'L', 78], ['A. Riddell', 30, 'F', 80], ['D. Armitage', 25, 'F', 84],
-    ['N. Seddon', 15, 'F', 84], ['K. Whitmore', 10, 'F', 80]] },
+    ['D. Conwey', 80], ['R. Ravindr', 82, 'L', 60], ['K. Williamsen', 86], ['D. Mitchel', 80], ['T. Lathem', 77],
+    ['G. Philipps', 76, 'O', 58], ['M. Santnar', 58, 'L', 78], ['K. Jamiesen', 30, 'F', 80], ['M. Henri', 25, 'F', 84],
+    ['L. Fergusen', 15, 'F', 84], ['W. Rourke', 10, 'F', 80]] },
   { id: 'sl', name: 'Sri Lanka', short: 'SL', col: '#22337f', dark: '#0e1640', wk: 1, players: [
-    ['I. Jayakody', 82], ['U. Ranatunga', 80], ['O. Hewage', 76], ['Z. Kuruppu', 79, 'O', 40], ['A. Galappatti', 72],
-    ['D. Senanayake', 72, 'O', 62], ['N. Wijesiri', 60, 'L', 84], ['K. Abeykoon', 45, 'L', 72], ['T. Bandara', 22, 'O', 80],
-    ['E. Kalubowila', 10, 'F', 82], ['B. Dissanayake', 10, 'F', 78]] },
+    ['P. Nisanka', 82], ['K. Mendiss', 80], ['K. Pereira', 76], ['C. Asalanke', 79, 'O', 40], ['S. Samarawick', 72],
+    ['D. de Silvaa', 72, 'O', 62], ['W. Hasarenga', 60, 'L', 84], ['D. Wellalagey', 45, 'L', 72], ['M. Theekshane', 22, 'O', 80],
+    ['M. Pathirena', 10, 'F', 82], ['D. Madushanke', 10, 'F', 78]] },
   { id: 'wi', name: 'West Indies', short: 'WI', col: '#7a1430', dark: '#2a0710', wk: 1, players: [
-    ['Z. Brathwaite', 79], ['A. Hinds', 83], ['D. Walcott', 83], ['N. Beckford', 77], ['K. Sealy', 75],
-    ['T. Gittens', 72], ['E. Drayton', 64, 'O', 70], ['B. Cumberbatch', 58, 'F', 76], ['I. Parris', 25, 'L', 80],
-    ['U. Roachford', 22, 'F', 84], ['O. Browne', 15, 'L', 77]] },
+    ['B. Kingg', 79], ['S. Hoape', 83], ['N. Pooraan', 83], ['S. Hetmyre', 77], ['R. Powel', 75],
+    ['S. Rutherfrd', 72], ['R. Chace', 64, 'O', 70], ['J. Holdar', 58, 'F', 76], ['A. Hossein', 25, 'L', 80],
+    ['A. Josef', 22, 'F', 84], ['G. Motee', 15, 'L', 77]] },
   { id: 'ban', name: 'Bangladesh', short: 'BAN', col: '#ff8a3d', dark: '#0f6b3a', wk: 1, players: [
-    ['N. Karim', 76], ['K. Mazumder', 78], ['T. Sikder', 79], ['E. Talukder', 77], ['B. Munshi', 78],
-    ['I. Barua', 70, 'O', 74], ['U. Sarker', 40, 'L', 76], ['O. Haldar', 25, 'F', 74], ['Z. Mollah', 20, 'F', 80],
-    ['A. Chowdhury', 12, 'F', 82], ['D. Kabir', 10, 'F', 80]] },
+    ['T. Hassan', 76], ['L. Daas', 78], ['N. Shantoo', 79], ['T. Hridoye', 77], ['M. Raheem', 78],
+    ['M. Mirazz', 70, 'O', 74], ['R. Hossein', 40, 'L', 76], ['T. Islaam', 25, 'F', 74], ['T. Ahmmed', 20, 'F', 80],
+    ['M. Rahmann', 12, 'F', 82], ['N. Raana', 10, 'F', 80]] },
   { id: 'afg', name: 'Afghanistan', short: 'AFG', col: '#ff6fae', dark: '#7a1846', wk: 0, players: [
-    ['E. Waziri', 80], ['B. Rahimi', 81], ['I. Zaryab', 74], ['U. Mehran', 76], ['O. Kohistani', 72, 'F', 74],
-    ['Z. Safdar', 70, 'O', 74], ['A. Baraki', 62, 'M', 60], ['D. Sarwari', 50, 'L', 92], ['N. Zamani', 18, 'L', 82],
-    ['K. Noorzai', 12, 'F', 82], ['T. Payenda', 15, 'F', 78]] },
+    ['R. Gurbaaz', 80], ['I. Zadraan', 81], ['S. Attal', 74], ['H. Shahidee', 76], ['A. Omarzay', 72, 'F', 74],
+    ['M. Nabbi', 70, 'O', 74], ['G. Naeb', 62, 'M', 60], ['R. Khaan', 50, 'L', 92], ['N. Ahmadd', 18, 'L', 82],
+    ['F. Farooqee', 12, 'F', 82], ['N. Ulhaq', 15, 'F', 78]] },
 ];
 TEAMS.push(...(window.CricketFranchises || []));
 // A side's ratings (0-100): batting = its top seven batters, bowling = its top five bowlers, overall = the two together.
@@ -1046,10 +1053,18 @@ const cupRatings = ids => Object.fromEntries(ids.map(id => { const r = teamRatin
 // text colour that reads on a team colour
 const onCol = c => { const n = parseInt(c.slice(1), 16), l = (0.299 * (n >> 16) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255; return l > 0.55 ? '#0a1024' : '#f3efe4'; };
 // the left-handed batters
-const LEFT_HANDED = new Set(['D. Bhasin', 'T. Bendre', 'B. Kamat', 'I. Sarin', 'K. Whitcombe', 'A. Tarrant', 'I. Hollis', 'A. Redfern', 'Z. Nizami', 'O. Qadri',
-  'D. Mokoena', 'K. Venter', 'B. Bothma', 'T. Kershaw', 'E. Harcourt', 'U. Lennox', 'Z. Calder', 'O. Hewage', 'Z. Kuruppu', 'K. Abeykoon',
-  'D. Walcott', 'N. Beckford', 'N. Karim', 'T. Sikder', 'B. Rahimi', 'I. Zaryab']);
-for (const t of TEAMS) t.players = t.players.map(([name, bat, type, bowl]) => ({ name, bat, type: type || '', bowl: bowl || 0, left: LEFT_HANDED.has(name) || /[?&]lefty=1/.test(location.search) }));   // ?lefty=1: everyone bats left-handed (for testing)
+const LEFT_HANDED = new Set(['R. Pantt', 'R. Jadeyja', 'A. Patell', 'T. Hedd', 'M. Starke', 'B. Duckitt', 'B. Stoaks', 'F. Zammaan', 'S. Ayube',
+  'Q. de Cok', 'R. Rickleton', 'D. Millar', 'D. Conwey', 'R. Ravindr', 'T. Lathem', 'M. Santnar', 'K. Pereira', 'C. Asalanke', 'D. Wellalagey',
+  'N. Pooraan', 'S. Hetmyre', 'T. Hassan', 'N. Shantoo', 'I. Zadraan', 'S. Attal']);
+// key = the game's own name: it picks the batter's style, the bowler's pace, the face, the head shape and left-handedness, so a
+// names file only changes the name shown (scorecards, commentary, shirts, records), never how anyone plays or looks.
+const ROSTER = (() => { try { return window.StumpflareNames ? window.StumpflareNames.readRoster(localStorage) : null; } catch (e) { return null; } })();
+for (const t of TEAMS) {
+  t.baseName = t.name; t.baseShort = t.short;
+  const tr = ROSTER && ROSTER.teams && ROSTER.teams[t.id];
+  if (tr) { if (tr.name) t.name = tr.name; if (tr.short) t.short = tr.short; }
+  t.players = t.players.map(([key, bat, type, bowl]) => ({ key, name: (ROSTER && ROSTER.players[key]) || key, bat, type: type || '', bowl: bowl || 0, left: LEFT_HANDED.has(key) || /[?&]lefty=1/.test(location.search) }));
+}   // ?lefty=1: everyone bats left-handed (for testing)
 // Quick chase: you against England's quicks
 const YOU = { id: 'you', name: 'You', short: 'YOU', col: '#2ed3c6', helmet: '#18245a', wk: 0,
               players: Array.from({ length: 11 }, () => ({ name: 'You', bat: 70, type: '', bowl: 0 })) };
@@ -1830,7 +1845,7 @@ const TOPLIFT = { ...TRIGGER, h: [0.27, 1.3, 0.8], bd: norm([-0.3, 0.8, -0.52]) 
 // own rhythm of taps. Strokes start from wherever this has got to, so they carry it too.
 const styleCache = {};
 function batStyle() {
-  const name = inn && inn.bat.players[inn.striker] ? inn.bat.players[inn.striker].name : '';
+  const name = inn && inn.bat.players[inn.striker] ? inn.bat.players[inn.striker].key || inn.bat.players[inn.striker].name : '';
   if (styleCache[name]) return styleCache[name];
   let h = 2166136261; for (const c of name) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
   const r = i => (((h >>> (i * 4)) & 15) / 15) - 0.5;   // eight numbers from -0.5 to 0.5
@@ -2179,6 +2194,35 @@ voiceSelect.addEventListener('change',()=>{
 $('commentaryListen').addEventListener('click',()=>{
   if(!commentary.preview?.())voiceStatus.textContent='Turn sound on to listen to a sample.';
 });
+// Player names from a file (Settings → Player names): kept on this device only, never sent anywhere. Saved records, stats,
+// series, tournaments and an unfinished match are renamed with it, then the game reloads with the new names.
+function showNames(){
+  $('namesStatus').textContent=ROSTER?'Using “'+(ROSTER.title||'names file')+'” ('+Object.keys(ROSTER.players).length+' players), on this device only.':'The game\'s own names.';
+  $('namesReset').hidden=!ROSTER;
+}
+function switchNames(next){
+  const map={},codes={},shown=(t,p)=>(next&&next.players[p.key])||p.key;
+  for(const t of TEAMS){
+    const tr=next&&next.teams&&next.teams[t.id],name=(tr&&tr.name)||t.baseName,short=(tr&&tr.short)||t.baseShort;
+    if(t.name!==name)map[t.name]=name;if(t.short!==short)codes[t.short]=short;
+    for(const p of t.players)if(p.name!==shown(t,p))map[p.name]=shown(t,p);
+  }
+  try{
+    if(next)localStorage.setItem(StumpflareNames.ROSTER_KEY,JSON.stringify(next));else localStorage.removeItem(StumpflareNames.ROSTER_KEY);
+    StumpflareNames.migrateStorage(localStorage,StumpflareNames.migrateWith(map,codes));
+  }catch(e){$('namesStatus').textContent='Could not save the names on this device.';return;}
+  location.reload();
+}
+$('namesLoad').addEventListener('click',()=>$('namesFile').click());
+$('namesFile').addEventListener('change',async e=>{
+  const f=e.target.files&&e.target.files[0];e.target.value='';if(!f)return;
+  let r=null;try{r=JSON.parse(await f.text());}catch(err){}
+  if(!StumpflareNames.validRoster(r)){$('namesStatus').textContent='That file is not a Stumpflare names file.';return;}
+  const n=Object.keys(r.players).filter(k=>TEAMS.some(t=>t.players.some(p=>p.key===k))).length;
+  ask('Use these names?',(r.title||'Names file')+': '+n+' players. Your records and saved games keep up. The game reloads (a match in progress carries on from the start of this over).','Use them',()=>switchNames(r));
+});
+$('namesReset').addEventListener('click',()=>ask('Go back to the game\'s names?','Your records and saved games keep up. The game reloads.','Use game names',()=>switchNames(null)));
+showNames();
 window.speechSynthesis?.addEventListener('voiceschanged',showCommentaryVoices);
 showCommentaryVoices();
 document.addEventListener('pointerdown',()=>commentary.unlock(),{capture:true,once:true});
@@ -2814,7 +2858,7 @@ function aiSpec(bp, mult) {
   }
   // each bowler has his own steady pace (from his name) and varies it only a little ball to ball (owner: the pace jumping
   // across the whole range felt like a slower ball every other ball)
-  const own = T.speed[0] + (T.speed[1] - T.speed[0]) * nameFrac(bp.name);
+  const own = T.speed[0] + (T.speed[1] - T.speed[0]) * nameFrac(bp.key || bp.name);
   const kmh = M.diff.speed ? rand(M.diff.speed[0], M.diff.speed[1]) : (own + rand(-1.5, 1.5)) * (0.95 + 0.05 * clamp(mult, 0, 1.2));
   let vi = chase ? 0 : quicker ? 2 : Math.random() < [0.12, 0.25, 0.38][plan] ? 1 + ((Math.random() * (T.vars.length - 1)) | 0) : 0;
   // slower balls against YOU are rationed per match (owner: none on Easy, one on Medium, three on Hard); other variations stay
@@ -4468,7 +4512,7 @@ function tossPeople() {
     for (const n in j) if (!/^foot(Dir|Pitch)/.test(n)) { const d = sub(j[n], pos); j[n] = add(pos, [d[0] * sw, d[1] * sy, d[2] * sw]); }
     if (k === 0 && handR) j.handR = handR;   // the coin stays in his fingers whatever his build
     const p = M.teams[k].players[0];
-    list.push({ j, at: pos, team: k ? 'bowl' : 'bat', bare: true, faceKey: k, pid: p ? p.name : 'captain' + k, look: lookAt(j.head, t >= 0 && coin ? coin.pos : null) });
+    list.push({ j, at: pos, team: k ? 'bowl' : 'bat', bare: true, faceKey: k, pid: p ? p.key || p.name : 'captain' + k, look: lookAt(j.head, t >= 0 && coin ? coin.pos : null) });
   }
   const up = [0, 0, TOSS_Z + 0.8], uj = figure(up, Math.PI, { seed: 41 });
   list.push({ j: uj, at: up, team: 'ump', umpire: true, faceKey: 2, pid: 'umpire0', look: lookAt(uj.head, t >= 0 && coin ? coin.pos : null) });
@@ -5320,7 +5364,7 @@ function livePeople() {
     return pt < r.end ? smooth(clamp((r.u - 0.8) / 0.12, 0, 1)) : out;
   };
   const diveFace = r => r.toZ < PITCH / 2 ? Math.PI : 0;   // (no turn at the end of a dive)
-  const pid = k => inn && inn.bat.players[k] ? inn.bat.players[k].name : 'x';
+  const pid = k => inn && inn.bat.players[k] ? inn.bat.players[k].key || inn.bat.players[k].name : 'x';
   // the striker: in his stance and swing, or running
   const sr = runner(0.6, 0.55);
   const cel = phase === 'result' && celebrate ? celebrate : null;
@@ -5420,7 +5464,7 @@ function livePeople() {
              bat: { carry: true, carryHand: 'l', hands: nHand, tip: nTip } });
   // the bowler, then the fielders (once the ball is hit, the bowler is one of the fielders)
   const afterHit = !!(ball && ball.play);
-  const fid = w => inn && w !== null && w !== undefined && inn.bowl.players[w] ? inn.bowl.players[w].name : 'f' + w;
+  const fid = w => inn && w !== null && w !== undefined && inn.bowl.players[w] ? inn.bowl.players[w].key || inn.bowl.players[w].name : 'f' + w;
   const won = cel && cel.out, hurt = cel && !cel.out && cel.runs >= 4;
   const react = (f, pos, face) => !cel || phaseT < 0.15 ? null
     : won && appealed(cel) && phaseT < sigStart(cel) + 0.1 && (f.bowler || f.keeper || Math.hypot(pos[0], pos[2] - 1) < 14)
