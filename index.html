@@ -418,6 +418,7 @@
   #tvcard .body { background: var(--panel); padding: 5px 14px 6px; min-width: 0; }
   #tvcard .t { font-family: var(--display); font-weight: 800; font-size: 22px; text-transform: uppercase; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #tvcard .s { font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #tvcard .c { font-size: 14px; font-weight: 700; color: var(--amber); white-space: normal; line-height: 1.25; margin-top: 1px; }   /* (wraps on a phone) */ #tvcard .c:empty { display: none; }
   /* the batter's card on a wicket, a fifty or a hundred (batCard): name, runs (balls), 4s, 6s, strike rate, how out */
   #batcard { left: 50%; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 14px); opacity: 0; pointer-events: none;
              width: min(440px, calc(100vw - 32px)); background: var(--panel); border-radius: 12px; overflow: hidden; padding: 0 0 10px;
@@ -495,7 +496,7 @@
     #nextTag { top: calc(58px + env(safe-area-inset-top, 0px)); padding: 2px 8px; }
     #timing { bottom: calc(46px + env(safe-area-inset-bottom, 0px)); font-size: 13px; }
     #banner { top: 42%; }
-    #tvcard { top: calc(54px + env(safe-area-inset-top, 0px)); } #tvcard .t { font-size: 15px; } #tvcard .s { font-size: 11px; } #tvcard .body { padding: 2px 9px 3px; }
+    #tvcard { top: calc(54px + env(safe-area-inset-top, 0px)); } #tvcard .t { font-size: 15px; } #tvcard .s, #tvcard .c { font-size: 11px; } #tvcard .body { padding: 2px 9px 3px; }
     #replayTag { font-size: 14px; padding: 2px 8px; }
     #banner .head { font-size: clamp(34px, 10vh, 60px); }
     #banner.small .head { font-size: clamp(24px, 8vh, 40px); }
@@ -718,7 +719,7 @@
   <div id="flash" class="hud"></div>
   <div id="banner" class="hud"><div class="head"></div><div class="line"></div><div class="streak"></div></div>
   <div id="comm" class="hud"><span class="mic">LIVE</span><span class="txt"></span></div>
-  <div id="tvcard" class="hud"><div class="bar"></div><div class="body"><div class="t"></div><div class="s"></div></div></div>
+  <div id="tvcard" class="hud"><div class="bar"></div><div class="body"><div class="t"></div><div class="s"></div><div class="c"></div></div></div>
   <div id="batcard" class="hud" aria-live="polite"><div class="kick"></div><div class="row1"><span class="nm"></span><span class="rb"><b class="r"></b><span class="b"></span></span></div>
     <div class="st"></div><div class="how"></div></div>
   <div id="replayTag" class="hud" hidden><span class="dot"></span>REPLAY<span class="skip">tap to skip</span></div>
@@ -3908,14 +3909,16 @@ function beginBall(delay, announce) {
     const b = bowlerP(), f = inn.bowlers[inn.bowler], ov = Math.floor(inn.balls / 6);
     const fig = f && f.balls ? ' · ' + f.wkts + '–' + f.runs + ' (' + ovStr(f.balls) + ')' : '';
     const last = inn.lastOver ? 'Last over ' + plural(inn.lastOver.runs, 'run') + (inn.lastOver.wkts ? ', ' + plural(inn.lastOver.wkts, 'wicket') : '') + ' · ' : '';
-    tvCard('Over ' + (ov + 1) + ' · ' + b.name, last + BOWL_TYPES[btype(b)].name + fig + ' · ' + FIELD_INFO[inn.field][0] + ' field' + (inn.fieldNote ? ', ' + inn.fieldNote + ' back' : ''), inn.bowl.col);
+    tvCard('Over ' + (ov + 1) + ' · ' + b.name, last + BOWL_TYPES[btype(b)].name + fig + ' · ' + FIELD_INFO[inn.field][0] + ' field' + (inn.fieldNote ? ', ' + inn.fieldNote + ' back' : ''), inn.bowl.col,
+      fig ? 3.4 : 4.4, fig ? '' : careerLine(b, true));   // his first over of the match: his record in the game
   } else if (inn.fieldNew && M.mode === 'match' && !quiet) {
     inn.fieldNew = false;
     tvCard('Field change', inn.fieldNote.charAt(0).toUpperCase() + inn.fieldNote.slice(1) + ' goes back to cut off your shots', inn.bowl.col);
-  } else if (M.mode === 'match' && inn.balls > 0 && inn.cards[inn.striker].balls === 0 && !inn.cards[inn.striker].out && inn.lastIn !== inn.striker) {
-    inn.lastIn = inn.striker;
-    const p = batterP(inn.striker);
-    tvCard('New batter · ' + p.name + (p.left ? ' (left-handed)' : ''), inn.bat.name + ' ' + inn.runs + '/' + inn.wkts + ' · ' + ovStr(inn.balls) + ' overs', inn.bat.col);
+  } else if (M.mode === 'match' && inn.balls > 0 && inn.cards[inn.striker].balls <= (inn.striker < 2 ? 1 : 0) && !inn.cards[inn.striker].out && !(inn.shownIn || (inn.shownIn = {}))[inn.striker]) {
+    // a batter's first ball (an opener's first or second: the first ball of the innings has the over's card): his record in the game
+    inn.shownIn[inn.striker] = true; inn.lastIn = inn.striker;
+    const p = batterP(inn.striker), opener = inn.striker < 2 && inn.wkts === 0;
+    tvCard((opener ? 'Opening · ' : 'New batter · ') + p.name + (p.left ? ' (left-handed)' : ''), inn.bat.name + ' ' + inn.runs + '/' + inn.wkts + ' · ' + ovStr(inn.balls) + ' overs', inn.bat.col, 4.4, careerLine(p, false));
   }
   if (userBowling()) {
     phase = 'aim'; phaseT = 0;
@@ -4327,8 +4330,59 @@ function endMatch() {
 const STATS_KEY = 'cricket-rush-stats';
 function loadStats() { try { const s = JSON.parse(localStorage.getItem(STATS_KEY)); if (s && s.v === 1 && s.f) return s; } catch (e) {} return { v: 1, f: {} }; }
 const betterBowl = (w, r, old) => !old || w > old[0] || (w === old[0] && r < old[1]);
+// Every player's record in the game, both sides, all match lengths together (owner, November 2026: shown when a batter comes in
+// and when a bowler starts his first over). By the player's key, so the names file doesn't split it. Only matches you play
+// (not simulated fixtures, quick chases or auto-play). The first time, your own players' figures are taken from the stats above.
+const CAREER_KEY = 'cricket-rush-careers';
+function loadCareers() {
+  try { const c = JSON.parse(localStorage.getItem(CAREER_KEY)); if (c && c.v === 1 && c.p) return c; } catch (e) {}
+  const c = { v: 1, p: {} }, byName = {};
+  for (const t of TEAMS) for (const p of t.players.concat(Object.values(t.mypOrig || {}))) byName[p.name] = p.key || p.name;
+  for (const F of Object.values(loadStats().f)) for (const [n, e] of Object.entries(F.pl || {})) {
+    const k = byName[n]; if (!k) continue;
+    const x = c.p[k] || (c.p[k] = careerBlank());
+    for (const f of ['i', 'o', 'r', 'b', 'f4', 's6', 'w', 'rc', 'bb']) x[f] += e[f] || 0;
+    x.hs = Math.max(x.hs, e.hs || 0); if (e.bw && betterBowl(e.bw[0], e.bw[1], x.bw)) x.bw = e.bw.slice();
+  }
+  return c;
+}
+const careerBlank = () => ({ i: 0, o: 0, r: 0, b: 0, hs: 0, f4: 0, s6: 0, f50: 0, h100: 0, w: 0, rc: 0, bb: 0, bw: null });
+function recordCareers() {
+  if (quiet || !M || M.mode !== 'match') return;
+  const c = loadCareers(), get = p => c.p[p.key || p.name] || (c.p[p.key || p.name] = careerBlank());
+  for (const i of M.innings) {
+    i.cards.forEach((cd, k) => {
+      if (!cd.in && !cd.balls) return;
+      const e = get(i.bat.players[k]);
+      e.i++; if (cd.out) e.o++; e.r += cd.runs; e.b += cd.balls; e.f4 += cd.fours; e.s6 += cd.sixes; e.hs = Math.max(e.hs, cd.runs);
+      if (cd.runs >= 100) e.h100++; else if (cd.runs >= 50) e.f50++;
+    });
+    for (const k of i.bowlOrder) {
+      const w = i.bowlers[k], e = get(i.bowl.players[k]);
+      e.w += w.wkts; e.rc += w.runs; e.bb += w.balls; if (betterBowl(w.wkts, w.runs, e.bw)) e.bw = [w.wkts, w.runs];
+    }
+  }
+  try { localStorage.setItem(CAREER_KEY, JSON.stringify(c)); } catch (e) {}
+}
+let careerCache = null;
+function careerLine(p, bowling) {
+  if (!careerCache) careerCache = loadCareers();
+  const e = careerCache.p[p.key || p.name];
+  if (bowling) {
+    if (!e || !e.bb) return 'First game';
+    return plural(e.w, 'wicket') + ' · econ ' + (e.rc / (e.bb / 6)).toFixed(1) + (e.bw ? ' · best ' + e.bw[0] + '–' + e.bw[1] : '');
+  }
+  if (!e || !e.i) return 'First game';
+  const bits = [e.i + ' innings', e.r + ' runs'];
+  if (e.o) bits.push('avg ' + (e.r / e.o).toFixed(1));
+  if (e.b) bits.push('SR ' + Math.round(e.r / e.b * 100));
+  bits.push('best ' + e.hs);
+  if (e.h100) bits.push(plural(e.h100, 'hundred')); if (e.f50) bits.push(e.f50 + (e.f50 === 1 ? ' fifty' : ' fifties'));
+  return bits.join(' · ');
+}
 function recordStats(winner) {   // after a match; returns the records it broke, to show on the end screen
   if (quiet || !M || M.mode !== 'match') return [];
+  recordCareers(); careerCache = null;
   const you = M.teams[0], s = loadStats(), news = [];
   const F = s.f[M.overs] || (s.f[M.overs] = { p: 0, w: 0, l: 0, t: 0, hi: null, bat: null, bowl: null, pl: {} });
   const P = (n) => F.pl[n] || (F.pl[n] = { t: you.short, i: 0, o: 0, r: 0, b: 0, hs: 0, f4: 0, s6: 0, w: 0, rc: 0, bb: 0, bw: null });
@@ -6234,10 +6288,10 @@ let last = performance.now();
 // ======================================================================= TV touches: info cards and replays
 // a card at the top (the bowler for this over, the last over, the new batter), in the batting side's colour
 let cardUntil = 0;
-function tvCard(title, sub, col, dur = 3.4) {
+function tvCard(title, sub, col, dur = 3.4, line = '') {   // line: a third line (a player's record in the game)
   const c = $('tvcard');
   if (quiet || !c) return;
-  c.querySelector('.t').textContent = title; c.querySelector('.s').textContent = sub || ''; c.querySelector('.s').hidden = !sub;
+  c.querySelector('.t').textContent = title; c.querySelector('.s').textContent = sub || ''; c.querySelector('.s').hidden = !sub; c.querySelector('.c').textContent = line;
   c.style.setProperty('--c', col || 'var(--amber)');
   c.classList.add('show'); cardUntil = clock + dur;
 }
