@@ -1,12 +1,18 @@
 // Offline support. VERSION is stamped with the commit when the game is published (tools/build-play.sh), so players get the new game.
-const VERSION = 'cricket-rush-cda8e5d';
+const VERSION = 'cricket-rush-00e5df7';
 const SHELL = ['./', 'index.html', 'privacy.html', 'credits.html', 'vendor/three-LICENSE.txt', 'vendor/player-rb-LICENSE.txt', 'vendor/postprocessing-LICENSE.txt', 'vendor/equipment-LICENSE.txt', 'vendor/fielder-clips-LICENSE.txt', 'vendor/fonts/OFL-Barlow.txt', 'presentation.css', 'vendor/fonts/barlow-condensed-800.ttf', 'tournament.js', 'franchise-teams.js', 'render3d.js', 'commentary.js', 'identity-migration.js', 'player-production/config.js', 'player-production/locomotion.js', 'player-production/equipment-preview.js', 'player-production/motion.js', 'player-production/diagnostics.js', 'vendor/three.min.js', 'vendor/postprocessing.min.js', 'vendor/GLTFLoader.js', 'vendor/SkeletonUtils.js', 'vendor/player-rb.js', 'vendor/equipment-model.js', 'vendor/grip-model.js', 'vendor/fielder-clips.js', 'manifest.webmanifest', 'brand/stumpflare-mark.svg', 'icons/stumpflare-192.png', 'icons/stumpflare-512.png', 'icons/stumpflare-maskable-512.png', 'icons/stumpflare-apple-180.png'];
 
 // All presentation assets, including the headline font, are served locally.
+// Some hosts redirect pages (Cloudflare Pages sends index.html to ./ and privacy.html to privacy). A browser refuses a redirected
+// answer for a page it opens, so the saved copy is a fresh, plain response: otherwise the game would not open offline.
+const plain = async r => r.redirected ? new Response(await r.blob(), { status: r.status, statusText: r.statusText, headers: r.headers }) : r;
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(async c => {
-    await Promise.all(SHELL.map(f => c.add(new Request(f, { cache: 'reload' }))));
-
+    await Promise.all(SHELL.map(async f => {
+      const req = new Request(f, { cache: 'reload' }), r = await fetch(req);
+      if (!r.ok) throw new Error('could not save ' + f + ' (' + r.status + ')');
+      await c.put(req, await plain(r));
+    }));
   }).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
@@ -23,7 +29,9 @@ self.addEventListener('fetch', e => {
   if (req.mode === 'navigate' && url.origin === location.origin) {
     const root = new URL('./', self.location.href).pathname;
     const isGame = url.pathname === root || url.pathname === root + 'index.html';
-    const key = isGame ? 'index.html' : req;
+    // Cloudflare Pages answers privacy.html with a redirect to privacy (and the browser remembers it), so both name one saved page.
+    const page = url.pathname.startsWith(root) ? url.pathname.slice(root.length) : '';
+    const key = isGame ? 'index.html' : page && !page.includes('.') && SHELL.includes(page + '.html') ? page + '.html' : req;
     e.respondWith(quick(req, 3000).then(async r => {
       if (r.ok) { const c = await caches.open(VERSION); await c.put(key, r.clone()); }
       return r;

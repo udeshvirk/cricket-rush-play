@@ -1,5 +1,5 @@
 # Stumpflare
 
-Play: https://udeshvirk.github.io/cricket-rush-play/
+Play: https://stumpflare.starquill.org/
 
 This repo only holds the published game.
