@@ -416,8 +416,8 @@
   #tvcard.show { opacity: 1; transform: translate(-50%, 0); }
   #tvcard .bar { width: 7px; background: var(--c); flex: none; }
   #tvcard .body { background: var(--panel); padding: 5px 14px 6px; min-width: 0; }
-  #tvcard .t { font-family: var(--display); font-weight: 800; font-size: 22px; text-transform: uppercase; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #tvcard .s { font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #tvcard .t { font-family: var(--display); font-weight: 800; font-size: 22px; text-transform: uppercase; letter-spacing: 0.02em; line-height: 1.1; }
+  #tvcard .s { font-size: 14px; color: var(--muted); white-space: pre-line; line-height: 1.3; }   /* one fact per line (\n) */
   #tvcard .c { font-size: 14px; font-weight: 700; color: var(--amber); white-space: normal; line-height: 1.25; margin-top: 1px; }   /* (wraps on a phone) */ #tvcard .c:empty { display: none; }
   /* the batter's card on a wicket, a fifty or a hundred (batCard): name, runs (balls), 4s, 6s, strike rate, how out */
   #batcard { left: 50%; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 14px); opacity: 0; pointer-events: none;
@@ -465,7 +465,8 @@
   .coin .face.t { transform: rotateX(180deg); }
   .coinshadow { width: 70px; height: 10px; margin-top: 8px; border-radius: 50%; background: rgba(0, 0, 0, 0.45); filter: blur(3px); }
   @media (max-height: 460px) { .tossarea { padding: 6px 0 0 4px; } .coin { width: 54px; height: 54px; } .coin .face { font-size: 8px; } .coin .face svg { width: 22px; height: 22px; } .coinshadow { width: 42px; height: 6px; margin: 4px 0 0 6px; } }
-  @media (max-width: 720px) and (orientation: portrait) { #tvcard { top: calc(118px + env(safe-area-inset-top, 0px)); } }
+  @media (max-width: 720px) and (orientation: portrait) { #tvcard { top: calc(118px + env(safe-area-inset-top, 0px)); left: 10px; transform: translate(0, -10px); max-width: calc(100vw - 96px); }
+    #tvcard.show { transform: translate(0, 0); } #tvcard .t { font-size: 17px; } #tvcard .s, #tvcard .c { font-size: 12.5px; } #tvcard .body { padding: 4px 10px 5px; } }
 
   /* short screens (a phone held sideways): smaller scoreboard and map, shot buttons in a column on the right,
      the move / step-out buttons in a small row at the bottom, hint at the top */
@@ -553,7 +554,8 @@
     #timing { bottom: auto; top: calc(128px + env(safe-area-inset-top, 0px)); font-size: 16px; }   /* up under the score, clear of the OUT banner and the buttons */
     #nextTag { top: calc(166px + env(safe-area-inset-top, 0px)); }
     #tvcard { bottom: auto; top: calc(96px + env(safe-area-inset-top, 0px)); max-width: calc(100% - 122px); }   /* clear of the buttons on the right */
-    #tvcard .s { white-space: normal; line-height: 1.2; }
+    #tvcard .s { white-space: pre-line; line-height: 1.2; }
+    #game:has(> #tvcard.show) #nextTag { opacity: 0; }   /* the taller card would cover it: it comes back as the card goes */
     .shotsel { gap: 6px; } .shotsel button { width: 28vw; height: 44px; }
     .batside { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); }
     #swipeHint { top: auto; bottom: calc(66px + env(safe-area-inset-bottom, 0px)); right: 112px; font-size: 12px; }
@@ -666,6 +668,7 @@
     #fireTag .w { display: none; } #fireTag { margin: 0 2px; padding: 1px 5px !important; } }
   @media (max-height: 460px) { #comm { display: none; } }
   #game:has(> .screen:not([hidden])) :is(#comm, #fxLayer, #flash) { visibility: hidden; }
+  #game:has(> #batcard.show) #comm { opacity: 0; }   /* the batter's card has the same place on phones: the commentary line steps aside */
   /* the menu: one big PLAY button, tiles that slide in, a shine on the title */
   #goQuick { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; cursor: pointer;
              background: linear-gradient(100deg, #ffb02e, #ff8a2e); color: #1a1205; border: 0; border-radius: 6px; padding: 14px 18px;
@@ -2846,6 +2849,7 @@ const DUCKFX = { life: 4.4, in: 1.3, stay: 1.7 };
 function fxDuck(golden) {
   if (!fxOn()) return;
   fxAdd({ kind: 'duck', golden, x: 0, y: 0, life: DUCKFX.life, delay: BATCARD.outAt + 0.15, size: golden ? 1.3 : 1 });
+  protect(BATCARD.outAt + 0.15 + 2);
   sndQuack(BATCARD.outAt + DUCKFX.in + 0.25, golden ? 1 : 0.8); if (golden) sndQuack(BATCARD.outAt + DUCKFX.in + 0.55, 0.8);
 }
 function drawDuck(g, p, w, h) {
@@ -3892,7 +3896,12 @@ function celCam() {
   }
   return null;
 }
+// a big moment can't be tapped away at once (owner: quick taps to skip the gap were cutting them): taps are ignored until
+// protectUntil (game clock: the first 2 s of a fifty, hat-trick or duck, 3 s of a hundred, a win or a cup final), then end it
+let protectUntil = 0;
+const protect = s => { protectUntil = Math.max(protectUntil, clock + s); };
 function skipGap() {
+  if (clock < protectUntil && (phase === 'result' || phase === 'wait')) return true;   // (the tap is used up, nothing skipped)
   if (phase === 'result' && !RP && celebrate) {   // a tap ends a big moment early
     const e = celEnd(celebrate); if (e && phaseT < e - 0.5 && phaseT > 0.8) { phaseT = e - 0.5; return true; }
   }
@@ -3909,7 +3918,7 @@ function beginBall(delay, announce) {
     const b = bowlerP(), f = inn.bowlers[inn.bowler], ov = Math.floor(inn.balls / 6);
     const fig = f && f.balls ? ' · ' + f.wkts + '–' + f.runs + ' (' + ovStr(f.balls) + ')' : '';
     const last = inn.lastOver ? 'Last over ' + plural(inn.lastOver.runs, 'run') + (inn.lastOver.wkts ? ', ' + plural(inn.lastOver.wkts, 'wicket') : '') + ' · ' : '';
-    tvCard('Over ' + (ov + 1) + ' · ' + b.name, last + BOWL_TYPES[btype(b)].name + fig + ' · ' + FIELD_INFO[inn.field][0] + ' field' + (inn.fieldNote ? ', ' + inn.fieldNote + ' back' : ''), inn.bowl.col,
+    tvCard('Over ' + (ov + 1) + ' · ' + b.name, [BOWL_TYPES[btype(b)].name + fig, FIELD_INFO[inn.field][0] + ' field' + (inn.fieldNote ? ', ' + inn.fieldNote + ' back' : ''), last.replace(/ · $/, '')].filter(Boolean).join('\n'), inn.bowl.col,
       fig ? 3.4 : 4.4, fig ? '' : careerLine(b, true));   // his first over of the match: his record in the game
   } else if (inn.fieldNew && M.mode === 'match' && !quiet) {
     inn.fieldNew = false;
@@ -4157,6 +4166,7 @@ function lockFeedback(e) {
 
 // ----------------------------------------------------------------------- result of a ball (animated)
 function finishBall(o, line) {
+  if (ff && !(M.watchFast && autoBowling()) && !M.autoplay) setFF(false);   // a tap sped up the fielding only: the result, its cards and moments play normally
   const i = inn, chaseMode = M.mode === 'chase';
   o = lawful(o);
   const k = o.out && o.out.how === 'run out' && o.runs % 2 === 0 ? i.non : i.striker;   // (a run out can be the non-striker)
@@ -5096,6 +5106,7 @@ function update(dt) {
 
   if (cardUntil && clock > cardUntil) hideCard();
   batCardStep();
+  if (phase === 'runup' || phase === 'flight') { if (cardUntil) hideCard(); if (bcUntil) hideBatCard(); }   // (owner: cards go as the bowler runs in)
   const gapOn = phase === 'wait' && phaseT < GAP_END && !ff && !paused;
   const nt = $('nextTag'); if (nt.hidden === gapOn) { nt.hidden = !gapOn; nt.firstChild.textContent = inn && inn.freeHit ? 'FREE HIT' : 'NEXT BALL'; nt.classList.toggle('fh', !!(inn && inn.freeHit)); nt.lastChild.textContent = touch ? 'tap to skip' : 'S or Space to skip'; }
   // a free hit to come: announced big once as the wait starts, then a pulsing badge until it's bowled
@@ -5719,6 +5730,7 @@ function bigMoments(i, milestone, hatN, ours) {
     c.win.at = c.hat ? celT0(c) + CEL.hat - 0.6 : c.out ? Math.max(1.5, sigEnd(c) + 0.3) : Math.max(0.8, sigEnd(c) + 0.2);
     c.kind = null;   // a fifty or hundred with the winning hit: the win takes over (the card still shows)
   }
+  if (c.kind || c.hat || c.win) protect((c.win ? c.win.at : celT0(c)) + (c.win || c.kind === 100 ? 3 : 2));
   if (!fxOn()) return;
   const col = i.bat.col, you = M.teams[0].col;
   if (c.kind === 50) fxFireworks(3, col, 0.7, 0.9);
@@ -6564,6 +6576,7 @@ canvas.addEventListener('pointerdown', e => {
   e.preventDefault(); audio();
   if (paused || !M) return;
   try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+  if (phase === 'result' && celebrate && (clock < protectUntil || celEnd(celebrate))) { skipGap(); return; }   // a big moment: protected, then a tap ends it
   if (phase === 'play' || phase === 'result') { setFF(true); return; }
   if (skipGap()) return;
   if (userBowling()) {
