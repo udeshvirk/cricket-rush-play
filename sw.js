@@ -1,5 +1,5 @@
 // Offline support. VERSION is stamped with the commit when the game is published (tools/build-play.sh), so players get the new game.
-const VERSION = 'cricket-rush-9246218';
+const VERSION = 'cricket-rush-d09aa9e';
 const SHELL = ['./', 'index.html', 'privacy.html', 'credits.html', 'vendor/three-LICENSE.txt', 'vendor/player-rb-LICENSE.txt', 'vendor/postprocessing-LICENSE.txt', 'vendor/equipment-LICENSE.txt', 'vendor/fielder-clips-LICENSE.txt', 'vendor/fonts/OFL-Barlow.txt', 'presentation.css', 'vendor/fonts/barlow-condensed-800.ttf', 'tournament.js', 'franchise-teams.js', 'render3d.js', 'commentary.js', 'identity-migration.js', 'player-production/config.js', 'player-production/locomotion.js', 'player-production/equipment-preview.js', 'player-production/motion.js', 'player-production/diagnostics.js', 'vendor/three.min.js', 'vendor/postprocessing.min.js', 'vendor/GLTFLoader.js', 'vendor/SkeletonUtils.js', 'vendor/player-rb.js', 'vendor/equipment-model.js', 'vendor/grip-model.js', 'vendor/fielder-clips.js', 'manifest.webmanifest', 'brand/stumpflare-mark.svg', 'icons/stumpflare-192.png', 'icons/stumpflare-512.png', 'icons/stumpflare-maskable-512.png', 'icons/stumpflare-apple-180.png', 'icons/player-faces.jpg'];
 
 // All presentation assets, including the headline font, are served locally.

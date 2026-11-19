@@ -282,14 +282,30 @@
   .champ svg { width:48px;height:56px;flex:none; }
   #trophy svg { display:block;margin:0 0 6px;width:110px;height:128px;filter:drop-shadow(0 0 18px rgba(255,190,60,0.55));animation:trophyIn 0.9s ease-out; }
   @keyframes trophyIn { from { transform:translateY(30px) scale(0.6);opacity:0; } to { transform:none;opacity:1; } }
-  #confetti { position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:5; }
+  #trophy.cup { position:relative; display:grid; place-items:center; margin:0 auto 4px; width:max-content; }
+  #trophy.cup svg { position:relative; width:150px; height:174px; animation:trophyRise 1.4s cubic-bezier(.2,1.4,.4,1) both, trophyFloat 3.2s ease-in-out 1.4s infinite;
+                    filter:drop-shadow(0 0 22px rgba(255,200,80,0.8)) drop-shadow(0 0 60px rgba(255,170,40,0.45)); }
+  #trophy.cup .rays { position:absolute; left:50%; top:50%; width:420px; height:420px; margin:-210px 0 0 -210px; border-radius:50%; pointer-events:none;
+                      background:repeating-conic-gradient(from 0deg, rgba(255,214,110,0.32) 0deg 7deg, rgba(255,214,110,0) 7deg 22deg);
+                      -webkit-mask:radial-gradient(circle, #000 18%, transparent 68%); mask:radial-gradient(circle, #000 18%, transparent 68%);
+                      animation:raysIn 1.6s ease-out both, raysTurn 18s linear infinite; }
+  @keyframes trophyRise { 0% { transform:translateY(90px) scale(0.3); opacity:0; } 60% { opacity:1; } 100% { transform:none; opacity:1; } }
+  @keyframes trophyFloat { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-7px); } }
+  @keyframes raysIn { from { opacity:0; scale:0.4; } to { opacity:1; scale:1; } }
+  @keyframes raysTurn { to { rotate:360deg; } }
+  #end .result.champ-title { -webkit-text-fill-color:transparent; font-size:clamp(46px, 11vw, 92px); background:linear-gradient(180deg,#fff6cf,#ffd36a 45%,#e39a1c); -webkit-background-clip:text; background-clip:text;
+                        color:transparent; filter:drop-shadow(0 0 16px rgba(255,190,60,0.55)); animation:champPulse 2.4s ease-in-out infinite; letter-spacing:0.04em; }
+  @keyframes champPulse { 0%,100% { filter:drop-shadow(0 0 12px rgba(255,190,60,0.45)); } 50% { filter:drop-shadow(0 0 26px rgba(255,200,80,0.85)); } }
+  @media (prefers-reduced-motion: reduce) { #trophy.cup svg, #trophy.cup .rays, #end .result.champ-title { animation:none; } }
+  @media (max-height: 460px) { #trophy.cup svg { width:64px; height:74px; } #trophy.cup .rays { width:200px; height:200px; margin:-100px 0 0 -100px; } #end .result.champ-title { font-size:40px; } }
+  #confetti { position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:30; }   /* over the card: confetti and the cup's fireworks */
   @media (max-height: 460px) { #trophy svg { width:56px;height:66px;margin-bottom:2px; } }
   .fixture { padding:8px 0;border-bottom:1px solid var(--line);font-size:16px; }
   .fixture small { color:var(--muted); }
   @media(max-height:460px) { #setup .card { gap:8px; } #setup .title { font-size:30px; } #setup .opt { padding:6px 9px; } }
   .card { width: min(640px, 100%); display: flex; flex-direction: column; gap: 16px; }
   /* while a menu screen is up, the match's score, map and touch buttons don't show through it */
-  #game:has(> .screen:not([hidden])) :is(#tvbar, #minimap, #batpad, #bowlpad, #autopad, .vars, #delivery, #swipeHint, #nextTag, #fhBadge, #tvcard) { visibility: hidden; }
+  #game:has(> .screen:not([hidden])) :is(#tvbar, #minimap, #batpad, #bowlpad, #autopad, .vars, #delivery, #swipeHint, #nextTag, #fhBadge, #tvcard, #batcard) { visibility: hidden; }
   .title { font-family: var(--display); font-weight: 900; font-size: clamp(54px, 12vw, 104px); line-height: 0.85;
            letter-spacing: 0.01em; text-wrap: balance; }
   .title span { color: var(--amber); }
@@ -402,6 +418,24 @@
   #tvcard .body { background: var(--panel); padding: 5px 14px 6px; min-width: 0; }
   #tvcard .t { font-family: var(--display); font-weight: 800; font-size: 22px; text-transform: uppercase; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #tvcard .s { font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* the batter's card on a wicket, a fifty or a hundred (batCard): name, runs (balls), 4s, 6s, strike rate, how out */
+  #batcard { left: 50%; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 14px); opacity: 0; pointer-events: none;
+             width: min(440px, calc(100vw - 32px)); background: var(--panel); border-radius: 12px; overflow: hidden; padding: 0 0 10px;
+             border-top: 4px solid var(--c, var(--amber)); box-shadow: 0 10px 30px #0008; transition: opacity 0.3s, transform 0.3s; }
+  #batcard.show { opacity: 1; transform: translate(-50%, 0); }
+  #batcard .kick { display: inline-block; background: var(--k, var(--c)); color: #10131c; font: 900 13px var(--display); letter-spacing: 0.14em;
+                   padding: 3px 12px 2px; border-bottom-right-radius: 8px; }
+  #batcard .row1 { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 6px 16px 0; }
+  #batcard .nm { font: 800 24px var(--display); text-transform: uppercase; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #batcard .rb { white-space: nowrap; } #batcard .r { font: 900 34px var(--display); } #batcard .b { font: 700 17px var(--display); color: var(--muted); margin-left: 4px; }
+  #batcard .st { display: flex; gap: 16px; padding: 2px 16px 0; font-size: 14px; color: var(--muted); } #batcard .st b { color: var(--text, #f3efe4); font-weight: 800; }
+  #batcard .how { padding: 4px 16px 0; font-size: 15px; font-weight: 600; } #batcard .how:empty { display: none; }
+  #batcard.gold { box-shadow: 0 0 0 1px #ffd36a66, 0 10px 34px #ffb02e44; }
+  @media (max-width: 720px) and (orientation: portrait) { #batcard { bottom: calc(232px + env(safe-area-inset-bottom, 0px)); } }
+  @media (max-height: 460px) { #batcard { left: auto; right: calc(10px + env(safe-area-inset-right, 0px)); bottom: auto; top: calc(58px + env(safe-area-inset-top, 0px)); transform: translate(0, 10px);
+      width: min(260px, 34vw); padding-bottom: 5px; border-radius: 9px; } #batcard.show { transform: translate(0, 0); }
+    #batcard .row1 { padding: 2px 12px 0; } #batcard .st, #batcard .how { padding-left: 12px; gap: 10px; } #batcard .how { padding-top: 1px; }
+    #batcard .nm { font-size: 15px; } #batcard .r { font-size: 19px; } #batcard .row1, #batcard .st, #batcard .how { line-height: 1.15; } #batcard .b { font-size: 13px; } #batcard .st, #batcard .how { font-size: 11px; } #batcard .kick { font-size: 10px; padding: 2px 9px 1px; } }
   #replayTag { left: 50%; top: calc(12px + env(safe-area-inset-top, 0px) + 6vh); transform: translateX(-50%); background: var(--panel);
                font-family: var(--display); font-weight: 800; font-size: 20px; letter-spacing: 0.12em; padding: 3px 12px; display: flex; align-items: center; gap: 8px; }
   #replayTag .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); animation: blink 1s steps(2) infinite; }
@@ -685,6 +719,8 @@
   <div id="banner" class="hud"><div class="head"></div><div class="line"></div><div class="streak"></div></div>
   <div id="comm" class="hud"><span class="mic">LIVE</span><span class="txt"></span></div>
   <div id="tvcard" class="hud"><div class="bar"></div><div class="body"><div class="t"></div><div class="s"></div></div></div>
+  <div id="batcard" class="hud" aria-live="polite"><div class="kick"></div><div class="row1"><span class="nm"></span><span class="rb"><b class="r"></b><span class="b"></span></span></div>
+    <div class="st"></div><div class="how"></div></div>
   <div id="replayTag" class="hud" hidden><span class="dot"></span>REPLAY<span class="skip">tap to skip</span></div>
   <div id="wipe" class="hud"></div>
   <div id="timing" class="hud"></div>
@@ -2549,6 +2585,15 @@ function sndOoh(level = 1, groan = false) {   // "oooh!" (beaten, an edge, a dro
   }
   g.connect(crowdBus); s.start(t, Math.random() * 0.4); s.stop(t + dur + 0.05);
 }
+// a soft quack (a duck): a nasal buzz through a narrow band, falling in pitch; two for a golden duck. Kept quiet.
+function sndQuack(when = 0, k = 1) {
+  if (!live()) return;
+  const t = actx.currentTime + when, o = actx.createOscillator(), f = actx.createBiquadFilter(), f2 = actx.createBiquadFilter(), g = actx.createGain();
+  o.type = 'sawtooth'; o.frequency.setValueAtTime(560, t); o.frequency.linearRampToValueAtTime(610, t + 0.04); o.frequency.exponentialRampToValueAtTime(380, t + 0.17);
+  f.type = 'bandpass'; f.frequency.value = 1150; f.Q.value = 4; f2.type = 'lowpass'; f2.frequency.value = 2600;
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.07 * k, t + 0.02); g.gain.setValueAtTime(0.07 * k, t + 0.1); g.gain.exponentialRampToValueAtTime(0.0008, t + 0.2);
+  o.connect(f); f.connect(f2); f2.connect(g); g.connect(sfx); o.start(t); o.stop(t + 0.22);
+}
 function sndHorn() {   // softer distant cheer accent after a six
   if (!live() || !crowdOn) return;
   const t = actx.currentTime + 0.35, g = actx.createGain(), f = actx.createBiquadFilter();
@@ -2694,6 +2739,8 @@ function fxStep(now, manual) {
       g.fillStyle=p.col;g.beginPath();g.moveTo(0,-s);g.lineTo(s*.22,-s*.22);
       g.lineTo(s,0);g.lineTo(s*.22,s*.22);g.lineTo(0,s);g.lineTo(-s*.22,s*.22);
       g.lineTo(-s,0);g.lineTo(-s*.22,-s*.22);g.closePath();g.fill();g.restore();
+    } else if (p.kind === 'duck') {
+      drawDuck(g, p, w, h);
     } else if (p.kind === 'confetti') {
       g.globalCompositeOperation = 'source-over'; g.globalAlpha = Math.min(1, k * 3);
       g.save(); g.translate(p.x + Math.sin(p.a) * 6, p.y); g.rotate(p.a); g.scale(1, Math.cos(p.a * 1.7));
@@ -2730,19 +2777,19 @@ function fxAccents(kind) {
   }
 }
 function fxFlash(bg) { const f = $('flash'); f.style.background = bg; f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
-function fxConfetti(n = 120, x = null, y = null) {   // from a point (a burst), or raining from the top
-  const w = FX.w || W, cols = FX_COLS.party;
+function fxConfetti(n = 120, x = null, y = null, d0 = 0, cols0 = null) {   // from a point (a burst), or raining from the top; d0: delay
+  const w = FX.w || W, cols = cols0 || FX_COLS.party;
   for (let i = 0; i < n; i++) {
     const burstAt = x != null, a = -Math.PI / 2 + rand(-1.1, 1.1), s = rand(250, 620);
     fxAdd({ kind: 'confetti', x: burstAt ? x : Math.random() * w, y: burstAt ? y : rand(-60, -10), vx: burstAt ? Math.cos(a) * s : rand(-30, 30), vy: burstAt ? Math.sin(a) * s : rand(60, 160),
-            grav: burstAt ? 520 : 40, drag: burstAt ? 0.975 : 1, a: Math.random() * 6, va: rand(-8, 8), life: rand(2.2, 3.6), size: rand(7, 12), col: cols[i % cols.length], delay: burstAt ? 0 : Math.random() * 0.8 });
+            grav: burstAt ? 520 : 40, drag: burstAt ? 0.975 : 1, a: Math.random() * 6, va: rand(-8, 8), life: rand(2.2, 3.6), size: rand(7, 12), col: cols[i % cols.length], delay: d0 + (burstAt ? 0 : Math.random() * 0.8) });
   }
 }
 // fireworks over the stands: rockets go up from the crowd and burst at the top of the picture
-function fxFireworks(count = 5, teamCol, k = 1) {   // k: size and brightness
+function fxFireworks(count = 5, teamCol, k = 1, d0 = 0) {   // k: size and brightness; d0: seconds before the first
   const w = FX.w || W, h = FX.h || H;
   for (let i = 0; i < count; i++) {
-    const x = w * rand(0.12, 0.88), y0 = h * rand(0.32, 0.45), y1 = h * rand(0.07, 0.24), T = rand(0.45, 0.6), delay = i * rand(0.22, 0.4);
+    const x = w * rand(0.12, 0.88), y0 = h * rand(0.32, 0.45), y1 = h * rand(0.07, 0.24), T = rand(0.45, 0.6), delay = d0 + i * rand(0.22, 0.4);
     const cols = i % 2 && teamCol ? [teamCol, '#ffffff', '#ffd36a'] : (i % 3 === 0 ? FX_COLS.gold : i % 3 === 1 ? FX_COLS.teal : FX_COLS.party);
     fxAdd({ kind: 'rocket', x, y: y0, vx: rand(-20, 20), vy: (y1 - y0) / T, life: T, size: 2.5, col: '#fff3c4', delay,
             onEnd: p => { fxGlow(p.x, p.y, cols[0], 90 * k); fxSparks(p.x, p.y, cols, Math.round(46 * k), rand(260, 360) * k, 120); } });
@@ -2791,6 +2838,53 @@ function fxResult(kind, ours, teamCol) {
   } else if (kind === 'streak') {
     fxSparks(bx, by, ['#ffb02e', '#ff6a2e', '#ffe27a'], 50, 560, 200, 0.1); sndStinger('streak');
   }
+}
+// out for nought: a cartoon duck waddles in along the top of the batter's card, stops, sheds a tear (a quiet quack), and waddles
+// off. A golden duck (out first ball) is gold, bigger, with a little crown and sparkles. Drawn in fxStep ('duck').
+const DUCKFX = { life: 4.4, in: 1.3, stay: 1.7 };
+function fxDuck(golden) {
+  if (!fxOn()) return;
+  fxAdd({ kind: 'duck', golden, x: 0, y: 0, life: DUCKFX.life, delay: BATCARD.outAt + 0.15, size: golden ? 1.3 : 1 });
+  sndQuack(BATCARD.outAt + DUCKFX.in + 0.25, golden ? 1 : 0.8); if (golden) sndQuack(BATCARD.outAt + DUCKFX.in + 0.55, 0.8);
+}
+function drawDuck(g, p, w, h) {
+  const u = p.t, card = $('batcard'), r = card && card.classList.contains('show') ? card.getBoundingClientRect() : null, lr = FX.cv.getBoundingClientRect();
+  const s = Math.max(16, Math.min(w, h) * 0.045) * p.size, ground = r ? r.top - lr.top : h * 0.78, cx = r ? r.left - lr.left + r.width * 0.5 : w * 0.5;
+  const startX = -3 * s, stopX = cx - (r ? r.width * 0.22 : 0), endX = w + 3 * s, outT = DUCKFX.in + DUCKFX.stay;
+  const walkIn = clamp(u / DUCKFX.in, 0, 1), walkOut = clamp((u - outT) / (p.life - outT), 0, 1), walking = u < DUCKFX.in || u > outT;
+  const x = u < DUCKFX.in ? lerp(startX, stopX, 1 - Math.pow(1 - walkIn, 2)) : u <= outT ? stopX : lerp(stopX, endX, walkOut * walkOut);
+  const ph = u * 13, bob = walking ? Math.abs(Math.sin(ph)) * 0.12 * s : Math.sin(u * 3) * 0.03 * s, tilt = walking ? Math.sin(ph) * 0.12 : 0;
+  const fade = Math.min(1, u / 0.2, (p.life - u) / 0.25), look = u > DUCKFX.in && u <= outT ? smooth(clamp((u - DUCKFX.in) / 0.3, 0, 1)) * (1 - smooth(clamp((u - outT + 0.3) / 0.3, 0, 1))) : 0;
+  const body = p.golden ? ['#ffe37a', '#f2b318', '#a8740a'] : ['#ffffff', '#e4e7ee', '#9aa3b5'];
+  g.save(); g.globalCompositeOperation = 'source-over'; g.globalAlpha = fade; g.translate(x, ground - 0.62 * s - bob); g.rotate(tilt);
+  // legs (behind), alternating
+  g.strokeStyle = '#f08a1c'; g.lineWidth = 0.13 * s; g.lineCap = 'round';
+  for (const k of [0, 1]) { const sw = walking ? Math.sin(ph + k * Math.PI) * 0.22 * s : 0;
+    g.beginPath(); g.moveTo(-0.1 * s + k * 0.2 * s, 0.4 * s); g.lineTo(-0.1 * s + k * 0.2 * s + sw, 0.62 * s + bob); g.lineTo(0.1 * s + k * 0.2 * s + sw, 0.62 * s + bob); g.stroke(); }
+  // body with a tail, shaded
+  const gr = g.createLinearGradient(0, -0.6 * s, 0, 0.5 * s); gr.addColorStop(0, body[0]); gr.addColorStop(0.6, body[1]); gr.addColorStop(1, body[2]);
+  g.fillStyle = gr; g.strokeStyle = '#10131c88'; g.lineWidth = 0.05 * s;
+  g.beginPath(); g.moveTo(-0.95 * s, -0.25 * s); g.quadraticCurveTo(-0.7 * s, -0.05 * s, -0.75 * s, 0.1 * s);
+  g.ellipse(0, 0.05 * s, 0.82 * s, 0.45 * s, 0, Math.PI * 0.92, Math.PI * 2.1, true); g.quadraticCurveTo(-0.3 * s, -0.42 * s, -0.95 * s, -0.25 * s); g.closePath(); g.fill(); g.stroke();
+  // wing
+  g.fillStyle = body[1]; g.beginPath(); g.ellipse(-0.12 * s, 0.02 * s, 0.42 * s, 0.22 * s, -0.25 + (walking ? Math.sin(ph * 0.5) * 0.08 : 0), 0, Math.PI * 2); g.fill(); g.stroke();
+  // head (turns a little toward us when it stops)
+  const hx = 0.55 * s - look * 0.12 * s, hy = -0.55 * s;
+  g.fillStyle = gr; g.beginPath(); g.arc(hx, hy, 0.36 * s, 0, Math.PI * 2); g.fill(); g.stroke();
+  g.fillStyle = '#f39a1e'; g.beginPath(); g.ellipse(hx + 0.38 * s - look * 0.14 * s, hy + 0.07 * s, 0.24 * s - look * 0.06 * s, 0.1 * s, 0.1, 0, Math.PI * 2); g.fill(); g.stroke();
+  // eye, a sad brow, and a tear while it stands there
+  const ex = hx + 0.12 * s - look * 0.08 * s, ey = hy - 0.06 * s;
+  g.fillStyle = '#10131c'; g.beginPath(); g.arc(ex, ey, 0.065 * s, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = '#10131c'; g.lineWidth = 0.05 * s; g.beginPath(); g.moveTo(ex - 0.1 * s, ey - 0.16 * s); g.lineTo(ex + 0.08 * s, ey - 0.11 * s); g.stroke();
+  if (look > 0.5) { const tu = ((u - DUCKFX.in - 0.3) % 0.9) / 0.9; g.globalAlpha = fade * (1 - tu) * 0.9; g.fillStyle = '#7fd3ff';
+    g.beginPath(); const ty = ey + 0.12 * s + tu * 0.45 * s; g.moveTo(ex, ty - 0.08 * s); g.quadraticCurveTo(ex + 0.06 * s, ty + 0.02 * s, ex, ty + 0.05 * s); g.quadraticCurveTo(ex - 0.06 * s, ty + 0.02 * s, ex, ty - 0.08 * s); g.fill(); g.globalAlpha = fade; }
+  if (p.golden) {   // a little crown, and a sparkle now and then
+    g.fillStyle = '#ffd36a'; g.strokeStyle = '#a8740a'; g.lineWidth = 0.04 * s; g.beginPath(); const cy0 = hy - 0.3 * s, cx0 = hx - 0.02 * s;
+    g.moveTo(cx0 - 0.2 * s, cy0); g.lineTo(cx0 - 0.22 * s, cy0 - 0.24 * s); g.lineTo(cx0 - 0.1 * s, cy0 - 0.1 * s); g.lineTo(cx0, cy0 - 0.28 * s);
+    g.lineTo(cx0 + 0.1 * s, cy0 - 0.1 * s); g.lineTo(cx0 + 0.22 * s, cy0 - 0.24 * s); g.lineTo(cx0 + 0.2 * s, cy0); g.closePath(); g.fill(); g.stroke();
+    if (Math.random() < 0.18) fxAdd({ kind: 'star', x: x + rand(-1, 1) * s, y: ground - rand(0.5, 1.6) * s, vx: 0, vy: -20, life: 0.6, size: rand(4, 7), a: Math.random(), va: 1, col: '#ffe9a0' });
+  }
+  g.restore();
 }
 // a line of commentary on screen, TV style: always shown, spoken too if the voice is on
 let commTimer = 0;
@@ -3774,7 +3868,33 @@ function startOver() {
 
 // a short breather before each ball (the owner found the game too quick); tap, S, Space or Enter skips it
 const BALL_GAP = 1.8, GAP_END = -0.6;
+// the camera for the big moments (3D): in front of your batter as he turns round the ground (a little to the side, so the partner
+// running in is seen too); beside the bowler's hat-trick run; round the winners' huddle, looking out at the stands and the fireworks
+function celCam() {
+  const c = phase === 'result' && !RP && celebrate;
+  if (!c || !R3D || !R3D.active()) return null;
+  const wt = c.win && phaseT >= c.win.at ? phaseT - c.win.at : -1;
+  if (wt >= 0) {
+    const C = c.win.bat ? lerp3(celSpots(c).s, celSpots(c).n, 0.5) : c.winC;
+    if (!C) return null;
+    if (c.win.a0 === undefined) { const r = Math.hypot(C[0], C[2] - PITCH / 2); c.win.a0 = r > 4 ? Math.atan2(C[0], C[2] - PITCH / 2) + Math.PI : Math.PI * 0.62; }   // (on the pitch: from the side, so both batters show)
+    const a = c.win.a0 + 0.16 * wt, R = c.win.cup ? 9.5 : 9;
+    return { kind: 'win', pos: [C[0] + Math.sin(a) * R, 3.1, C[2] + Math.cos(a) * R], tgt: [C[0], 1.35, C[2]], fov: 32, rate: 3 };
+  }
+  if (c.hat && phaseT >= celT0(c) && c.plane) {
+    const { pos } = planeAt(c.plane, phaseT - celT0(c)), from = add(lerp3([0, 0, PITCH / 2], pos, 0.3), [0, 3, 0]), d = dist2(from, pos);
+    return { kind: 'hat', pos: from, tgt: add(pos, [0, 1.1, 0]), fov: clamp(2 * Math.atan(3.4 / d) / deg, 14, 45), rate: 4 };
+  }
+  if (c.kind && phaseT >= celT0(c) && c.mAt) {
+    const f = c.mFace + 0.75, F = [Math.sin(f), 0, Math.cos(f)];
+    return { kind: 'mil', pos: add(c.mAt, add(mul(F, 7.6), [0, 1.5, 0])), tgt: add(c.mAt, [0, 0.72, 0]), fov: 30, rate: 2.2 };   // (framed high: the card sits below him)
+  }
+  return null;
+}
 function skipGap() {
+  if (phase === 'result' && !RP && celebrate) {   // a tap ends a big moment early
+    const e = celEnd(celebrate); if (e && phaseT < e - 0.5 && phaseT > 0.8) { phaseT = e - 0.5; return true; }
+  }
   if (phase !== 'wait' || phaseT >= GAP_END) return false;
   phaseT = GAP_END; return true;
 }
@@ -4075,6 +4195,11 @@ function finishBall(o, line) {
   else if (!o.wide && !o.noBall && i.hat && i.hat.b === bwl) i.hat = null;
   const hatN = bowlerWkt ? i.hat.n : 0, bs = i.bStreak || 0;
   const streak = boundary && bs >= 3 ? '🔥 ' + bs + ' IN A ROW!' : boundary && bs === 2 ? '2 IN A ROW' : hatN === 2 ? 'ON A HAT-TRICK!' : '';
+  if (o.out && !chaseMode) {   // the card of the batter who is out (a run-out can be the non-striker), and a duck if he made none
+    const ok = o.batter ?? k, oc = i.cards[ok], duck = oc.runs === 0 ? (oc.balls <= 1 && ok === k ? 'golden' : 'duck') : null;
+    batCard(batterP(ok), oc, i.bat, duck || 'out', oc.out);
+    if (duck) fxDuck(duck === 'golden');
+  }
   if (o.out) {
     showBanner(hatN >= 3 ? 'HAT-TRICK!' : 'OUT!', chaseMode ? line : line + ' · ' + who + c.runs + ' (' + c.balls + ')', 'bw', 0, streak);
     if (ours) { sndOoh(1, true); sndClap(0.25, 3); fxResult('out'); }
@@ -4087,7 +4212,8 @@ function finishBall(o, line) {
   else if (o.runs === 0) showBanner('', line || 'Dot ball', 'small quiet');   // a dot ball is the commonest ball: no big word for it
   else showBanner(o.runs + (o.runs === 1 ? ' RUN' : ' RUNS'), line, 'small');
   if (boundary && bs >= 3 && ours) fxResult('streak');
-  if (milestone) { showBanner(milestone === 100 ? 'HUNDRED!' : 'FIFTY!', who + c.runs + ' off ' + c.balls, 'bmil pop'); sndClap(1, 7); sndCrowd(0.6, 4); sndCheer(0.9); fxResult('milestone'); }
+  bigMoments(i, milestone, hatN, ours);
+  if (milestone) { batCard(batterP(k), c, i.bat, milestone); showBanner(milestone === 100 ? 'HUNDRED!' : 'FIFTY!', who + c.runs + ' off ' + c.balls, 'bmil pop'); sndClap(1, 7); sndCrowd(0.6, 4); sndCheer(0.9); fxResult('milestone'); }
   phase = 'result'; phaseT = 0;
 }
 
@@ -4097,7 +4223,7 @@ function setPace() {
   RUN1 = match ? 2.75 : 3.0; RUN_MORE = match ? 2.6 : 2.7; FRICTION = match ? 3.4 : 1.8;
 }
 function startInnings(k) {
-  commentary.reset();
+  commentary.reset(); hideBatCard();
   M.cur = k; inn = allInnings()[k];
   setPace();
   showScreen(null);
@@ -4108,7 +4234,7 @@ function startInnings(k) {
   commentaryCall('innings', { target: inn.target, team: inn.bat.name, overs: Math.round(inn.maxBalls / 6) });
 }
 function endInnings() {
-  phase = 'break'; showControls();
+  phase = 'break'; showControls(); hideBatCard();
   $('pick').hidden = true; $('meter').hidden = true; $('delivery').classList.remove('show');
   if (M.mode === 'chase') return endChase();
   if (M.cur === 0) {
@@ -4187,7 +4313,7 @@ function endMatch() {
     [bestB ? bestB.w + '–' + bestB.r : '-', 'Best bowling · ' + (bestB ? surname(bestB.n) : '')]]
     .map(([v, l]) => '<div><b>' + esc(v) + '</b><span>' + esc(l) + '</span></div>').join('');
   renderTabs('endTabs', 'endCard', 1);
-  $('trophy').hidden = true;
+  $('trophy').hidden = true; $('trophy').classList.remove('cup'); $('endTitle').classList.remove('champ-title');
   recordTournamentMatch(winner);
   renderEndOptions();
   const news = recordStats(winner);
@@ -4486,27 +4612,46 @@ const TROPHY_SVG='<svg viewBox="0 0 110 128" aria-hidden="true"><defs><linearGra
   '<path d="M20 6 H90 C90 50 76 70 55 74 C34 70 20 50 20 6 Z" fill="url(#gold)"/><ellipse cx="55" cy="7" rx="35" ry="4" fill="#fff1b0" opacity="0.7"/>'+
   '<path d="M48 74 H62 L60 92 H50 Z" fill="url(#gold)"/><rect x="34" y="92" width="42" height="10" rx="2" fill="url(#gold)"/><rect x="26" y="102" width="58" height="18" rx="3" fill="#3a2a12"/>'+
   '<rect x="26" y="102" width="58" height="4" fill="url(#gold)"/><path d="M55 24 l4 9 10 1 -8 6 3 10 -9 -5 -9 5 3 -10 -8 -6 10 -1 Z" fill="#fff6c8" opacity="0.85"/></svg>';
-// Winning a tournament: the trophy on the end screen, confetti and the crowd. Stops when the end screen closes.
-let confettiOn=false;
+// Winning a tournament (owner: "mega celebrations on a World Cup win"): the trophy rises out of turning gold rays, the title
+// glows, and over the end screen fireworks burst for about ten seconds while gold ticker tape falls. Stops when the screen closes.
+let confettiOn=false,confettiCup=false;
 function celebrateCup(){
-  $('trophy').innerHTML=TROPHY_SVG;$('trophy').hidden=false;
-  confettiRain();
-  sndCrowd(1,7);sndClap(1,8);setTimeout(()=>sndClap(0.8,6),2500);
+  $('trophy').innerHTML='<div class="rays"></div>'+TROPHY_SVG;$('trophy').hidden=false;$('trophy').classList.add('cup');
+  $('endTitle').classList.add('champ-title');
+  confettiCup=true;confettiRain();
+  sndCrowd(1,9);sndClap(1,10);sndCheer(1);setTimeout(()=>{sndClap(0.9,8);sndCheer(0.9);},3000);
 }
-// confetti over the end screen (a match won, a cup lifted)
+// confetti over the end screen (a match won, a cup lifted: gold, longer, with fireworks)
 function confettiRain(){
-  if(confettiOn||quiet)return;confettiOn=true;
-  const cv=$('confetti');cv.hidden=false;const g=cv.getContext('2d'),cols=['#ffb02e','#2ec4b6','#f3efe4','#e63946','#ffe27a','#4c8dff'];
+  if(quiet)return;
+  if(confettiOn)return;confettiOn=true;
+  const cv=$('confetti');cv.hidden=false;const g=cv.getContext('2d'),party=['#ffb02e','#2ec4b6','#f3efe4','#e63946','#ffe27a','#4c8dff'],gold=['#ffd36a','#ffb02e','#fff2c0','#f3efe4','#e8b04a'];
   let w=0,h=0;const size=()=>{w=cv.width=cv.clientWidth;h=cv.height=cv.clientHeight;};size();
-  const bits=Array.from({length:160},()=>({x:Math.random()*(w||innerWidth),y:-Math.random()*(h||innerHeight),vx:(Math.random()-0.5)*60,vy:60+Math.random()*120,a:Math.random()*6,va:(Math.random()-0.5)*8,s:5+Math.random()*7,c:cols[Math.floor(Math.random()*cols.length)]}));
-  let t0=performance.now(),prev=t0;
+  const bit=cols=>({x:Math.random()*(w||innerWidth),y:-Math.random()*(h||innerHeight),vx:(Math.random()-0.5)*60,vy:60+Math.random()*120,a:Math.random()*6,va:(Math.random()-0.5)*8,s:5+Math.random()*7,c:cols[Math.floor(Math.random()*cols.length)]});
+  const bits=Array.from({length:160},()=>bit(party)),sparks=[];
+  let t0=performance.now(),prev=t0,cupOn=false,nextRocket=0;
+  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
   const step=now=>{
-    if($('end').hidden||now-t0>9000){cv.hidden=true;confettiOn=false;return;}
+    if(confettiCup&&!cupOn){cupOn=true;t0=now;for(let i=0;i<200;i++)bits.push(bit(gold));}   // the cup: more, gold, longer
+    const LIFE=cupOn?12000:9000,el=now-t0;
+    if($('end').hidden||el>LIFE){cv.hidden=true;confettiOn=false;confettiCup=false;return;}
     if(cv.clientWidth!==w||cv.clientHeight!==h)size();
     const dt=Math.min(0.05,(now-prev)/1000);prev=now;g.clearRect(0,0,w,h);
-    const fade=Math.min(1,(9000-(now-t0))/1500);g.globalAlpha=fade;
-    for(const b of bits){b.x+=b.vx*dt+Math.sin(b.a)*20*dt;b.y+=b.vy*dt;b.a+=b.va*dt;if(b.y>h+10&&now-t0<6000){b.y=-10;b.x=Math.random()*w;}
-      g.save();g.translate(b.x,b.y);g.rotate(b.a);g.fillStyle=b.c;g.fillRect(-b.s/2,-b.s/4,b.s,b.s/2);g.restore();}
+    const fade=Math.min(1,(LIFE-el)/1500);
+    // fireworks: a rocket every half second or so for the first nine seconds, bursting near the top
+    if(cupOn&&!reduced&&el<9000&&el>=nextRocket){nextRocket=el+rand(280,620);
+      const x=w*rand(0.1,0.9),y=h*rand(0.08,0.38),cols=Math.random()<0.6?gold:party,n=Math.round(rand(46,70)),sp=rand(170,260)*Math.max(0.7,Math.min(w,h)/700);
+      for(let i=0;i<n;i++){const a=i/n*6.2832+rand(-0.05,0.05),v=sp*rand(0.75,1.05);sparks.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,t:0,life:rand(0.9,1.5),c:cols[i%cols.length]});}
+      sparks.push({x,y,vx:0,vy:0,t:0,life:0.35,c:'#fff6d8',flash:true});sndFirework(0,0.7);}
+    g.globalCompositeOperation='lighter';
+    for(let i=sparks.length-1;i>=0;i--){const p=sparks[i];p.t+=dt;if(p.t>=p.life){sparks.splice(i,1);continue;}
+      const k=1-p.t/p.life;g.globalAlpha=fade*k;
+      if(p.flash){const r=60*(1-k*0.5),gr=g.createRadialGradient(p.x,p.y,0,p.x,p.y,r);gr.addColorStop(0,p.c);gr.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=gr;g.fillRect(p.x-r,p.y-r,2*r,2*r);continue;}
+      p.vy+=70*dt;p.vx*=Math.pow(0.97,dt*60);p.vy*=Math.pow(0.97,dt*60);p.x+=p.vx*dt;p.y+=p.vy*dt;
+      g.fillStyle=p.c;g.beginPath();g.arc(p.x,p.y,1.4+1.4*k,0,6.2832);g.fill();}
+    g.globalCompositeOperation='source-over';g.globalAlpha=fade;
+    for(const b of bits){b.x+=b.vx*dt+Math.sin(b.a)*20*dt;b.y+=b.vy*dt;b.a+=b.va*dt;if(b.y>h+10&&el<LIFE-3000){b.y=-10;b.x=Math.random()*w;}
+      g.save();g.translate(b.x,b.y);g.rotate(b.a);g.scale(1,Math.cos(b.a*1.3));g.fillStyle=b.c;g.fillRect(-b.s/2,-b.s/4,b.s,b.s/2);g.restore();}
     requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
@@ -4896,6 +5041,7 @@ function update(dt) {
   if (bannerUntil && clock > bannerUntil) hideBanner();
 
   if (cardUntil && clock > cardUntil) hideCard();
+  batCardStep();
   const gapOn = phase === 'wait' && phaseT < GAP_END && !ff && !paused;
   const nt = $('nextTag'); if (nt.hidden === gapOn) { nt.hidden = !gapOn; nt.firstChild.textContent = inn && inn.freeHit ? 'FREE HIT' : 'NEXT BALL'; nt.classList.toggle('fh', !!(inn && inn.freeHit)); nt.lastChild.textContent = touch ? 'tap to skip' : 'S or Space to skip'; }
   // a free hit to come: announced big once as the wait starts, then a pulsing badge until it's bowled
@@ -5028,7 +5174,7 @@ function update(dt) {
   hint.hidden = !showHint;
 
   // between balls
-  if (phase === 'result' && phaseT > Math.max(celebrate && (celebrate.out || celebrate.milestone) ? 3.0 : 2.1, sigEnd(celebrate) + (celebrate && celebrate.out ? 2.3 : 0.5))) afterBall();
+  if (phase === 'result' && phaseT > Math.max(celebrate && (celebrate.out || celebrate.milestone) ? 3.0 : 2.1, sigEnd(celebrate) + (celebrate && celebrate.out ? 2.3 : 0.5), celEnd(celebrate))) afterBall();
 
   // camera
   const HC = homeCam(); let tp = HC.pos, tt = HC.tgt, tf = HC.fov, rate = 2.5;
@@ -5059,19 +5205,22 @@ function update(dt) {
   if (!!cam.ro !== ro) { cam.ro = ro; cam.pos = tp.slice(); cam.tgt = tt.slice(); cam.fov = tf; }   // cut, don't swoop
   // a wicket (3D): cut to a close-up of the batter walking off, the stumps behind him
   // the umpire signalling: a cut to him from in front, full length so raised arms fit
-  const uc = phase === 'result' && !RP && phaseT > sigStart(celebrate) - 0.05 && phaseT < sigEnd(celebrate);
+  const ccv = celCam();
+  const uc = !ccv && phase === 'result' && !RP && phaseT > sigStart(celebrate) - 0.05 && phaseT < sigEnd(celebrate);
   if (uc) {   // he stands right of centre, clear of the result banner in the middle (on an upright phone there is no room: centred, a little lower)
     const d = 6.2, half = Math.tan(14 * deg) * d * W / H, off = Math.min(1.1, half * 0.5) * (W > H ? 1 : 0);
     tp = [UMP_AT[0] - 0.35 + off, 1.6, UMP_AT[2] - d]; tt = [UMP_AT[0] + off, W > H ? 1.3 : 2.3, UMP_AT[2]]; tf = 28; rate = 8;
   }
   if (!!cam.uc !== uc) { cam.uc = uc; cam.pos = tp.slice(); cam.tgt = tt.slice(); cam.fov = tf; }   // cut, don't swoop
-  const wk = phase === 'result' && celebrate && celebrate.out && celebrate.out.how !== 'run out' && phaseT > Math.max(0.7, sigEnd(celebrate)) && !RP && R3D && R3D.active();
+  const wk = !ccv && !(celebrate && celebrate.hat) && phase === 'result' && celebrate && celebrate.out && celebrate.out.how !== 'run out' && phaseT > Math.max(0.7, sigEnd(celebrate)) && !RP && R3D && R3D.active();
   if (wk) {
     const u = phaseT - 0.7, f = -2.2, d = [Math.sin(f), 0, Math.cos(f)], at = [0.6 + guard + d[0] * u * 1.2, 0, 0.75 + d[2] * u * 1.2];
     const wide = W > H * 1.2, off = wide ? -1.0 : 0;   // on wide screens he stands right of centre, the banner to his left
     tp = [at[0] + d[0] * 6.4 + d[2] * 1.6, 1.45, at[2] + d[2] * 6.4 - d[0] * 1.6]; tt = [at[0] + d[2] * off, 1.0, at[2] - d[0] * off]; tf = 24; rate = 6;
   }
   if (!!cam.wk !== !!wk) { cam.wk = wk; cam.pos = tp.slice(); cam.tgt = tt.slice(); cam.fov = tf; }   // cut, don't swoop
+  if (ccv) { tp = ccv.pos; tt = ccv.tgt; tf = ccv.fov; rate = ccv.rate; }
+  if ((cam.cc || null) !== (ccv ? ccv.kind : null)) { cam.cc = ccv ? ccv.kind : null; cam.pos = tp.slice(); cam.tgt = tt.slice(); cam.fov = tf; }   // cut
   const k = 1 - Math.exp(-rate * dt);
   cam.pos = lerp3(cam.pos, tp, k); cam.tgt = lerp3(cam.tgt, tt, Math.min(1, k * 2)); cam.fov = lerp(cam.fov, tf, k);
 }
@@ -5481,6 +5630,145 @@ function cheerFig(pos, face, t, seed) {
   const hand = (s, hi) => add(p, add(add(mul(L, s * lerp(0.25, 0.32, up)), mul(F, 0.08)), [0, lerp(0.95, hi, up), 0]));
   return figure(p, face, { handL: hand(1, one ? 1.5 : 2.2), handR: hand(-1, 2.25), seed });
 }
+// ---- the big moments on the field (owner, November 2026: "more dynamic celebrations ... and mega celebrations on a World Cup win").
+// Your batter's fifty (bat raised round the ground, the partner runs down to touch gloves) and hundred (a leap, helmet off, arms up,
+// a hug); your bowler's hat-trick (he runs off with his arms out, the team chases him down); your win (the winning batters run
+// together, or the whole side mobs the bowler; the other side's heads go down). Each has its own camera (cc in update()) and holds
+// the ball's result phase until it is done (celEnd); a tap ends it early. A cup final won runs longer, with more fireworks, and then
+// the champions' screen (celebrateCup). Not in simulations, auto-play or quick chases; the computer's moments stay short.
+const CEL = { fifty: 3.9, hundred: 5.2, hat: 3.9, win: 4.6, cup: 6.4, ns: 7, nsFifty: 0.3, nsHundred: 0.9, plane: 1.9, planeV: 5.4 };
+const celT0 = c => c.kind ? 0.5 : c.hat ? Math.max(0.6, sigEnd(c)) : 0;
+function celEnd(c) {
+  if (!c) return 0;
+  let e = 0;
+  if (c.kind) e = celT0(c) + (c.kind === 100 ? CEL.hundred : CEL.fifty);
+  if (c.hat) e = Math.max(e, celT0(c) + CEL.hat);
+  if (c.win) e = Math.max(e, c.win.at + (c.win.cup ? CEL.cup : CEL.win));
+  return e;
+}
+// the innings just finished the match, and you won it (a tie goes to a Super Over: no)
+function matchWonNow(i) {
+  if (!M || M.mode !== 'match' || !inningsOver() || !i.target || i.runs === i.target - 1) return false;
+  return (i.runs >= i.target ? i.bat : i.bowl) === M.teams[0];
+}
+function isFinalFixture() {
+  if (!M.tournamentId || typeof tournament === 'undefined' || !tournament || tournament.id !== M.tournamentId) return false;
+  const f = tournament.fixtures.find(x => x.id === M.fixtureId); return !!(f && f.stage === 'final');
+}
+function bigMoments(i, milestone, hatN, ours) {
+  const c = celebrate;
+  if (!c || quiet || ff || M.autoplay || M.mode !== 'match') return;
+  if (milestone && ours) c.kind = milestone;
+  if (hatN >= 3 && !ours) c.hat = true;
+  if (matchWonNow(i)) {
+    c.win = { bat: i.userBats, cup: isFinalFixture() };
+    c.win.at = c.hat ? celT0(c) + CEL.hat - 0.6 : c.out ? Math.max(1.5, sigEnd(c) + 0.3) : Math.max(0.8, sigEnd(c) + 0.2);
+    c.kind = null;   // a fifty or hundred with the winning hit: the win takes over (the card still shows)
+  }
+  if (!fxOn()) return;
+  const col = i.bat.col, you = M.teams[0].col;
+  if (c.kind === 50) fxFireworks(3, col, 0.7, 0.9);
+  if (c.kind === 100) { fxFireworks(7, col, 1.1, 1.2); fxConfetti(140, null, null, 1.3); sndCrowd(1, 6); sndCheer(1); }
+  if (c.hat) { fxFireworks(6, i.bowl.col, 1, celT0(c)); sndCrowd(1, 5); sndClap(1, 6); }
+  if (c.win) {
+    const a = c.win.at, k = c.win.cup ? 1.35 : 1.05;
+    fxFireworks(c.win.cup ? 9 : 7, you, k, a); fxFireworks(c.win.cup ? 9 : 5, you, k, a + 1.7);
+    if (c.win.cup) { fxFireworks(10, '#ffd36a', 1.45, a + 3.3); fxConfetti(320, null, null, a + 0.4, FX_COLS.gold.concat(['#ffffff', you])); }
+    else fxConfetti(200, null, null, a + 0.4);
+    sndCrowd(1, c.win.cup ? 9 : 6); sndCheer(1); sndClap(1, c.win.cup ? 10 : 7);
+  }
+}
+const armsTo = (j, hL, hR, L) => { j.handL = hL; j.handR = hR; j.elL = add(lerp3(j.shL, hL, 0.5), add(mul(L, 0.06), [0, -0.05, 0])); j.elR = add(lerp3(j.shR, hR, 0.5), add(mul(L, -0.06), [0, -0.05, 0])); return j; };
+const angDiff = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
+// where the two batters stand for a celebration: the striker (after any runs) and the non-striker
+function celSpots(c) {
+  if (c.spots) return c.spots;
+  const legs = ball && ball.play && ball.play.res && ball.play.res.legs, pt = ball && ball.play ? ball.play.t : 0;
+  const r = (z, x) => legs ? CricketLocomotion.legsRunner({ time: pt + 99, legs, startZ: z, x, pitch: PITCH }) : null;
+  const sr = r(0.6, 0.55), nr = r(PITCH - 0.6, -1.5);
+  return (c.spots = { s: sr ? sr.pos.slice() : [0.6 + guard, 0, 0.75], n: nr ? nr.pos.slice() : [-1.5, 0, PITCH - 0.4] });
+}
+// your batter's fifty or hundred. t from the start; returns the figure, his bat, his face, and whether the helmet is off
+function milestoneFig(c, t) {
+  const { s: at, n } = celSpots(c), hundred = c.kind === 100, toNs = norm([n[0] - at[0], 0, n[2] - at[2]]);
+  const meet = (hundred ? CEL.nsHundred : CEL.nsFifty) + (dist2(at, n) - 0.6) / CEL.ns;
+  const fNs = Math.atan2(toNs[0], toNs[2]), tm = smooth(clamp((t - meet + 0.5) / 0.5, 0, 1)), after = smooth(clamp((t - meet - (hundred ? 1.3 : 0.6)) / 0.4, 0, 1));
+  let face = 1.25 - 2.5 * smooth(clamp((t - (hundred ? 1.5 : 0.7)) / 2.2, 0, 1));   // round the ground: leg side to off side
+  face += angDiff(face, fNs) * tm * (1 - after);
+  const F = [Math.sin(face), 0, Math.cos(face)], L = [Math.cos(face), 0, -Math.sin(face)];
+  const hop = hundred && t < 0.75 ? Math.sin(Math.PI * t / 0.75) * 0.42 : 0, p = [at[0], hop, at[2]];
+  const P = (a, b, h) => add(p, add(add(mul(F, a), mul(L, b)), [0, h, 0]));
+  const up = smooth(clamp(t / 0.35, 0, 1)), wave = Math.sin(t * 4.2) * 0.09 * smooth(clamp((t - 0.5) / 0.4, 0, 1));
+  let hR = P(0.05, -0.28 + wave, lerp(1.0, 2.15, up)), hL, helmOff = false;
+  if (!hundred) hL = P(0.1, 0.34 - wave, lerp(0.95, 1.72, smooth(clamp((t - 0.25) / 0.4, 0, 1))));
+  else {   // both arms up in the leap; the left hand takes the helmet off and holds it up; both arms high
+    const toHead = smooth(clamp((t - 0.75) / 0.25, 0, 1)), lift = smooth(clamp((t - 1.1) / 0.4, 0, 1));
+    hL = t < 0.75 ? P(0.05, 0.3, lerp(1.0, 2.25, up)) : lerp3(lerp3(P(0.05, 0.3, 2.25), P(0.02, 0.06, 1.86), toHead), P(0.05, 0.3, 2.3), lift);
+    helmOff = t > 1.15;
+  }
+  // meeting the partner: gloves touched (fifty), a hug (hundred); the bat hangs behind him
+  const hug = tm * (1 - after);
+  if (hug > 0) {
+    const gR = hundred ? P(0.42, -0.24, 1.36) : P(0.05, -0.3, 1.0), gL = hundred ? P(0.42, 0.24, 1.4) : P(0.42, 0.06, 1.3);
+    hR = lerp3(hR, gR, hug); hL = lerp3(hL, gL, hug);
+  }
+  const j = armsTo(figure(p, face, { seed: 9 }), hL, hR, L);
+  const tip = add(hR, lerp3([-0.1 * up, 0.85 * up - 0.6 * (1 - up), 0], add(mul(F, -0.1), [0, -0.8, 0]), hundred ? hug : 0));
+  return { j, at: p, face, look: F, helmOff, bat: { carry: true, carryHand: 'r', hands: hR, tip } };
+}
+// the non-striker runs down to him and touches gloves or hugs him
+function nsJoinFig(c, t) {
+  const { s, n } = celSpots(c), hundred = c.kind === 100, dir = norm([s[0] - n[0], 0, s[2] - n[2]]), meetP = sub(s, mul(dir, 0.6));
+  const t0 = hundred ? CEL.nsHundred : CEL.nsFifty, D = dist2(n, meetP), T = D / CEL.ns, u = clamp((t - t0) / T, 0, 1);
+  const face = Math.atan2(dir[0], dir[2]), F = dir, L = [Math.cos(face), 0, -Math.sin(face)];
+  if (t < t0 + T) {
+    const pos = lerp3(n, meetP, u), j = runFig(figure(pos, face, { run: u > 0 ? 1 : 0, phase: clock * 11, gaitDistance: D * u, seed: 20 }), pos, face, D * u, u > 0 ? 1 : 0);
+    return { j, at: pos, bat: { carry: true, carryHand: 'l', hands: j.handL, tip: add(j.handL, add([0.1, -0.75, 0], mul(F, 0.25))) } };
+  }
+  const v = t - t0 - T, hold = smooth(clamp(v / 0.3, 0, 1)) * (1 - smooth(clamp((v - (hundred ? 1.2 : 0.55)) / 0.35, 0, 1)));
+  const P = (a, b, h) => add(meetP, add(add(mul(F, a), mul(L, b)), [0, h, 0]));
+  const restL = P(0.05, 0.26, 0.95), restR = P(0.05, -0.26, 0.95);
+  const hL = lerp3(restL, hundred ? P(0.42, 0.24, 1.4) : restL, hold), hR = lerp3(restR, hundred ? P(0.42, -0.24, 1.36) : P(0.42, -0.06, 1.3), hold);
+  const j = armsTo(figure(meetP, face, { seed: 20 }), hL, hR, L);
+  return { j, at: meetP, bat: { carry: true, carryHand: 'l', hands: hL, tip: add(hL, [0.05, -0.8, 0]) } };
+}
+// your bowler's hat-trick: he runs off on a curve with his arms out, then stops and leaps; the team runs to where he stops
+function planePath(c, P0) {
+  if (c.plane) return c.plane;
+  const side = P0[0] > 0 ? 1 : -1, a0 = side > 0 ? 1.15 : -1.15, k = -side * 0.55;
+  return (c.plane = { P0: P0.slice(), a0, k });
+}
+function planeAt(pl, t) {
+  const u = Math.min(t, CEL.plane), a = pl.a0 + pl.k * u, v = CEL.planeV;
+  return { pos: [pl.P0[0] + v * (Math.cos(pl.a0) - Math.cos(a)) / pl.k, 0, pl.P0[2] + v * (Math.sin(a) - Math.sin(pl.a0)) / pl.k], face: a };
+}
+function planeFig(c, P0, t) {
+  const pl = planePath(c, P0), { pos, face } = planeAt(pl, t);
+  if (t >= CEL.plane) return { j: cheerFig(pos, face, t - CEL.plane, 0.4), at: pos };
+  const F = [Math.sin(face), 0, Math.cos(face)], L = [Math.cos(face), 0, -Math.sin(face)], bank = Math.sin(t * 2.6) * 0.22, d = CEL.planeV * t;
+  const j = runFig(figure(pos, face, { run: 1, phase: clock * 11, gaitDistance: d, seed: 3 }), pos, face, d, 1);
+  return { j: armsTo(j, add(j.shL, add(mul(L, 0.62), [0, 0.02 + bank, 0])), add(j.shR, add(mul(L, -0.62), [0, 0.02 - bank, 0])), L), at: pos };
+}
+// your win, bowling: everyone runs to the bowler; batting: the two batters run together. The losers' heads go down.
+function downFig(pos, face, t, seed) {
+  if (seed % 3 === 0) { const L = [Math.cos(face), 0, -Math.sin(face)], F = [Math.sin(face), 0, Math.cos(face)], u = smooth(clamp(t / 0.5, 0, 1));
+    const knee = s => add(pos, add(add(mul(F, 0.28), mul(L, s * 0.14)), [0, lerp(0.95, 0.55, u), 0]));
+    return figure(pos, face, { crouch: 0.35 * u, bend: 0.45 * u, handL: knee(1), handR: knee(-1), seed }); }
+  return headFig(pos, face, t, seed);
+}
+function winBatFig(c, t, who) {   // who: 's' striker, 'n' non-striker
+  const { s, n } = celSpots(c), me = who === 's' ? s : n, other = who === 's' ? n : s, mid = lerp3(s, n, 0.5);
+  const dir = norm([other[0] - me[0], 0, other[2] - me[2]]), face = Math.atan2(dir[0], dir[2]), stop = sub(mid, mul(dir, 0.35));
+  const D = dist2(me, stop), t1 = 0.7, T = D / CEL.ns, u = clamp((t - t1) / T, 0, 1), carry = who === 's' ? 'r' : 'l';
+  let j, at;
+  if (t < t1) { at = me; j = cheerFig(me, face, t, who === 's' ? 0.4 : 1.3); }
+  else if (u < 1) { at = lerp3(me, stop, u); j = runFig(figure(at, face, { run: 1, phase: clock * 11, gaitDistance: D * u, seed: who === 's' ? 9 : 20 }), at, face, D * u, 1); }
+  else { const v = t - t1 - T, L = [Math.cos(face), 0, -Math.sin(face)], hop = Math.max(0, Math.sin(v * 7)) * 0.2 * (v < 1.6 ? 1 : 0); at = [stop[0], hop, stop[2]];
+    const P = (a, b, h) => add(at, add(add(mul(dir, a), mul(L, b)), [0, h, 0]));
+    j = armsTo(figure(at, face, { seed: 9 }), P(0.4, 0.24, 1.4), P(0.4, -0.24, 1.36), L); }
+  const h = carry === 'r' ? j.handR : j.handL;
+  return { j, at, bat: { carry: true, carryHand: carry, hands: h, tip: add(h, t < t1 ? [0, 0.8, 0] : [0.05, -0.8, 0]) } };
+}
 // After a wicket the fielders near the bowler (or near the catcher, for a catch in the field) run in to him: high fives, a few
 // little jumps, then pats on the back. He stays where he is, celebrating (cheerFig); the keeper stays put while he has the ball.
 const HUDDLE = { reach: 30, speed: 5.2, ring: 1.05 };
@@ -5491,10 +5779,10 @@ function huddleCentre(c) {
   return { f: bf, at: ball && ball.play && bf ? fielderDisplayPos(bf) : bowlerState().pos };
 }
 function huddleFig(f, start, fi, hc, c) {
-  if (f === hc.f || (f.keeper && (appealed(c) || c.out.how === 'run out'))) return null;
+  if (f === hc.f || (!hc.reach && f.keeper && (appealed(c) || c.out.how === 'run out'))) return null;
   const C = hc.at, d0 = dist2(start, C);
-  if (d0 > HUDDLE.reach || d0 < 0.5) return null;
-  const t = phaseT - (appealed(c) ? sigStart(c) + 0.25 : 0.55) - (fi % 4) * 0.08;
+  if (d0 > (hc.reach || HUDDLE.reach) || d0 < 0.5) return null;
+  const t = phaseT - (hc.t0 ?? (appealed(c) ? sigStart(c) + 0.25 : 0.55)) - (fi % 4) * 0.08;
   if (t < 0) return null;
   const ang = Math.atan2(start[0] - C[0], start[2] - C[2]) + ((fi % 3) - 1) * 0.35;
   const slot = [C[0] + Math.sin(ang) * HUDDLE.ring, 0, C[2] + Math.cos(ang) * HUDDLE.ring];
@@ -5574,7 +5862,17 @@ function livePeople() {
   // the striker: in his stance and swing, or running
   const sr = runner(0.6, 0.55);
   const cel = phase === 'result' && celebrate ? celebrate : null;
-  if (cel && cel.out && cel.out.how !== 'run out' && phaseT > 0.7) {   // out: carry the blade down beside the leg
+  const winT = cel && cel.win && phaseT >= cel.win.at ? phaseT - cel.win.at : -1, sOut = !!(cel && cel.out && cel.out.how !== 'run out');
+  if (winT >= 0 && cel.win.bat) {   // the winning hit: the batters run together
+    const w = winBatFig(cel, winT, 's');
+    out.push({ j: w.j, at: w.at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look: null, bat: w.bat });
+  } else if (cel && cel.kind && phaseT >= celT0(cel)) {   // your fifty or hundred
+    const m = milestoneFig(cel, phaseT - celT0(cel)); cel.mAt = m.at; cel.mFace = m.face;
+    out.push({ j: m.j, at: m.at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look: m.look, bat: m.bat, helmOff: m.helmOff });
+  } else if (winT >= 0 && !sOut) {   // beaten: head down where he stands
+    const at = celSpots(cel).s, j = downFig(at, Math.PI, winT, 4);
+    out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look: null, bat: { carry: true, carryHand: 'r', hands: j.handR, tip: add(j.handR, [0, -0.8, 0.1]) } });
+  } else if (cel && cel.out && cel.out.how !== 'run out' && phaseT > 0.7) {   // out: carry the blade down beside the leg
     const u = phaseT - 0.7, turn=smooth(clamp(u/.45,0,1)),face=lerp(-Math.PI/2,-2.2,turn);
     const r=clamp(u/.45,0,1),distance=u<.45?1.2*.45*(r*r*r-.5*r*r*r*r):1.2*(u-.225);
     const charge=ball?.charge?STEP*smooth(clamp(ball.charge.t/.4,0,1)):0;
@@ -5660,13 +5958,17 @@ function livePeople() {
   const ns = runner(PITCH - 0.6, -1.5), ndw = diveW(ns), nb = nsBackup();
   if (ns && ns.leg === 0) ns.pos = [ns.pos[0], 0, ns.pos[2] - NS_BACK * (1 - smooth(clamp(ns.u, 0, 1)))];   // he set off from where he had backed up to
   const nsPos = ns ? ns.pos : [lerp(-1.7, -1.5, nb.b / NS_BACK), 0, PITCH - 0.4 - nb.b];
+  let nsAt = nsPos;
   const nsFace = ndw > 0 ? diveFace(ns) : ns ? ns.face : nb.out ? Math.PI : 0, nsForward = [Math.sin(nsFace), 0, Math.cos(nsFace)];
   let nj = figure(nsPos, nsFace, { run: ns ? ns.runWeight : 0, phase: clock * 11 + 1,gaitDistance:ns?ns.distance+1.9:undefined, seed: 20 });
   if (ns) nj = runFig(nj, nsPos, nsFace, ns.distance + 1.9, ns.runWeight);
   else if (nb.walk > 0) nj = runFig(nj, nsPos, nsFace, nb.out ? nb.b : NS_BACK * 2 - nb.b, nb.walk, 'walk');
   let nHand = nj.handL, nTip = add(nj.handL, add([0.1, -0.75, 0], mul(nsForward, 0.25)));
   if (ndw > 0) { const s = stretchFig(nsPos, nsFace, 'l'); nj = mixJ(nj, s.j, ndw); nHand = lerp3(nHand, s.hand, ndw); nTip = lerp3(nTip, s.tip, ndw); }
-  out.push({ j: nj, at: nsPos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.non : 1), look: null,
+  if (winT >= 0 && cel.win.bat) { const w = winBatFig(cel, winT, 'n'); nj = w.j; nsAt = w.at; nHand = w.bat.hands; nTip = w.bat.tip; }
+  else if (winT >= 0) { nsAt = celSpots(cel).n; nj = downFig(nsAt, 0, winT, 6); nHand = nj.handL; nTip = add(nHand, [0, -0.8, 0.1]); }
+  else if (cel && cel.kind && phaseT >= celT0(cel)) { const w = nsJoinFig(cel, phaseT - celT0(cel)); nj = w.j; nsAt = w.at; nHand = w.bat.hands; nTip = w.bat.tip; }
+  out.push({ j: nj, at: nsAt, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.non : 1), look: null,
              bat: { carry: true, carryHand: 'l', hands: nHand, tip: nTip } });
   // the bowler, then the fielders (once the ball is hit, the bowler is one of the fielders)
   const afterHit = !!(ball && ball.play);
@@ -5677,11 +5979,23 @@ function livePeople() {
       ? appealFig(pos, angTo(pos, UMP_AT), phaseT - 0.15, (f.who || 0) + (f.keeper ? 1 : 0))
     : won && (f.bowler || f === cel.out.by || (f.keeper && cel.out.how !== 'caught')) ? cheerFig(pos, face, phaseT - 0.15, f.bowler ? 0.4 : 1.3)
     : hurt && f.bowler ? headFig(pos, face, phaseT - 0.15, 3) : null;
+  const hatT = cel && cel.hat && phaseT >= celT0(cel) ? phaseT - celT0(cel) : -1, bf = fielders.find(f => f.bowler);
+  // the bowler's big moments: the hat-trick run, and the win (the team runs to him); beaten, his head goes down
+  const bowlBig = (pos, face) => hatT >= 0 ? planeFig(cel, pos, hatT)
+    : winT >= 0 ? { j: cel.win.bat ? downFig(pos, face, winT, 1) : cheerFig(pos, face, winT, 0.4), at: pos } : null;
   if (!afterHit) {
-    const bw = bowlerState(), rj = react({ bowler: true }, bw.pos, Math.PI);
-    out.push({ j: rj || bw.j, at: bw.pos, team: 'bowl', bowler: true, pid: fid(inn ? inn.bowler : 0), look: null });
+    const bw = bowlerState(), big = bowlBig(bw.pos, Math.PI), rj = big ? null : react({ bowler: true }, bw.pos, Math.PI);
+    if (big && winT >= 0 && !cel.win.bat && !cel.winC) cel.winC = big.at.slice();
+    out.push({ j: big ? big.j : rj || bw.j, at: big ? big.at : bw.pos, team: 'bowl', bowler: true, pid: fid(inn ? inn.bowler : 0), look: null });
   }
-  const wi = walkIn(), hc = won && phase === 'result' ? huddleCentre(cel) : null;
+  const wi = walkIn();
+  let hc = won && phase === 'result' ? huddleCentre(cel) : null;
+  if (hatT >= 0 && cel.plane) hc = { f: bf, at: planeAt(cel.plane, CEL.plane).pos, t0: celT0(cel) + 0.35, reach: 45 };
+  if (winT >= 0 && !cel.win.bat) {
+    const C = cel.hat && cel.plane ? planeAt(cel.plane, CEL.plane).pos : cel.winC || (bf ? fielderDisplayPos(bf, wi) : bowlerState().pos);
+    if (!cel.winC) cel.winC = C.slice();
+    hc = { f: bf, at: cel.winC, t0: cel.win.at, reach: 95 };
+  }
   for (const [fi, f] of fielders.entries()) {
     if (f.bowler && !afterHit) continue;
     let pos = fielderDisplayPos(f, wi), run = f.run, ph = f.phase;
@@ -5690,7 +6004,16 @@ function livePeople() {
       if (wi.moving) { run = Math.max(run, 0.3); ph = clock * 7 + f.phase; }
     }
     const act = fielderAct(f), caughtCel = act && act.u !== undefined && act.u >= 1;
-    const hj = hc && (!act || caughtCel) ? huddleFig(f, pos, fi, hc, cel) : null;
+    if (f.bowler && (hatT >= 0 || (winT >= 0 && !cel.win.bat))) {
+      const big = bowlBig(pos, act ? act.face : f.face);
+      if (big) { if (winT >= 0 && !cel.winC) cel.winC = big.at.slice(); out.push({ j: big.j, at: big.at, team: 'bowl', bowler: true, pid: fid(f.who), look: null }); continue; }
+    }
+    if (winT > 0.3 && cel.win.bat) {   // they lost: heads down where they are
+      if (f.keeper) kHand = null;
+      out.push({ j: downFig(pos, angTo(pos, [0, 0, PITCH / 2]), winT - 0.3 - (fi % 4) * 0.12, fi), at: pos, team: 'bowl', keeper: !!f.keeper, bowler: !!f.bowler, pid: fid(f.who), look: null });
+      continue;
+    }
+    const hj = hc && (!act || caughtCel || winT >= 0) ? huddleFig(f, pos, fi, hc, cel) : null;
     if (hj) {
       if (f.keeper) kHand = null;
       out.push({ j: hj.j, at: hj.at, team: 'bowl', keeper: !!f.keeper, bowler: !!f.bowler, pid: fid(f.who), look: null });
@@ -5919,6 +6242,30 @@ function tvCard(title, sub, col, dur = 3.4) {
   c.classList.add('show'); cardUntil = clock + dur;
 }
 const hideCard = () => { cardUntil = 0; $('tvcard').classList.remove('show'); };
+// the batter's card (owner, November 2026: "when a batter gets out we don't see his score"; and on a fifty or hundred): shown a
+// moment after the ball (bcFrom, game clock) for BATCARD.dur seconds. kind: 'out' | 'duck' | 'golden' | 50 | 100
+const BATCARD = { outAt: 1.0, milAt: 0.7, dur: 4.2 };
+let bcFrom = 0, bcUntil = 0, bcLast = 0;
+function batCard(p, c, team, kind, how) {
+  const el = $('batcard'); if (quiet || ff || (M && M.autoplay) || !el) return;
+  const kick = { out: 'OUT', duck: 'OUT FOR A DUCK', golden: 'GOLDEN DUCK', 50: 'FIFTY', 100: 'HUNDRED' }[kind];
+  el.querySelector('.kick').textContent = kick;
+  el.querySelector('.nm').textContent = p.name;
+  el.querySelector('.r').textContent = c.runs; el.querySelector('.b').textContent = '(' + c.balls + ')';
+  el.querySelector('.st').innerHTML = '<span><b>' + c.fours + '</b> fours</span><span><b>' + c.sixes + '</b> sixes</span><span>SR <b>' + (c.balls ? Math.round(c.runs / c.balls * 100) : 0) + '</b></span>';
+  el.querySelector('.how').textContent = how || '';
+  el.style.setProperty('--c', team.col); el.style.setProperty('--k', kind === 50 || kind === 100 || kind === 'golden' ? '#ffd36a' : kind === 'duck' ? '#f3efe4' : '#ff6a5a');
+  el.classList.toggle('gold', kind === 100 || kind === 'golden');
+  bcFrom = clock + (typeof kind === 'number' ? BATCARD.milAt : BATCARD.outAt); bcUntil = bcFrom + BATCARD.dur;
+}
+function batCardStep() {
+  const el = $('batcard'), d = clock - bcLast; bcLast = clock; if (!el || !bcUntil) return;
+  if (RP || paused) { bcFrom += d; bcUntil += d; }   // a replay holds it: the rest of it shows after
+  const on = clock >= bcFrom && clock < bcUntil && !RP;
+  if (el.classList.contains('show') !== on) el.classList.toggle('show', on);
+  if (clock >= bcUntil) { bcUntil = 0; el.classList.remove('show'); }
+}
+const hideBatCard = () => { bcUntil = 0; const el = $('batcard'); if (el) el.classList.remove('show'); };
 
 // Replays (3D view): every frame of the ball is recorded (everyone's pose, the ball, the stumps), and after a wicket,
 // a six or a dropped catch it plays again, slowed down around the key moment, from TV angles. Tap or press a key to skip.
@@ -6041,7 +6388,7 @@ function tick(dt) {
   else if (ACTIVE.has(phase)) {
     const n = ff ? 4 : 1; for (let s = 0; s < n && ACTIVE.has(phase); s++) update(dt);
     if (R3D && R3D.active()) recFrame(dt * n);
-    if (phase === 'result' && rec.kind && !rec.shown && phaseT > Math.max(celebrate && celebrate.out ? 2.0 : 1.0, sigEnd(celebrate) + (celebrate && celebrate.out ? 1.3 : 0.2))) { rec.shown = true; if (canReplay()) startReplay(); }
+    if (phase === 'result' && rec.kind && !rec.shown && !(celebrate && celebrate.win) && phaseT > Math.max(celebrate && celebrate.out ? 2.0 : 1.0, sigEnd(celebrate) + (celebrate && celebrate.out ? 1.3 : 0.2), celEnd(celebrate) - 0.2)) { rec.shown = true; if (canReplay()) startReplay(); }
   }
   else { clock += dt; update0(dt); }
 }

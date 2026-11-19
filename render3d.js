@@ -1479,9 +1479,9 @@ window.Cricket3D = function (G) {
       this.headG.position.set(hp[0], hp[1], hp[2]); this.headG.rotation.set(-0.08, yaw, 0, 'YXZ');
       this.gear.position.set(0, -0.105, 0.0);   // without the model, the head joint is the middle of the head
       for (const m of [this.skull, this.jaw, this.nose, this.earL, this.earR]) m.material = skin;
-      const helm = (bat || keeper) && !pr.bare && !BARE_ALL;
+      const helm = (bat || keeper) && !pr.bare && !pr.helmOff && !BARE_ALL;   // (helmOff: a batter's helmet off to celebrate his hundred)
       if (M3.keepHelmet) this.helmet.children[0].material = keeper ? M3.keepHelmet : M3.helmet;
-      this.helmet.visible = helm; this.cap.visible = !helm && !ump && !pr.bare && !BARE_ALL; this.hat.visible = ump; this.hair.visible = !helm && !ump;
+      this.helmet.visible = helm; this.cap.visible = !helm && !ump && !pr.bare && !pr.helmOff && !BARE_ALL; this.hat.visible = ump; this.hair.visible = !helm && !ump;
       this.shades.visible = !helm && hs % 3 === 0;
       // the bat: handle, a flat blade and the ridge down its back
       if (this.model) this.fit(pr, fwd, side, hs, shirt, pants);
