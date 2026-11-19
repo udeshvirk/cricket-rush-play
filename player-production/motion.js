@@ -305,47 +305,36 @@
   function lcutKeys({start,target,stance,impact=.15}) {
     const bd=unit([-.35,-.92,.17]),h=add(target,scale(bd,-.48));
     const shift=clamp(target[0],-.35,.25),low=clamp((.65-target[1])/.4,0,1);
-    const contact={...start,fr:[.70+shift,0,1.0],bk:[.51+shift,0,.31],pel:[.56+shift,.87-.11*low,.73],
-      hy:-94,sy:-100,lean:15+12*low,side:3,h,bd,kpL:[-1,0,.3],kpR:[-1,0,0],rearFootPitch:0,batRoll:.35};
+    // November 2026 (owner: the late cut still wasn't right): the back foot now goes back and across toward off stump and
+    // takes the weight, he bends over the ball with his head down, and after contact the bat carries on down and back toward
+    // third man while the hips sink back a little. It used to freeze at contact, upright, the bat hidden behind him.
+    const contact={...start,fr:[.66+shift*.6,0,1.02],bk:[.42+shift*.8,0,.32],pel:[.5+shift*.7,.84-.11*low,.68],
+      hy:-96,sy:-104,lean:24+12*low,side:5,h,bd,kpL:[-1,0,.3],kpR:[-1,-.1,.1],rearFootPitch:0,batRoll:.35};
     const load={...contact,pel:start.pel.map((v,i)=>v+(contact.pel[i]-v)*.35),
-      hy:start.hy+(contact.hy-start.hy)*.3,sy:start.sy+(contact.sy-start.sy)*.2,
+      hy:start.hy+(contact.hy-start.hy)*.3,sy:start.sy+(contact.sy-start.sy)*.2,lean:start.lean+(contact.lean-start.lean)*.3,
       h:start.h.map((v,i)=>v+(h[i]-v)*.25),bd:slerp(unit(start.bd),unit([-.5,-.6,.45]),.15),batRoll:.08};
-    const slot={...contact,sy:-96,h:add(h,[.015,.07,.01]),bd:unit([-.5,-.6,.45]),batRoll:.25};
+    const slot={...contact,sy:-98,lean:contact.lean-4,h:add(h,[.015,.07,.01]),bd:unit([-.5,-.6,.45]),batRoll:.25};
     const mid=between(load,slot,.5);   // the bat starts down at once and turns evenly (no lift, then snap)
-    const through={...contact,sy:-106,h:add(h,[-.035,-.015,-.05]),bd:unit([-.44,-.88,-.12]),batRoll:.42};
-    const finish={...contact,sy:-112,lean:14+8*low,
-      h:[h[0]-.055,h[1]-.045,h[2]-.10],bd:unit([-.48,-.86,-.16]),batRoll:.4};
-    const settle={...finish,sy:-106,h:add(finish.h,[.01,.025,.02]),batRoll:.25};
+    const through={...contact,pel:add(contact.pel,[-.01,-.01,-.02]),sy:-110,lean:contact.lean+3,
+      h:add(h,[-.04,-.04,-.08]),bd:unit([-.42,-.85,-.32]),batRoll:.45};
+    const finish={...contact,pel:add(contact.pel,[-.025,-.02,-.05]),sy:-118,lean:contact.lean+5,side:7,
+      h:add(h,[-.07,-.07,-.14]),bd:unit([-.5,-.7,-.5]),batRoll:.45};
+    const settle={...finish,sy:-112,lean:contact.lean,h:add(finish.h,[.01,.03,.02]),batRoll:.25};
     return [[0,{...start,batRoll:0}],[impact*.25,load],[impact*.5,mid],[impact*.75,slot],[impact,contact],
-      [impact+.095,through],[impact+.3,finish],[impact+.75,settle],[impact+1.4,{...stance,batRoll:0}]];
+      [impact+.09,through],[impact+.32,finish],[impact+.8,settle],[impact+1.4,{...stance,batRoll:0}]];
   }
   // Leg glance: meet the ball beside the pad and absorb its pace. Keep the
   // shoulders quiet and the finish below the hands of a full wristy flick.
   function glanceKeys({start,target,stance,aim=130,loft=false,impact=.15}) {
     // Owner trial: the pull's body turn and wrapped finish, adapted to lower balls and a fine-leg release.
     // Selection, fine-leg scoring direction and contact timing remain those of the lofted glance.
-    if(loft)return pullKeys({start,target,stance,loft:true,impact,fineLeg:true});
-    const low=clamp((.6-target[1])/.3,0,1);
-    const bd=unit([.08,-.98,.12]),h=add(target,scale(bd,-clamp((1.32-target[1])/.98,.2,.48+.1*low)));
-    const fr=[clamp(target[0]+.43,.12,.76),0,1.12];
-    const pel=[.63+(fr[0]-.63)*.4,.86-.065*low,.86];
-    const contact={...start,fr,pel,hy:-75,sy:-78,lean:18+8*low,side:6,h,bd,
-      kpL:[-.45,0,1],rearFootPitch:0,batRoll:-.12};
-    const load={...contact,pel:start.pel.map((v,i)=>v+(pel[i]-v)*.4),
-      hy:start.hy+(contact.hy-start.hy)*.3,sy:start.sy+(contact.sy-start.sy)*.2,
-      h:start.h.map((v,i)=>v+(h[i]-v)*.3),bd:slerp(unit(start.bd),unit([-.06,-.93,-.36]),.15),batRoll:0};
-    const slot={...contact,sy:-80,h:add(h,[-.015,.055,-.045]),bd:unit([-.06,-.93,-.36]),batRoll:-.04};
-    const mid=between(load,slot,.5);   // the bat starts down at once and turns evenly (no lift, then snap)
-    const through={...contact,sy:-73,lean:17,h:add(h,[.025,-.015,-.025]),bd:unit([.27,-.95,-.06]),batRoll:-.25};
-    const finish={...contact,pel:add(pel,[.01,.01,0]),hy:-71,sy:-66,lean:15,side:4,
-      h:add(h,[.07,.025,-.055]),bd:unit([.36,-.93,.06]),batRoll:-.32};
-    const settle={...finish,h:add(finish.h,[0,-.025,.015]),batRoll:-.2};
-    return [[0,{...start,batRoll:0}],[impact*.25,load],[impact*.5,mid],[impact*.75,slot],[impact,contact],
-      [impact+.075,through],[impact+.24,finish],[impact+.8,settle],[impact+1.45,{...stance,batRoll:0}]];
+    // Along the ground too (owner, November 2026): the same swivel, with the pull's lower finish for a ball kept down.
+    return pullKeys({start,target,stance,loft,impact,fineLeg:true});
   }
   // Flick: plant toward the line, bring a straight blade through the ball,
   // then release the wrists into a leg-side extension before wrapping up.
   function flickKeys({start,target,stance,aim=45,loft=false,impact=.15}) {
+    if(!loft)return slogKeys({start,target,stance,aim,impact,ground:true});   // along the ground: the slog's swing, kept down (see slogKeys)
     const shift=clamp(target[0],-.3,.3),low=clamp((.6-target[1])/.4,0,1);
     const fine=loft?clamp((aim-100)/30,0,1):0;
     // a shorter step toward the line onto a bent front knee, head over it, back heel up (November 2026: it was a wide
@@ -373,12 +362,15 @@
       h:add(h,[.14+.06*fine,.055+.045*fine,.14+.05*fine]),
       bd:slerp(unit([.62,-.66,.43]),unit([.65,-.24,.72]),fine),batRoll:.12,rearFootPitch:.1};
     const square=clamp((aim-45)/80,0,1);
+    // November 2026 (owner: the flick along the ground "is not good", make it swing like the lofted one but grounded): both
+    // now share the lofted swing up into a high finish; along the ground the wrists roll the face over more and the finish sits
+    // a little lower and more over the front knee. It used to stop with the hands at chest height and the bat flat.
     const extension={...contact,hy:-43,sy:-16,lean:16,side:3,
-      h:[.55+shift*.4+.07*fine,loft?1.36+.06*fine:1.15,1.4-square*.08+.07*fine],
+      h:[.55+shift*.4+.07*fine,loft?1.36+.06*fine:1.31,1.4-square*.08+.07*fine],
       // Give the blade room outside the arms as the wrists release into the high finish.
-      bd:unit([.87,loft?.25+.15*fine:-.3,.46-square*.2]),batRoll:loft?.16:.35,rearFootPitch:.2};
-    const finish={...extension,pel:[.53+shift*.4,loft?.86:.8,1.04],hy:-38,sy:-12,lean:loft?11:16,side:loft?1:4,
-      h:[.66+shift*.35,loft?1.67:1.36,1.15],bd:unit([.75,loft?.62:.35,-.48]),batRoll:loft?.22:.55};
+      bd:unit([.87,loft?.25+.15*fine:.2,.46-square*.2]),batRoll:loft?.16:.24,rearFootPitch:.2};
+    const finish={...extension,pel:[.53+shift*.4,loft?.86:.84,1.04],hy:-38,sy:-12,lean:loft?11:14,side:loft?1:2,
+      h:[.66+shift*.35,loft?1.67:1.57,1.15],bd:unit([.75,loft?.62:.5,-.48]),batRoll:loft?.22:.45};
     const settle={...finish,sy:-18,h:add(finish.h,[0,-.055,0]),batRoll:.25};
     return [[0,{...start,batRoll:0}],[impact*.25,load],[impact*.5,mid],[impact*.75,slot],[impact,contact],
       [impact+.075,through],[impact+.2,extension],[impact+.42,finish],[impact+.9,settle],
@@ -440,7 +432,9 @@
   const fdefKeys=args=>defenceKeys(args),bdefKeys=args=>defenceKeys(args,true),pushKeys=args=>defenceKeys(args,false,true);
   // Slog loads into a wide base and drives the hips through the ball before
   // the arms wrap high. It must not look like a wristy flick or a short-ball pull.
-  function slogKeys({start,target,stance,aim=70,impact=.15}) {
+  // ground=true: the same swing kept down (owner, November 2026: the leg-side shots along the ground should move like the lofted
+  // ones, which had been fixed one by one): the wrists roll the face over through the ball and the finish stays lower.
+  function slogKeys({start,target,stance,aim=70,impact=.15,ground=false}) {
     const shift=clamp(target[0],-.3,.3),low=clamp((.7-target[1])/.4,0,1);
     const bd=unit([-.76+.25*low,-.58-.24*low,.24]),h=add(target,scale(bd,-.58));
     // Stand over a compact base. Unreachable low/off-side deliveries now miss in swing(), rather than
@@ -454,11 +448,11 @@
     const through={...contact,pel:add(contact.pel,[.025,.025,.025]),hy:-25,sy:-20,lean:12,
       h:add(h,[.15,.10,.14]),bd:unit([.5,-.45,.74]),rearFootPitch:.22,batRoll:.10};
     const fine=clamp((aim-45)/70,0,1);
-    const extension={...through,hy:-5,sy:12,lean:12,side:0,
-      h:[.79+shift*.35,1.43,1.37-.1*fine],bd:unit([.82,.28,.5]),batRoll:.18};
-    const finish={...extension,pel:[.69+shift*.4,.90,.96],hy:5,sy:38,lean:7,
-      h:[.91+shift*.25,1.79,1.05],bd:unit([.53,.72,-.45]),rearFootPitch:.3,batRoll:.28};
-    const settle={...finish,sy:30,h:add(finish.h,[-.025,-.09,0]),rearFootPitch:.18,batRoll:.15};
+    const extension={...through,hy:-5,sy:12,lean:ground?14:12,side:0,
+      h:[.79+shift*.35,ground?1.3:1.43,1.37-.1*fine],bd:unit([.82,ground?.14:.28,.5]),batRoll:ground?.4:.18};
+    const finish={...extension,pel:[.69+shift*.4,ground?.87:.90,.96],hy:5,sy:38,lean:ground?11:7,
+      h:[.91+shift*.25,ground?1.58:1.79,1.05],bd:unit([.53,ground?.55:.72,-.45]),rearFootPitch:.3,batRoll:ground?.5:.28};
+    const settle={...finish,sy:30,h:add(finish.h,[-.025,-.09,0]),rearFootPitch:.18,batRoll:ground?.3:.15};
     return [[0,{...start,batRoll:0}],[impact*.3,load],[impact*.7,slot],[impact,contact],
       [impact+.08,through],[impact+.23,extension],[impact+.46,finish],[impact+.95,settle],[impact+1.7,{...stance,batRoll:0}]];
   }

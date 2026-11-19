@@ -228,6 +228,28 @@
   .condnote { margin-top:6px; font-size:13px; color:var(--muted); }
   .condline { font-size:14px; color:var(--chalk); } .condline i { color:var(--muted); font-style:normal; } .condline i:not(:empty)::before { content:'· '; }
   .setsec { display:flex; flex-direction:column; gap:12px; }
+  /* Settings → My player */
+  .myp-input { width:100%; box-sizing:border-box; padding:11px 12px; background:#0b1b2a; color:var(--chalk); border:1px solid rgba(173,200,213,.3);
+               border-radius:8px; font:600 16px var(--ui); -webkit-user-select:text; user-select:text; }
+  .myp-num { width:96px; }
+  .myp-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .myp-grid label, #myplayer label { display:flex; flex-direction:column; gap:6px; min-width:0; }
+  #mypSkill { width:100%; accent-color:var(--amber); }
+  .myp-faces { display:grid; grid-template-columns:repeat(auto-fill, minmax(58px, 1fr)); gap:8px; }
+  .myp-face { aspect-ratio:1; border-radius:10px; border:2px solid rgba(243,239,228,.18); background:#0b1b2a url(icons/player-faces.jpg) no-repeat;
+              background-size:1700% 100%; cursor:pointer; padding:0; }
+  .myp-list { display:flex; flex-direction:column; gap:10px; }
+  .myp-row { display:grid; grid-template-columns:56px 1fr auto; gap:12px; align-items:center; padding:10px; border-radius:12px;
+             background:#07132166; border:1px solid #adc8d51a; }
+  .myp-row .myp-face { display:block; width:56px; cursor:default; }
+  .myp-row .nm { font:800 18px var(--display); letter-spacing:.02em; }
+  .myp-row .d { font-size:13px; color:var(--muted); margin-top:2px; }
+  .myp-row .acts { display:flex; gap:6px; }
+  .myp-row .btn { padding:8px 12px; font-size:12px; }
+  .myp-empty { color:var(--muted); font-size:14px; padding:6px 0; }
+  @media (max-width:520px) { .myp-row { grid-template-columns:48px 1fr; } .myp-row .myp-face { width:48px; } .myp-row .acts { grid-column:1 / -1; } }
+  .myp-face.on { border-color:var(--amber); box-shadow:0 0 0 2px rgba(255,176,46,.35); }
+  @media (max-width:520px) { .myp-grid { grid-template-columns:1fr; } }
   .sechead { font:900 18px var(--display); letter-spacing:.06em; color:var(--amber); text-transform:uppercase; border-bottom:1px solid var(--line); padding-bottom:4px; }
   .toggles .btn { padding:9px 14px; font-size:15px; }
   .setup-grid:has(#opponentField[hidden]) > label:first-child { grid-column: 1 / -1; }
@@ -728,7 +750,7 @@
         <button class="level" type="button" id="goChase"><span class="n">Quick chase</span><span class="d">Chase a target</span>
           <span class="s">Gully · Club · Super Over</span><span class="best"></span></button>
       </div>
-      <div class="row"><button class="btn ghost" id="goStats" type="button">Stats &amp; records</button><button class="btn ghost" id="goSettings" type="button">Settings</button><button class="btn ghost" id="fsMenu" type="button" hidden>Play full screen</button></div>
+      <div class="row"><button class="btn ghost" id="goStats" type="button">Stats &amp; records</button><button class="btn ghost" id="goMyp" type="button">My players</button><button class="btn ghost" id="goSettings" type="button">Settings</button><button class="btn ghost" id="fsMenu" type="button" hidden>Play full screen</button></div>
       <div class="menu-footnote">Bat. Bowl. Chase glory.</div>
       </div>
     </div>
@@ -799,6 +821,11 @@
         <div class="row"><button class="btn ghost" id="namesLoad" type="button">Load names file</button><button class="btn ghost" id="namesReset" type="button" hidden>Use the game's names</button></div>
         <input type="file" id="namesFile" accept=".json,application/json" hidden>
       </div>
+      <div class="setsec" id="mypSec">
+        <div class="sechead">My players</div>
+        <p class="how" id="mypStatus">Make your own players and put them in any team.</p>
+        <div class="row"><button class="btn ghost" id="mypOpen" type="button">My players</button></div>
+      </div>
       <div class="row"><a class="btn ghost" href="privacy.html" target="_blank" rel="noopener">Privacy</a><a class="btn ghost" href="credits.html" target="_blank" rel="noopener">Credits &amp; licences</a></div>
       <details><summary>How to play · controls</summary>
       <p class="how"><b>Batting:</b> choose <b>Defend</b>, <b>Shot</b> or <b>Loft</b> before the ball arrives. As it reaches the bat,
@@ -815,6 +842,53 @@
       </details>
       <div class="row"><button class="btn" id="settingsBack" type="button">Done</button></div>
     </div>
+  </div>
+
+  <div id="myplayers" class="screen" hidden>
+    <div class="card">
+      <div class="title sm">MY <span>PLAYERS</span></div>
+      <p class="how">Make your own players and put each one in any team, in place of one of its players. Up to 11, kept on this device.</p>
+      <div class="myp-list" id="mypList"></div>
+      <div class="row"><button class="btn" id="mypAdd" type="button">Add a player</button><button class="btn ghost" id="mypListBack" type="button">Back</button></div>
+    </div>
+  </div>
+  <div id="myplayer" class="screen" hidden>
+    <div class="card">
+      <div class="title sm">MY <span>PLAYER</span></div>
+      <div class="setsec">
+        <label class="sechead" for="mypName">Name</label>
+        <input id="mypName" class="myp-input" maxlength="18" autocomplete="off" spellcheck="false" placeholder="Your player's name">
+      </div>
+      <div class="setsec">
+        <div class="sechead">Team</div>
+        <div class="myp-grid">
+          <label><span class="lbl2">Plays for</span><select id="mypTeam" class="myp-input"></select></label>
+          <label><span class="lbl2">In place of</span><select id="mypSlot" class="myp-input"></select></label>
+        </div>
+      </div>
+      <div class="setsec">
+        <div class="sechead">Game</div>
+        <div><div class="lbl2">Bats</div><div class="opts" id="mypHand"></div></div>
+        <div><div class="lbl2">Bowls</div><div class="opts" id="mypType"></div></div>
+        <div><div class="lbl2" id="mypSkillLbl">Batting and bowling</div>
+          <input type="range" id="mypSkill" min="10" max="90" step="1" aria-describedby="mypSkillTxt">
+          <p class="how" id="mypSkillTxt"></p></div>
+      </div>
+      <div class="setsec">
+        <div class="sechead">Look</div>
+        <div class="myp-faces" id="mypFaces" role="radiogroup" aria-label="Face"></div>
+        <div><div class="lbl2">Skin tone</div><div class="opts" id="mypTone"></div></div>
+        <label><span class="lbl2">Shirt number</span><input id="mypNum" class="myp-input myp-num" type="number" min="1" max="99" inputmode="numeric"></label>
+      </div>
+      <p class="how" id="mypMsg" aria-live="polite"></p>
+      <div class="row"><button class="btn" id="mypSave" type="button">Save player</button><button class="btn ghost" id="mypRemove" type="button" hidden>Remove player</button><button class="btn ghost" id="mypBack" type="button">Back</button></div>
+    </div>
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <filter id="tone0"><feColorMatrix type="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 1 0"/></filter>
+      <filter id="tone1"><feColorMatrix type="matrix" values=".85 0 0 0 0 0 .82 0 0 0 0 0 .78 0 0 0 0 0 1 0"/></filter>
+      <filter id="tone2"><feColorMatrix type="matrix" values=".68 0 0 0 0 0 .62 0 0 0 0 0 .56 0 0 0 0 0 1 0"/></filter>
+      <filter id="tone3"><feColorMatrix type="matrix" values=".52 0 0 0 0 0 .45 0 0 0 0 0 .38 0 0 0 0 0 1 0"/></filter>
+    </svg>
   </div>
 
   <div id="tournament" class="screen" hidden><div class="card">
@@ -1065,6 +1139,37 @@ for (const t of TEAMS) {
   if (tr) { if (tr.name) t.name = tr.name; if (tr.short) t.short = tr.short; }
   t.players = t.players.map(([key, bat, type, bowl]) => ({ key, name: (ROSTER && ROSTER.players[key]) || key, bat, type: type || '', bowl: bowl || 0, left: LEFT_HANDED.has(key) || /[?&]lefty=1/.test(location.search) }));
 }   // ?lefty=1: everyone bats left-handed (for testing)
+// Your own player (Settings → My player), kept on this device only (MYP_KEY). He takes one player's place in one squad, in the same
+// batting position (and the gloves, if that was the keeper). Ratings come from one budget (MYP_BUDGET), so the better he bats the
+// worse he bowls; a player who doesn't bowl just bats. His key starts 'myp:' so his batting style is his own and no names file
+// renames him. The 3D view takes his face, skin tone and shirt number from him (face, num). Change him and the game reloads.
+const MYP_KEY = 'cricket-rush-myplayer', MYP_BUDGET = 150, MYP_MAX = 90, MYP_MIN = 10, MYP_FACES = 17;
+const mypClamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));   // (clamp is defined further down)
+const MYP_TONES = [{ name: 'Light', v: 1 }, { name: 'Medium', v: 0.85 }, { name: 'Brown', v: 0.68 }, { name: 'Dark', v: 0.52 }];
+function mypRatings(m) {
+  const bat = Math.round(mypClamp(+m.bat || 60, MYP_MIN, MYP_MAX));
+  return { bat, bowl: m.type ? Math.round(mypClamp(MYP_BUDGET - bat, MYP_MIN, MYP_MAX)) : 0 };
+}
+function mypClean(m) {
+  if (!m || typeof m !== 'object') return null;
+  const name = String(m.name || '').replace(/\s+/g, ' ').trim().slice(0, 18), t = TEAMS.find(t => t.id === m.team);
+  if (!name || !t || !(m.slot >= 0 && m.slot < t.players.length)) return null;
+  return { name, team: t.id, slot: m.slot | 0, left: !!m.left, type: ['F', 'M', 'O', 'L'].includes(m.type) ? m.type : '',
+           bat: Math.round(mypClamp(+m.bat || 60, MYP_MIN, MYP_MAX)), face: mypClamp(m.face | 0, 0, MYP_FACES - 1),
+           tone: mypClamp(m.tone | 0, 0, MYP_TONES.length - 1), num: mypClamp(m.num | 0, 1, 99) };
+}
+// Several players (up to MYP_LIMIT, each in a different place): the list is kept under the same key (an older save holds one
+// player, not a list). A place already taken, or a player who no longer fits, is left out.
+const MYP_LIMIT = 11;
+let MYPS = [];
+try { const raw = JSON.parse(localStorage.getItem(MYP_KEY) || 'null'); for (const x of [].concat(raw || [])) { const m = mypClean(x);
+  if (m && MYPS.length < MYP_LIMIT && !MYPS.some(o => o.team === m.team && o.slot === m.slot)) MYPS.push(m); } } catch (e) {}
+for (const m of MYPS) {
+  const t = TEAMS.find(t => t.id === m.team), r = mypRatings(m);
+  (t.mypOrig || (t.mypOrig = {}))[m.slot] = t.players[m.slot]; m.replaced = t.players[m.slot].name;
+  t.players[m.slot] = { key: 'myp:' + m.name, name: m.name, ...r, type: m.type, left: m.left || /[?&]lefty=1/.test(location.search),
+                        mine: true, face: [m.face, MYP_TONES[m.tone].v], num: m.num };
+}
 // Quick chase: you against England's quicks
 const YOU = { id: 'you', name: 'You', short: 'YOU', col: '#2ed3c6', helmet: '#18245a', wk: 0,
               players: Array.from({ length: 11 }, () => ({ name: 'You', bat: 70, type: '', bowl: 0 })) };
@@ -2223,6 +2328,95 @@ $('namesFile').addEventListener('change',async e=>{
 });
 $('namesReset').addEventListener('click',()=>ask('Go back to the game\'s names?','Your records and saved games keep up. The game reloads.','Use game names',()=>switchNames(null)));
 showNames();
+// My players (menu, or Settings → My players): a list (MYPS) and one form for adding or editing a player (mypEdit: his place in the
+// list, -1 for a new one). The form works on a copy (mypForm); Save and Remove store the whole list (MYP_KEY) and reload, as the
+// names file does, so every squad, rating and saved game picks it up. A match in progress carries on from the start of its over.
+const MYP_BOWL = [{ v: '', html: "Doesn't bowl" }, { v: 'F', html: 'Fast' }, { v: 'M', html: 'Medium' }, { v: 'O', html: 'Off spin' }, { v: 'L', html: 'Leg spin' }];
+let mypForm = null, mypEdit = -1, mypFrom = 'menu';
+const mypOrig = (t, k) => (t.mypOrig && t.mypOrig[k]) || t.players[k];   // the side's own player in that place
+const mypTakenBy = (team, slot) => MYPS.findIndex((m, i) => i !== mypEdit && m.team === team && m.slot === slot);
+const mypDesc = m => { const t = TEAMS.find(t => t.id === m.team), r = mypRatings(m);
+  return t.name + ' · in place of ' + m.replaced + ' · bat ' + r.bat + (m.type ? ' · ' + BOWL_TYPES[m.type].name.toLowerCase() + ' ' + r.bowl : ''); };
+const mypThumb = m => '<span class="myp-face" aria-hidden="true" style="background-position:' + (m.face * 100 / (MYP_FACES - 1)) + '% 0;filter:url(#tone' + m.tone + ')"></span>';
+function showMyp() {
+  $('mypStatus').textContent = MYPS.length ? (MYPS.length === 1 ? MYPS[0].name + ' plays for ' + TEAMS.find(t => t.id === MYPS[0].team).name + '.' : MYPS.length + ' of your players are in teams.') + ' Only on this device.'
+    : 'Make your own players and put them in any team.';
+}
+function renderMypList() {
+  $('mypList').innerHTML = MYPS.length ? MYPS.map((m, i) => '<div class="myp-row">' + mypThumb(m) + '<div><div class="nm">' + esc(m.name) + ' <span class="d">#' + m.num + '</span></div><div class="d">' + esc(mypDesc(m)) +
+    '</div></div><div class="acts"><button class="btn ghost" type="button" data-edit="' + i + '">Edit</button><button class="btn ghost" type="button" data-remove="' + i + '">Remove</button></div></div>').join('')
+    : '<div class="myp-empty">No players yet. Add one and choose the team he plays for.</div>';
+  $('mypAdd').disabled = MYPS.length >= MYP_LIMIT;
+  $('mypAdd').textContent = MYPS.length >= MYP_LIMIT ? 'All 11 places used' : 'Add a player';
+}
+function openMypList(from) { if (from) mypFrom = from; renderMypList(); showScreen('myplayers'); }
+function mypStore(list) {
+  try { localStorage.setItem(MYP_KEY, JSON.stringify(list.map(({ replaced, ...m }) => m))); } catch (e) { return false; }
+  location.reload(); return true;
+}
+function mypRemove(i) {
+  const m = MYPS[i];
+  ask('Remove ' + m.name + '?', m.replaced + ' goes back into ' + TEAMS.find(t => t.id === m.team).name + '. ' + m.name + '\'s records stay. The game reloads.', 'Remove', () => mypStore(MYPS.filter((_, k) => k !== i)));
+}
+function renderMyp() {
+  const f = mypForm, nations = TEAMS.length - (window.CricketFranchises || []).length;
+  const opt = t => '<option value="' + t.id + '">' + esc(t.name) + '</option>';
+  $('mypTeam').innerHTML = '<optgroup label="Nations">' + TEAMS.slice(0, nations).map(opt).join('') + '</optgroup><optgroup label="Clubs">' + TEAMS.slice(nations).map(opt).join('') + '</optgroup>';
+  $('mypTeam').value = f.team;
+  const t = TEAMS.find(t => t.id === f.team);
+  $('mypSlot').innerHTML = t.players.map((_, k) => { const p = mypOrig(t, k), mine = mypTakenBy(t.id, k);
+    return '<option value="' + k + '"' + (mine >= 0 ? ' disabled' : '') + '>' + (k + 1) + '. ' + esc(p.name) + (mine >= 0 ? ' · your ' + esc(MYPS[mine].name) + ' is here' : ' · bat ' + p.bat +
+      (p.type ? ' · ' + BOWL_TYPES[p.type].name.toLowerCase() + ' ' + p.bowl : '') + (k === t.wk ? ' · keeper' : '')) + '</option>'; }).join('');
+  $('mypSlot').value = f.slot;
+  optButtons('mypHand', [{ v: false, html: 'Right-handed' }, { v: true, html: 'Left-handed' }], it => it.v === f.left, it => { f.left = it.v; renderMyp(); });
+  optButtons('mypType', MYP_BOWL, it => it.v === f.type, it => { f.type = it.v; renderMyp(); });
+  $('mypSkill').value = mypRatings(f).bat;
+  $('mypSkillLbl').textContent = f.type ? 'Batting and bowling' : 'Batting';
+  mypSkillText();
+  $('mypFaces').innerHTML = Array.from({ length: MYP_FACES }, (_, i) => '<button type="button" class="myp-face' + (i === f.face ? ' on' : '') + '" data-i="' + i +
+    '" role="radio" aria-checked="' + (i === f.face) + '" aria-label="Face ' + (i + 1) + '" style="background-position:' + (i * 100 / (MYP_FACES - 1)) + '% 0;filter:url(#tone' + f.tone + ')"></button>').join('');
+  optButtons('mypTone', MYP_TONES.map(x => ({ html: x.name })), (it, k) => k === f.tone, (it, k) => { f.tone = k; renderMyp(); });
+  $('mypNum').value = f.num;
+  $('mypRemove').hidden = mypEdit < 0;
+}
+function mypSkillText() { const r = mypRatings(mypForm);
+  $('mypSkillTxt').textContent = mypForm.type ? 'Batting ' + r.bat + ' · bowling ' + r.bowl + '. Slide right to bat better and bowl worse.' : 'Batting ' + r.bat + '. He doesn\'t bowl.'; }
+function mypFreeSlot(team, prefer) { const t = TEAMS.find(t => t.id === team);
+  return [prefer, ...t.players.keys()].find(k => k < t.players.length && mypTakenBy(team, k) < 0) ?? -1; }
+function openMyp(i) {
+  mypEdit = i;
+  if (i >= 0) mypForm = { ...MYPS[i] };
+  else { const team = (TEAMS[setup.a] || TEAMS[0]).id;
+    mypForm = { name: '', team, slot: Math.max(0, mypFreeSlot(team, 5)), left: false, type: '', bat: 75, face: 0, tone: 0, num: 7 }; }
+  $('mypName').value = mypForm.name; $('mypMsg').textContent = '';
+  renderMyp(); showScreen('myplayer');
+}
+$('mypOpen').addEventListener('click', () => openMypList('settings'));
+$('goMyp').addEventListener('click', () => openMypList('menu'));
+$('mypListBack').addEventListener('click', () => { if (mypFrom === 'settings') { showMyp(); showScreen('settings'); } else showScreen('menu'); });
+$('mypAdd').addEventListener('click', () => openMyp(-1));
+$('mypList').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.edit) openMyp(+b.dataset.edit); else if (b.dataset.remove) mypRemove(+b.dataset.remove); });
+$('mypBack').addEventListener('click', () => openMypList());
+$('mypName').addEventListener('input', () => { mypForm.name = $('mypName').value; });
+$('mypTeam').addEventListener('change', () => { mypForm.team = $('mypTeam').value; mypForm.slot = mypFreeSlot(mypForm.team, 5); renderMyp(); });
+$('mypSlot').addEventListener('change', () => { mypForm.slot = +$('mypSlot').value; });
+$('mypSkill').addEventListener('input', () => { mypForm.bat = +$('mypSkill').value; mypSkillText(); });
+$('mypFaces').addEventListener('click', e => { const b = e.target.closest('.myp-face'); if (b) { mypForm.face = +b.dataset.i; renderMyp(); } });
+$('mypNum').addEventListener('input', () => { mypForm.num = +$('mypNum').value; });
+$('mypSave').addEventListener('click', () => {
+  const m = mypClean({ ...mypForm, name: $('mypName').value, num: +$('mypNum').value || 0 });
+  if (!m) { $('mypMsg').textContent = mypForm.slot < 0 ? 'Your players already fill that team. Pick another team.' : 'Give him a name first.'; $('mypName').focus(); return; }
+  if (!(+$('mypNum').value >= 1 && +$('mypNum').value <= 99)) { $('mypMsg').textContent = 'Pick a shirt number from 1 to 99.'; $('mypNum').focus(); return; }
+  if (mypTakenBy(m.team, m.slot) >= 0) { $('mypMsg').textContent = 'One of your players is already in that place. Pick another.'; return; }
+  const t = TEAMS.find(t => t.id === m.team), out = mypOrig(t, m.slot).name;
+  const list = MYPS.slice(); if (mypEdit >= 0) list[mypEdit] = m; else list.push(m);
+  ask('Save ' + m.name + '?', m.name + ' plays for ' + t.name + ' in place of ' + out + '. The game reloads (a match in progress carries on from the start of this over).', 'Save', () => {
+    if (!mypStore(list)) $('mypMsg').textContent = 'Could not save on this device.';
+  });
+});
+$('mypRemove').addEventListener('click', () => mypRemove(mypEdit));
+showMyp();
 window.speechSynthesis?.addEventListener('voiceschanged',showCommentaryVoices);
 showCommentaryVoices();
 document.addEventListener('pointerdown',()=>commentary.unlock(),{capture:true,once:true});
@@ -4129,7 +4323,7 @@ function renderTabs(tabsId, cardId, sel) {
 }
 
 // ----------------------------------------------------------------------- screens
-const SCREENS = ['menu', 'setup', 'chaseMenu', 'toss', 'break', 'pause', 'end', 'stats', 'tournament', 'settings'];
+const SCREENS = ['menu', 'setup', 'chaseMenu', 'toss', 'break', 'pause', 'end', 'stats', 'tournament', 'settings', 'myplayers', 'myplayer'];
 function showScreen(id) { for (const s of SCREENS) $(s).hidden = s !== id; if (id === 'menu') renderQuickLine(); }
 function toMenu() {
   M = null; inn = null; ball = null; phase = 'menu'; paused = false; setFF(false);
@@ -5973,6 +6167,7 @@ canvas.addEventListener('pointercancel', canvasUp);
 
 const DIR_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'];
 window.addEventListener('keydown', e => {
+  if (e.target && e.target.closest && e.target.closest('input, select, textarea')) return;   // typing (My player's name)
   if (e.code === 'Escape' || e.code === 'KeyP') { if (paused) resume(); else openPause(); return; }
   if (!M || paused) return;
   if (phase === 'pick') { if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); pickGo(); } return; }

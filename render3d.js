@@ -614,11 +614,11 @@ window.Cricket3D = function (G) {
     const t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; t.anisotropy = 4; t.flipY = false;
     return { c, t, who: '' };
   }
-  function drawBack(b, name, ink, key) {   // key: the player's own name, for a number that stays with him
-    if (b.who === name + ink) return; b.who = name + ink;
+  function drawBack(b, name, ink, key, own) {   // key: the player's own name, for a number that stays with him; own: a number he picked
+    if (b.who === name + ink + (own || '')) return; b.who = name + ink + (own || '');
     const g = b.c.getContext('2d', SOFT2D); g.clearRect(0, 0, 256, 256);
     if (!name) { b.t.needsUpdate = true; return; }   // a plain shirt (the umpires)
-    const sur = (name.split(' ').pop() || '').toUpperCase().slice(0, 10), num = 1 + (hash(key || name) % 98);
+    const sur = (name.split(' ').pop() || '').toUpperCase().slice(0, 10), num = own || 1 + (hash(key || name) % 98);
     g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = ink;
     g.font = '800 30px "Rush Display", Impact, sans-serif'; g.fillText(sur, 128, 62);
     g.font = '900 118px "Rush Display", Impact, sans-serif'; g.fillText(String(num), 128, 150);
@@ -696,6 +696,7 @@ window.Cricket3D = function (G) {
   // the textured player (vendor/player-rb.js): photo-textured cloth and skin. The cloth is neutral in the texture and takes the
   // team's colours here (mask: red = shirt, green = trousers, blue = bare skin); the skin takes each player's tone
   const RB_KEY = { body: 'rb-body-2', head: 'rb-head-3' };
+  const BARE_ALL = /[?&]bare=1/.test(location.search);   // testing: no helmets or caps (the face pictures for Settings → My player)
   // faces: [face, shade] choices per team (the shade darkens a lighter face, for more variety); any team not listed uses them all
   // faces 10-16 were added in November 2026 (dark-haired tan 12, bearded 14, goatee 16, blond 15, curly 10), 17-19 are older
   // men (grey hair, grey beard, balding) for the umpires. A team's players take the pool in turn (see Person.fit), so with
@@ -1387,7 +1388,8 @@ window.Cricket3D = function (G) {
         const team = G.inn && !pr.umpire ? G.inn[pr.team === 'bat' ? 'bat' : 'bowl'] : null, ub = P.RB_Body.material.userData.u, uh = P.RB_Head.material.userData.u;
         ub.uShirt.value.copy(shirt.color); ub.uPants.value.copy(pants.color); ub.uTrim.value.copy(shirt === M3.batShirt ? M3.batTrim.color : shirt === M3.umpShirt ? M3.umpPants.color : M3.bowlTrim.color);
         const pool = pr.umpire ? UMP : (team && FACE_POOL[team.id]) || MIX, at = team ? team.players.findIndex(p => (p.key || p.name) === pr.pid) : -1;
-        const [fi, shade] = pool[(pr.faceKey ?? (at >= 0 ? at + hash(team.id) : skinIdx)) % pool.length], face = RIG.faces[fi % RIG.faces.length];
+        const own = at >= 0 && team.players[at].face;   // your own player (Settings → My player) picked his face and skin tone
+        const [fi, shade] = own || pool[(pr.faceKey ?? (at >= 0 ? at + hash(team.id) : skinIdx)) % pool.length], face = RIG.faces[fi % RIG.faces.length];
         if (face && face.map && P.RB_Head.material.map !== face.map) { P.RB_Head.material.map = face.map; P.RB_Head.material.needsUpdate = true; }
         // a darker tone from a lighter photo: take away more blue than red, as real darker skin has (an even darkening goes grey)
         uh.uSkin.value.setRGB(shade, Math.pow(shade, 1.22), Math.pow(shade, 1.5));
@@ -1395,7 +1397,7 @@ window.Cricket3D = function (G) {
         uh.uBeard.value.copy(look.beard); uh.uHair.value.copy(look.hair);
         if (face && RIG.bodySkin) ub.uSkin.value.setRGB(face.skin.r / RIG.bodySkin.r, face.skin.g / RIG.bodySkin.g, face.skin.b / RIG.bodySkin.b).multiply(uh.uSkin.value);
         const ink = inkFor(shirt.color);
-        drawBack(this.back, pr.umpire ? '' : at >= 0 ? team.players[at].name : pr.pid || '', ink, pr.pid);   // the name shown (a names file may change it)
+        drawBack(this.back, pr.umpire ? '' : at >= 0 ? team.players[at].name : pr.pid || '', ink, pr.pid, at >= 0 ? team.players[at].num : 0);   // the name shown (a names file may change it)
         const ct = chestTex(team, shirt.color);
         if (P.RB_Chest.material.map !== ct) { P.RB_Chest.material.map = ct; P.RB_Chest.material.needsUpdate = true; }
       }
@@ -1477,9 +1479,9 @@ window.Cricket3D = function (G) {
       this.headG.position.set(hp[0], hp[1], hp[2]); this.headG.rotation.set(-0.08, yaw, 0, 'YXZ');
       this.gear.position.set(0, -0.105, 0.0);   // without the model, the head joint is the middle of the head
       for (const m of [this.skull, this.jaw, this.nose, this.earL, this.earR]) m.material = skin;
-      const helm = (bat || keeper) && !pr.bare;
+      const helm = (bat || keeper) && !pr.bare && !BARE_ALL;
       if (M3.keepHelmet) this.helmet.children[0].material = keeper ? M3.keepHelmet : M3.helmet;
-      this.helmet.visible = helm; this.cap.visible = !helm && !ump && !pr.bare; this.hat.visible = ump; this.hair.visible = !helm && !ump;
+      this.helmet.visible = helm; this.cap.visible = !helm && !ump && !pr.bare && !BARE_ALL; this.hat.visible = ump; this.hair.visible = !helm && !ump;
       this.shades.visible = !helm && hs % 3 === 0;
       // the bat: handle, a flat blade and the ridge down its back
       if (this.model) this.fit(pr, fwd, side, hs, shirt, pants);
