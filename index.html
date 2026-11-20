@@ -125,8 +125,10 @@
 
   #timing { left: 50%; bottom: calc(140px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
             font-size: 18px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0;
-            transition: opacity 0.2s; white-space: nowrap; }
+            transition: opacity 0.2s; white-space: nowrap; text-align: center; }   /* centred over the bar, however short the word */
   #timing.show { opacity: 1; }
+  #game:has(> #banner.bw.show) #timing, #game:has(> #batcard.show) #timing { opacity: 0; }
+  #game:has(> #batcard.show) #banner.bw { opacity: 0; }   /* the card says OUT too: one at a time, they overlapped on iPad and phones */   /* a wicket: OUT and the card take its place */
   /* after a shot: how early or late it was, on a small bar (green = well timed) */
   #timing .tbar { display: block; position: relative; width: 150px; height: 6px; margin: 5px auto 0; border-radius: 3px; background: rgba(243, 239, 228, 0.22); }
   #timing .tbar .ok { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: rgba(46, 211, 198, 0.75); }
@@ -552,6 +554,7 @@
     #tvbar { max-width: calc(100% - 110px); }
     #delivery { top: auto; bottom: calc(118px + env(safe-area-inset-bottom, 0px)); font-size: 13px; padding: 2px 10px; }
     #timing { bottom: auto; top: calc(128px + env(safe-area-inset-top, 0px)); font-size: 16px; }   /* up under the score, clear of the OUT banner and the buttons */
+    #game:has(> #tvcard.show) #timing { opacity: 0; }   /* the new-over card sits in the same place */
     #nextTag { top: calc(166px + env(safe-area-inset-top, 0px)); }
     #tvcard { bottom: auto; top: calc(96px + env(safe-area-inset-top, 0px)); max-width: calc(100% - 122px); }   /* clear of the buttons on the right */
     #tvcard .s { white-space: pre-line; line-height: 1.2; }
@@ -716,7 +719,7 @@
   </div>
   <div id="delivery" class="hud"></div>
   <div id="ffTag" class="hud" hidden>FAST-FORWARD ▸▸</div>
-  <div id="nextTag" class="hud" hidden>NEXT BALL<span class="skip">tap to skip</span></div>
+  <div id="nextTag" class="hud" hidden>NEXT BALL<span class="skip"></span></div>
   <div id="fhBadge" class="hud" hidden>FREE HIT</div>
   <canvas id="fxLayer" class="hud"></canvas>
   <div id="flash" class="hud"></div>
@@ -1046,6 +1049,7 @@
 <script src="player-production/config.js"></script>
 <script src="player-production/locomotion.js"></script>
 <script src="player-production/motion.js"></script>
+<script src="player-production/batting-clips.js"></script>
 <script src="player-production/diagnostics.js"></script>
 <script src="commentary.js"></script>
 <script src="identity-migration.js"></script>
@@ -1913,12 +1917,21 @@ function mixPose(a, b, t) {
 function mixJoints(a, b, t) { const o = {}; for (const k in a) o[k] = lerp3(a[k], b[k] || a[k], t); return o; }
 
 // --- the batter (a right-hander at his guard: facing the off side, front shoulder to the bowler). h = hands, bd = the bat's direction
-const STANCE = { fr: [0.58, 0, 1.1], bk: [0.64, 0, 0.42], pel: [0.64, 0.82, 0.76], hy: -90, sy: -88, lean: 22, side: 0,
-  h: [0.24, 0.72, 0.93], bd: norm([-0.2, -0.3, -0.93]), kpL: [-1, 0, 0.35], kpR: [-1, 0, -0.1],rearFootPitch:0 };
+// The guard as in Cricket 07 (owner, 20 November 2026: "copy that shot and stance"): side-on, the feet close together, folded
+// forward from the hips (legs nearly straight, knees soft: a hinge, not a squat), arms hanging to the hands at the top of the pads, the bat's toe resting by the back foot.
+// (Before: feet 0.68 m apart, 22° lean, hands out at 0.72 m: { fr: [0.58,0,1.1], bk: [0.64,0,0.42], pel: [0.64,0.82,0.76], lean: 22,
+// h: [0.24,0.72,0.93], bd: [-0.2,-0.3,-0.93] }.)
+const STANCE = { fr: [0.6, 0, 0.96], bk: [0.66, 0, 0.56], pel: [0.76, 0.84, 0.76], hy: -90, sy: -86, lean: 31, side: 0,
+  h: [0.46, 0.68, 0.84], bd: norm([-0.05, -0.92, -0.38]), kpL: [-1, 0, 0.35], kpR: [-1, 0, -0.1],rearFootPitch:0,
+  epL: [0.4, -1, 0.2], epR: [0.4, -1, -0.2], headOff: [0, 0, 0] };   // head up, eyes level (it pitched forward with the trunk: the hunch)   // arms hang straight, elbows in (they splayed out)
+// Cricket 07's batter is never still at the guard: he comes up a little, then bends back down into it (owner, 20 November).
+// STAND_UP is the top of that; between balls he goes slowly up and down, and he is down in the guard as the bowler comes in.
+const guardBob = { v: 0, at: 0 };
+const STAND_UP = { ...STANCE, pel: [0.74, 0.92, 0.76], lean: 16, h: [0.56, 0.86, 0.82] };
 // Compact guard: the blade stays in front of the legs until the backlift.
 // The previous raised guard ran the blade through the chest/right sleeve.
-const READY = { ...STANCE, bk: [0.6, 0, 0.4], pel: [0.62, 0.84, 0.74], lean: 19, h: [0.22, 0.86, 0.88], bd: norm([-0.25, -0.42, -0.87]) };
-const PREPARE = {...READY,lean:14,fr:[.42,0,1.18],pel:[.58,.88,.80],h:[.24,1.3,.86],bd:norm([-.3,.8,-.52])};   // a high backlift as the ball comes
+const READY = { ...STANCE, bk: [0.64, 0, 0.52], pel: [0.7, 0.9, 0.75], lean: 22, h: [0.42, 0.85, 0.84], bd: norm([-0.2, -0.6, -0.77]) };   // (Cricket 07: he stays down in the crouch)
+const PREPARE = {...READY,lean:14,fr:[.42,0,1.18],pel:[.6,.87,.80],h:[.26,1.28,.82],bd:norm([-.3,.8,-.52])};   // a high backlift as the ball comes
 const GRIP_TURN = +(new URLSearchParams(location.search).get('gturn') ?? 1.2);   // how far the bat is turned in the hands at the guard (radians)
 const LEAVE = { ...READY, lean: 6, h: [0.6, 1.5, 0.66], bd: norm([0.12, 0.95, -0.28]) };
 const DUCK = { ...LEAVE, pel: [0.66, 0.56, 0.7], lean: 48, h: [0.62, 1.0, 0.62], kpL: [-1, 0.2, 0.3], kpR: [-1, 0.2, 0] };
@@ -1983,7 +1996,7 @@ function bladeClear(j, h, bd) {
 // back and across with the bat going back toward the slips; the bat at the top of the backlift as the ball is released;
 // then, once he sees the length, a stride forward to a full ball or back and across to a short one. The stroke starts
 // from wherever this has got to (swing() keeps it as visualStart).
-const TRIGGER = { ...READY, bk: [0.54, 0, 0.38], fr: [0.55, 0, 1.08], pel: [0.6, 0.83, 0.75], lean: 16, h: [0.34, 1.02, 0.66], bd: norm([-0.3, -0.35, -0.89]) };
+const TRIGGER = { ...READY, bk: [0.58, 0, 0.48], fr: [0.57, 0, 1.0], pel: [0.64, 0.88, 0.74], lean: 20, h: [0.36, 0.95, 0.64], bd: norm([-0.3, -0.35, -0.89]) };
 const TOPLIFT = { ...TRIGGER, h: [0.27, 1.3, 0.8], bd: norm([-0.3, 0.8, -0.52]) };
 // Each batter's own way of standing and picking the bat up, from his name (so it stays the same all match): wider or
 // narrower, crouched or upright, a slightly open or closed stance, a higher or lower backlift taken earlier or later, and his
@@ -1994,8 +2007,8 @@ function batStyle() {
   if (styleCache[name]) return styleCache[name];
   let h = 2166136261; for (const c of name) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
   const r = i => (((h >>> (i * 4)) & 15) / 15) - 0.5;   // eight numbers from -0.5 to 0.5
-  return styleCache[name] = { width: r(0) * 0.18, crouch: r(1) * 0.1, open: r(2) * 20, lift: r(3) * 0.32, liftAt: r(4) * 0.1,
-                              tap: 0.75 + r(5) * 0.35, tapBig: 1 + r(6) * 0.6, lean: r(7) * 10 };
+  return styleCache[name] = { width: r(0) * 0.18, crouch: r(1) * 0.05, open: r(2) * 20, lift: r(3) * 0.32, liftAt: r(4) * 0.1,
+                              tap: 0.75 + r(5) * 0.35, tapBig: 1 + r(6) * 0.6, lean: r(7) * 5 };   // (was ±5° lean, ±5 cm crouch: owner, 20 Nov: too bent)
 }
 function styled(k, st) {
   return { ...k, fr: [k.fr[0], k.fr[1], k.fr[2] + st.width * 0.5], bk: [k.bk[0], k.bk[1], k.bk[2] - st.width * 0.5],
@@ -2016,8 +2029,8 @@ function waitMove(k) {
       const tx = ball.atBat ? clamp(ball.atBat[0] - guard, -0.9, 0.9) : 0;
       const to = back
         ? { ...P, bk: [0.42, 0, 0.3], fr: [0.5, 0, 0.96], pel: [0.5, 0.92, 0.62], lean: 8, h: [0.3, 1.38, 0.74] }
-        : { ...P, fr: [clamp(tx + 0.32, 0.1, 0.72), 0, lerp(1.08, 1.24, front)], pel: [lerp(0.6, 0.55, front), 0.87 - 0.02 * front, lerp(0.78, 0.90, front)],
-            lean: 14 + 2 * front, rearFootPitch: 0.25 * front, kpL: [-0.4, 0, 1] };
+        : { ...P, fr: [clamp(tx + 0.32, 0.1, 0.72), 0, lerp(1.08, 1.24, front)], pel: [lerp(0.6, 0.55, front), 0.86 - 0.02 * front, lerp(0.78, 0.90, front)],
+            lean: 14 + 2 * front, rearFootPitch: 0.25 * front, kpL: [-0.4, 0, 1] };   // (lean was 14: he stood right up before the shot; Cricket 07 stays lower until the stroke)
       // Stay ready until a stroke is chosen. A full spinner must not force every shot into a sweep-like crouch.
       P = mixPose(P, to, w);
       const step = 0.08 * Math.sin(Math.PI * w);   // the moving foot comes off the ground
@@ -2084,6 +2097,52 @@ function missedBallGaze(shoulderYaw, after, shadowWeight=0, baseYaw=0) {
   const target=shoulderYaw+clamp(-125-shoulderYaw,-55,55);
   return facing(baseYaw+clamp(target-baseYaw,-125,125)*turn);
 }
+// Recorded strokes (November 2026, owner: "pick one shot and make it perfect"): the body comes from a real player's shot
+// tracked from video (player-production/batting-clips.js), not from key poses. The clip is placed where he starts the shot
+// (back foot on his), blends in over CLIP.blendIn, and at contact the hands (and a share of the body) shift so the middle of the
+// bat meets the ball wherever it is (CLIP.reach), fading after. The bat's angle still comes from the stroke's keys (k.bd).
+// ?clip=0 turns it off to compare.
+const CLIP = { blendIn: 0.1, reachIn: 0.12, reachOut: 0.3, bodyShare: 0.4 };
+const clipsOn = () => window.BATTING_CLIPS && new URLSearchParams(location.search).get('clip') !== '0';
+function clipFrame(c, ft) {   // the clip at frame time ft (frames, fractional): Catmull-Rom through the frames
+  const n = c.frames.length, i = clamp(Math.floor(ft), 0, n - 1), u = clamp(ft - i, 0, 1);
+  const F = q => c.frames[clamp(q, 0, n - 1)], a = F(i - 1), b = F(i), d = F(i + 1), e = F(i + 2), o = {};
+  for (const key in b) {
+    if (key === 'bd') { o.bd = norm(lerp3(b.bd, d.bd, u)); continue; }
+    const cr = (p0, p1, p2, p3) => 0.5 * ((2 * p1) + (-p0 + p2) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u * u + (-p0 + 3 * p1 - 3 * p2 + p3) * u * u * u);
+    o[key] = Array.isArray(b[key]) ? b[key].map((_, m) => cr(a[key][m], b[key][m], d[key][m], e[key][m])) : cr(a[key], b[key], d[key], e[key]);
+  }
+  return o;
+}
+function clipBody(sw, motionTime, k, j0) {
+  const c = clipsOn() && window.BATTING_CLIPS[sw.fam];
+  if (!c) return null;
+  const tc = motionTime - SWING_LAG, ft = c.contact + tc * c.fps;
+  if (!sw.clipO) {   // placed once per shot: his hands at contact where the keys meet the ball (the ball's line moves his feet
+    // into line, as a batter's would); only the height is left for the arms and knees to make up
+    const fc = clipFrame(c, c.contact), keysAt = sub(sw.target, mul(norm(fc.bd), 0.48)), hc = mul(add(fc.handL, fc.handR), 0.5);
+    sw.clipO = [keysAt[0] - hc[0], 0, keysAt[2] - hc[2]];
+    sw.clipD = [0, keysAt[1] - hc[1], 0];
+  }
+  const f = clipFrame(c, ft), O = sw.clipO, D = sw.clipD;
+  const r = tc < 0 ? smooth(clamp(1 + tc / CLIP.reachIn, 0, 1)) : 1 - smooth(clamp(tc / CLIP.reachOut, 0, 1));
+  const body = [D[0] * CLIP.bodyShare * r, Math.min(0, D[1]) * 0.3 * r, D[2] * CLIP.bodyShare * r];
+  const j = {};
+  for (const key of ['pelvis', 'hipL', 'hipR', 'neck', 'shL', 'shR', 'head']) j[key] = add(add(f[key], O), body);
+  j.footL = add(f.footL, O); j.footR = add(f.footR, O);
+  j.footDirL = f.footDirL; j.footDirR = f.footDirR; j.footPitchL = [f.footPitchL, 0, 0]; j.footPitchR = [f.footPitchR, 0, 0];
+  j.kneeL = ik(j.hipL, add(j.footL, [0, 0.07, 0]), LEG, LEG, sub(add(f.kneeL, O), mul(add(f.hipL, f.footL), 0.5)));
+  j.kneeR = ik(j.hipR, add(j.footR, [0, 0.07, 0]), LEG, LEG, sub(add(f.kneeR, O), mul(add(f.hipR, f.footR), 0.5)));
+  const h = add(add(mul(add(f.handL, f.handR), 0.5), O), mul(D, r));
+  return { j, h, bd: f.bd, poleL: sub(add(f.elL, O), mul(add(f.shL, f.handL), 0.5)), poleR: sub(add(f.elR, O), mul(add(f.shR, f.handR), 0.5)) };
+}
+function blendBody(a, b, w) {   // joints part way from a to b (the limbs re-solved so they keep their lengths)
+  if (w >= 0.999) return b; const o = {};
+  for (const key in b) o[key] = Array.isArray(b[key]) && Array.isArray(a[key]) && b[key].length === 3 && key.indexOf('Pitch') < 0 ? lerp3(a[key], b[key], w) : b[key];
+  for (const key in a) if (o[key] === undefined) o[key] = a[key];
+  return o;
+}
+
 function batterPose(sw) {
   let k, motionTime = sw ? sw.t : 0, gripTurn = 0;
   if (sw) {
@@ -2153,7 +2212,12 @@ function batterPose(sw) {
   else {
     const ready = phase === 'runup' ? smooth(clamp((phaseT - RUNUP + 0.4) / 0.35, 0, 1)) : (phase === 'flight' || phase === 'result') && ball ? 1 : 0;
     const st = batStyle();
-    k = ready ? mixPose(styled(STANCE, st), styled(READY, st), ready) : styled(STANCE, st);
+    // up and down at the guard: slowly between balls; once the bowler is running he comes up, then settles down for the ball
+    const bob = phase === 'runup' ? 0.6 * Math.sin(Math.PI * clamp((phaseT - 0.2) / Math.max(0.8, RUNUP - 1.2), 0, 1))
+              : phase === 'wait' ? 0.5 - 0.5 * Math.cos(clock * 2 * Math.PI / 4.2) : 0;
+    const dtc = clamp(clock - guardBob.at, 0, 0.1); guardBob.at = clock; guardBob.v += (bob - guardBob.v) * Math.min(1, dtc * 6);   // eased: no jump when the run-up starts
+    const guardK = mixPose(styled(STANCE, st), styled(STAND_UP, st), smooth(clamp(guardBob.v, 0, 1)));
+    k = ready ? mixPose(guardK, styled(READY, st), ready) : guardK;
     gripTurn = (1 - ready) * GRIP_TURN * MIR;   // a left-hander is drawn mirrored, which would turn it the other way   // at his guard the bat's face looks to the off side: the gloves stack on the handle and the arms hang together
     // alive at the crease: breathing, and a tap of the bat until the bowler is well into his run
     const br = Math.sin(clock * 1.7);
@@ -2168,7 +2232,20 @@ function batterPose(sw) {
     }
   }
   let bd = norm(k.bd);
-  const j = buildBody({ ...k, hL: sub(k.h, mul(bd, 0.045)), hR: add(k.h, mul(bd, 0.045)), headOff: [0, 0, 0.04] });
+  let j = buildBody({ ...k, hL: sub(k.h, mul(bd, 0.045)), hR: add(k.h, mul(bd, 0.045)), headOff: [0, 0, 0.04] });
+  const cb = sw && clipBody(sw, motionTime, k, j);
+  if (cb) {   // the recorded stroke: blends in at the start, out as he lets the finish go
+    const w = smooth(clamp(motionTime / CLIP.blendIn, 0, 1)) * (1 - (sw.rx || 0) / 0.9);
+    bd = norm(lerp3(bd, cb.bd, w));   // the bat's angle as read off the video
+    const h = lerp3(k.h, cb.h, w), hL = sub(h, mul(bd, 0.045)), hR = add(h, mul(bd, 0.045)), c = cb.j;
+    c.handL = hL; c.handR = hR;
+    c.elL = ik(c.shL, hL, UPARM, FOREARM, cb.poleL); c.elR = ik(c.shR, hR, UPARM, FOREARM, cb.poleR);
+    j = blendBody(j, c, w);
+    if (w < 0.999) { j.kneeL = ik(j.hipL, add(j.footL, [0, 0.07, 0]), LEG, LEG, sub(j.kneeL, mul(add(j.hipL, j.footL), 0.5)));
+      j.kneeR = ik(j.hipR, add(j.footR, [0, 0.07, 0]), LEG, LEG, sub(j.kneeR, mul(add(j.hipR, j.footR), 0.5)));
+      j.elL = ik(j.shL, j.handL, UPARM, FOREARM, sub(j.elL, mul(add(j.shL, j.handL), 0.5))); j.elR = ik(j.shR, j.handR, UPARM, FOREARM, sub(j.elR, mul(add(j.shR, j.handR), 0.5))); }
+    k = { ...k, h, bd };
+  }
   bd = bladeClear(j, k.h, bd);
   const follow=sw?smooth(clamp((motionTime-SWING_LAG-.04)/.32,0,1)):0;
   let gaze=facing(sw?clamp(sw.intent||0,-70,70)*follow:0);
@@ -2894,6 +2971,7 @@ function drawDuck(g, p, w, h) {
 // a line of commentary on screen, TV style: always shown, spoken too if the voice is on
 let commTimer = 0;
 function showComm(text) {
+  if (true) return;   // the commentary line on screen is off (owner, 20 November 2026: too much text); the voice is unchanged
   if (quiet || ff || !text) return;
   const el = $('comm'); el.querySelector('.txt').textContent = text; el.classList.add('show'); el.classList.toggle('tp', touch);
   clearTimeout(commTimer); commTimer = setTimeout(() => el.classList.remove('show'), Math.max(3200, 900 + text.length * 55));
@@ -3343,7 +3421,7 @@ function shotName(a, loft, defend, push, family) {
 function showTiming(dtT, kind, shot, w) {
   const el = $('timing');
   if (!inn.userBats) {   // the computer is batting: just name the shot
-    if (!shot) { el.classList.remove('show'); return; }
+    el.classList.remove('show'); return;   // (it named the computer's shot: removed with the other text)
     el.textContent = shot; el.style.color = 'var(--chalk)'; el.classList.add('show'); return;
   }
   const a = Math.abs(dtT);
@@ -4094,7 +4172,7 @@ let fhKey = '';   // which ball the FREE HIT announcement was shown for
 function hideBanner() { $('banner').className = 'hud'; bannerUntil = 0; }
 function showDelivery(d) {
   const el = $('delivery');
-  el.innerHTML = (d.noBall ? '<b>NO BALL</b> · ' : inn.freeHit ? '<b>FREE HIT</b> · ' : '') + '<b>' + Math.round(d.kmh) + ' km/h</b> · ' + d.length + (userBowling() && d.vname !== 'Stock' ? ' · ' + d.vname : '');
+  el.innerHTML = (d.noBall ? '<b>NO BALL</b> · ' : inn.freeHit ? '<b>FREE HIT</b> · ' : '') + '<b>' + Math.round(d.kmh) + ' km/h</b>' + (userBowling() && d.vname !== 'Stock' ? ' · ' + d.vname : '');
   el.classList.add('show');
 }
 function showControls() {
@@ -5108,7 +5186,7 @@ function update(dt) {
   batCardStep();
   if (phase === 'runup' || phase === 'flight') { if (cardUntil) hideCard(); if (bcUntil) hideBatCard(); }   // (owner: cards go as the bowler runs in)
   const gapOn = phase === 'wait' && phaseT < GAP_END && !ff && !paused;
-  const nt = $('nextTag'); if (nt.hidden === gapOn) { nt.hidden = !gapOn; nt.firstChild.textContent = inn && inn.freeHit ? 'FREE HIT' : 'NEXT BALL'; nt.classList.toggle('fh', !!(inn && inn.freeHit)); nt.lastChild.textContent = touch ? 'tap to skip' : 'S or Space to skip'; }
+  const nt = $('nextTag'); if (nt.hidden === gapOn) { nt.hidden = !gapOn; nt.firstChild.textContent = inn && inn.freeHit ? 'FREE HIT' : 'NEXT BALL'; nt.classList.toggle('fh', !!(inn && inn.freeHit)); nt.lastChild.textContent = ''; }   // ("tap to skip" removed with the other text)
   // a free hit to come: announced big once as the wait starts, then a pulsing badge until it's bowled
   const fhOn = !!(inn && inn.freeHit) && ['wait', 'aim', 'runup', 'flight'].includes(phase) && !ff && !quiet && !(M && M.autoplay);
   if (fhOn && phase === 'wait' && !RP && fhKey !== inn.balls + '/' + inn.over.length) {   // (after any replay)
@@ -6198,6 +6276,7 @@ function umpires() {
 // what you swiped: just the shot's name near your finger (no arrows at all: the owner found them distracting)
 function drawSwipe() {
   const v = swipeVis;
+  if (true) return;   // off (owner, 20 November 2026: no shot name in a black strip)
   if (!v || !inn || !inn.userBats || v.keys || !v.label) return;
   const fade = clamp(1.6 - (clock - v.t0), 0, 1);
   if (fade <= 0) return;
@@ -6244,15 +6323,7 @@ function drawBounceMark() {
   const col = { Yorker: '255,77,94', Full: '255,176,46', Good: '46,211,198', Short: '150,165,255' }[band[3]];
   const ring = (r, a) => { const pts = []; for (let i = 0; i < 20; i++) { const t = i / 20 * Math.PI * 2; pts.push([s[0] + Math.sin(t) * r, 0.008, s[2] + Math.cos(t) * r * 1.3]); } fillPoly(pts, 'rgba(' + col + ',' + a + ')'); };
   ring(0.5, 0.3 * fade); ring(0.32, 0.45 * fade); ring(0.14, 0.95 * fade);
-  // the length, written beside the mark
-  const c = toCam([s[0] - 0.75 * MIR, 0, s[2]]);
-  if (c[2] > NEAR) {
-    const q = proj(c);
-    ctx.globalAlpha = fade; ctx.font = '800 15px system-ui, "Arial Narrow", sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    const t = band[3].toUpperCase(), tw = ctx.measureText(t).width + 10;
-    ctx.fillStyle = 'rgba(10,16,36,0.75)'; ctx.fillRect(q[0] - tw, q[1] - 10, tw, 20);
-    ctx.fillStyle = 'rgb(' + col + ')'; ctx.fillText(t, q[0] - tw + 5, q[1] + 1); ctx.globalAlpha = 1;
-  }
+  // (the length used to be written beside it: removed, owner, 20 November 2026)
 }
 function drawAimGuide() {
   if (ball && ball.spot && ball.t > ball.tBounce && camMode === 'bowl') {
