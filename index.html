@@ -5579,22 +5579,35 @@ function fielderAct(f) {   // what the fielder with the ball is doing (fielderAc
 // A full-length dive for a ground ball at the edge of his reach: launched DIVE.launch s before it arrives, flat out with both
 // hands on it, down for DIVE.down s, then up into the gather and the throw (the get-up is DIVE.cost s of extra gather time).
 const DIVE = { margin: 0.7, look: 0.4, launch: 0.24, down: 0.3, up: 0.6, cost: 0.35 };
-function diveFig(point, dir) {
-  const F = dir, L = [F[2], 0, -F[0]], at = (b, f, s, h) => [b[0] + F[0] * f + L[0] * s, h, b[2] + F[2] * f + L[2] * s], j = {};
-  const p = [point[0], 0, point[2]], hy = Math.max(0.09, Math.min(point[1], 0.3));
-  j.handL = at(p, 0, 0.07, hy); j.handR = at(p, 0, -0.07, hy);
-  j.neck = at(p, -0.66, 0, 0.3); j.head = at(p, -0.47, 0, 0.38);
-  j.shL = at(p, -0.62, 0.18, 0.27); j.shR = at(p, -0.62, -0.18, 0.27);
-  j.pelvis = at(p, -1.18, 0, 0.2); j.hipL = at(p, -1.18, 0.1, 0.2); j.hipR = at(p, -1.18, -0.1, 0.2);
-  j.footL = at(p, -2.0, 0.12, 0.07); j.footR = at(p, -1.72, -0.24, 0.12);
-  j.kneeL = ik(j.hipL, j.footL, LEG, LEG, [0, -1, 0]); j.kneeR = ik(j.hipR, j.footR, LEG, LEG, add([0, -1, 0], mul(L, -0.5)));
-  j.elL = ik(j.shL, j.handL, UPARM, FOREARM, add([0, -1, 0], mul(L, 0.3))); j.elR = ik(j.shR, j.handR, UPARM, FOREARM, add([0, -1, 0], mul(L, -0.3)));
+// The dive (November 2026, owner: "only one motion"): out sideways toward the ball, rolled onto that side with the chest to
+// where the ball came from (watch = the way he faced it), the lower hand stopping it (one = that hand alone, else both).
+// Straight ahead it is flat on his front.
+function diveFig(point, dir, watch, one) {
+  const F = dir, U = [0, 1, 0], p = [point[0], 0, point[2]], hy = Math.max(0.09, Math.min(point[1], 0.3));
+  let C = [F[2], 0, -F[0]]; if (C[0] * watch[0] + C[2] * watch[2] < 0) C = mul(C, -1);
+  const fwd = Math.abs(F[0] * watch[0] + F[2] * watch[2]), r = lerp(0.6, Math.PI / 2, smooth(clamp((fwd - 0.4) / 0.5, 0, 1)));   // roll: 0.6 rad off his side, flat when diving ahead
+  const chest = norm(add(mul(C, Math.cos(r)), mul(U, -Math.sin(r)))), Lb = cross(F, chest);   // Lb: his left, lying down
+  const at = (f, sd, h) => [p[0] + F[0] * f + Lb[0] * sd, 0.22 + Lb[1] * sd + h, p[2] + F[2] * f + Lb[2] * sd], j = {};
+  const lowL = Lb[1] <= 0;   // on his left side: the left hand is the low one
+  j.neck = at(-0.66, 0, 0.06); j.head = at(-0.47, 0, 0.14);
+  j.shL = at(-0.62, 0.18, 0.04); j.shR = at(-0.62, -0.18, 0.04);
+  j.pelvis = at(-1.18, 0, 0); j.hipL = at(-1.18, 0.1, 0); j.hipR = at(-1.18, -0.1, 0);
+  // legs: the low one straight out behind, the top one bent, its knee forward toward the chest
+  const fl = add(at(-2.0, 0.1, -0.1), [0, 0, 0]), fu = add(at(-1.7, -0.1, 0.05), mul(chest, 0.3));
+  j.footL = lowL ? fl : fu; j.footR = lowL ? fu : fl;
+  const lowHand = [p[0] + Lb[0] * 0.05 * (lowL ? 1 : -1), hy, p[2] + Lb[2] * 0.05 * (lowL ? 1 : -1)];
+  const topHand = one ? at(-0.95, lowL ? -0.22 : 0.22, 0.08) : [p[0] - Lb[0] * 0.07 * (lowL ? 1 : -1), hy + 0.05, p[2] - Lb[2] * 0.07 * (lowL ? 1 : -1)];
+  if (one) { const lead = add(lowHand, mul(F, 0)); j.handL = lowL ? lead : topHand; j.handR = lowL ? topHand : lead; }
+  else { j.handL = lowL ? lowHand : topHand; j.handR = lowL ? topHand : lowHand; }
+  for (const k of ['neck', 'head', 'shL', 'shR', 'pelvis', 'hipL', 'hipR', 'footL', 'footR']) j[k][1] = Math.max(j[k][1], k.startsWith('foot') ? 0.07 : 0.1);
+  j.kneeL = ik(j.hipL, j.footL, LEG, LEG, chest); j.kneeR = ik(j.hipR, j.footR, LEG, LEG, chest);
+  j.elL = ik(j.shL, j.handL, UPARM, FOREARM, add(mul(chest, -0.6), mul(Lb, 0.4))); j.elR = ik(j.shR, j.handR, UPARM, FOREARM, add(mul(chest, -0.6), mul(Lb, -0.4)));
   j.footDirL = mul(F, -1); j.footDirR = mul(F, -1); j.footPitchL = [0, 0, 0]; j.footPitchR = [0, 0, 0];
-  return j;
+  return { j, lowL };
 }
-// getting up from the dive: pushed up onto the right knee, the ball in both hands at the waist
-function kneelFig(point, dir) {
-  const F = dir, L = [F[2], 0, -F[0]], at = (b, f, s, h) => [b[0] + F[0] * f + L[0] * s, h, b[2] + F[2] * f + L[2] * s], j = {};
+// getting up from the dive, facing the ball's way: pushed up onto the knee of the side he landed on, the ball in both hands
+function kneelFig(point, dir, lowL = false) {
+  const F = dir, L = mul([F[2], 0, -F[0]], lowL ? -1 : 1), at = (b, f, s, h) => [b[0] + F[0] * f + L[0] * s, h, b[2] + F[2] * f + L[2] * s], j = {};
   const p = [point[0], 0, point[2]];
   j.pelvis = at(p, -0.7, 0, 0.62); j.hipL = at(p, -0.7, 0.1, 0.62); j.hipR = at(p, -0.7, -0.1, 0.62);
   j.neck = at(p, -0.45, 0, 1.1); j.head = at(p, -0.36, 0, 1.3);
@@ -5604,6 +5617,7 @@ function kneelFig(point, dir) {
   j.kneeL = ik(j.hipL, j.footL, LEG, LEG, F); j.kneeR = ik(j.hipR, j.footR, LEG, LEG, add(F, [0, -1, 0]));
   j.elL = ik(j.shL, j.handL, UPARM, FOREARM, add([0, -1, 0], mul(L, 0.4))); j.elR = ik(j.shR, j.handR, UPARM, FOREARM, add([0, -1, 0], mul(L, -0.4)));
   j.footDirL = F; j.footDirR = F; j.footPitchL = [0, 0, 0]; j.footPitchR = [0, 0, 0];
+  if (lowL) for (const k of ['hip', 'sh', 'hand', 'foot', 'knee', 'el', 'footDir', 'footPitch']) { const t = j[k + 'L']; j[k + 'L'] = j[k + 'R']; j[k + 'R'] = t; }   // the mirror image: down on the left knee
   return j;
 }
 function diveAct(f, res, t, tc, a) {
@@ -5611,7 +5625,9 @@ function diveAct(f, res, t, tc, a) {
   if (t < tL || t > tStand) return null;
   const d = sub(res.point, f.pos); d[1] = 0;
   const dir = len(d) > 0.05 ? norm(d) : [Math.sin(f.face), 0, Math.cos(f.face)], face = Math.atan2(dir[0], dir[2]);
-  const lie = diveFig(res.point, dir);
+  const wa = watchAng(f, ball.play, tL), watch = [Math.sin(wa), 0, Math.cos(wa)];
+  const one = Math.abs(Math.sin(res.point[0] * 12.99 + res.point[2] * 78.23) * 437.58) % 1 < 0.5;   // one hand or both: varies ball to ball
+  const D = diveFig(res.point, dir, watch, one), lie = D.j;
   // the pose he dives out of, and gets up into: what he would be doing anyway
   let base = a ? figure(f.pos, a.face, { crouch: a.crouch || 0, bend: a.bend || 0, handL: a.handL, handR: a.handR, seed: 3 }) : figure(f.pos, face, { crouch: 0.6, seed: 3 });
   if (a && a.clipJ) base = mixJ(base, a.clipJ, a.w);
@@ -5620,9 +5636,9 @@ function diveAct(f, res, t, tc, a) {
     const u = smooth((t - tL) / DIVE.launch), lift = 0.22 * Math.sin(Math.PI * u);
     j = mixJ(base, lie, u);
     for (const k in j) if (!/^foot(Dir|Pitch)/.test(k)) j[k] = add(j[k], [0, lift, 0]);
-  } else if (t < tUp) { j = lie; hold = lerp3(lie.handL, lie.handR, 0.5); }
+  } else if (t < tUp) { j = lie; hold = one ? (D.lowL ? lie.handL : lie.handR) : lerp3(lie.handL, lie.handR, 0.5); }
   else {   // up onto a knee, then onto his feet into whatever comes next (the throw)
-    const v = (t - tUp) / DIVE.up, kn = kneelFig(res.point, dir);
+    const v = (t - tUp) / DIVE.up, kn = kneelFig(res.point, watch, D.lowL);
     j = v < 0.5 ? mixJ(lie, kn, smooth(v / 0.5)) : mixJ(kn, base, smooth((v - 0.5) / 0.5));
     const mid = lerp3(j.handL, j.handR, 0.5);
     hold = a && a.hold && v > 0.5 ? (v > 0.97 ? a.hold : lerp3(mid, j.handR, smooth(clamp((v - 0.5) / 0.4, 0, 1)))) : mid;
@@ -5726,14 +5742,19 @@ function jumpAct(f, res, t, tc) {
   const J = placeClip(lj, add(f.pos, [0, lift, 0]), face), F = [Math.sin(face), 0, Math.cos(face)], L = [Math.cos(face), 0, -Math.sin(face)];
   const sh = lerp3(J.shL, J.shR, 0.5);
   let hold = null;
-  if (t < tc) {   // both hands up to where the ball will be
-    let v = sub(res.point, sh); const d = len(v); if (d > 0.78) v = mul(v, 0.78 / d);
-    const m = add(sh, v), u = smooth(clamp((t - (tOff - 0.15)) / 0.3, 0, 1));
-    setHands(J, lerp3(J.handL, add(m, mul(L, 0.07)), u), lerp3(J.handR, add(m, mul(L, -0.07)), u), face);
-  } else {        // caught: brought down to the chest
-    const top = add(sh, mul(norm(sub(res.point, sh)), 0.7)), chest = add(sub(J.neck, [0, 0.28, 0]), mul(F, 0.28));
-    const m = lerp3(top, chest, smooth(clamp((t - tc) / 0.35, 0, 1)));
-    setHands(J, add(m, mul(L, 0.07)), add(m, mul(L, -0.07)), face); hold = m;
+  // One hand, as real fielders do at full stretch (owner, November 2026): the hand on the ball's side goes up for it, the other
+  // arm swings out and down the other way for balance; once it is caught the free hand joins it on the way down to the chest.
+  const sideOff = dot(sub(res.point, sh), L), left = Math.abs(sideOff) > 0.08 ? sideOff > 0 : (Math.abs(Math.sin(res.point[0] * 7.3 + res.point[2] * 3.1) * 97) % 1) < 0.3;
+  const sgn = left ? 1 : -1, shC = left ? J.shL : J.shR, free = add(add(left ? J.shR : J.shL, mul(L, -0.42 * sgn)), add([0, -0.22, 0], mul(F, 0.12)));
+  const put = (c, o) => setHands(J, left ? c : o, left ? o : c, face);
+  if (t < tc) {
+    let v = sub(res.point, shC); const d = len(v); if (d > 0.6) v = mul(v, 0.6 / d);
+    const m = add(shC, v), u = smooth(clamp((t - (tOff - 0.15)) / 0.3, 0, 1));
+    put(lerp3(left ? J.handL : J.handR, m, u), lerp3(left ? J.handR : J.handL, free, u));
+  } else {        // caught: brought down to the chest, the other hand meeting it
+    const top = add(shC, mul(norm(sub(res.point, shC)), 0.58)), chest = add(sub(J.neck, [0, 0.28, 0]), mul(F, 0.28));
+    const k = smooth(clamp((t - tc) / 0.35, 0, 1)), m = lerp3(top, chest, k);
+    put(m, lerp3(free, add(m, mul(L, -0.12 * sgn)), k)); hold = m;
   }
   const after = t - tLand;
   return { face, crouch: 0, handL: J.handL, handR: J.handR, clipJ: J, w, hold, u: after > 0.6 ? 1 : undefined };   // u = 1: the celebration takes over
