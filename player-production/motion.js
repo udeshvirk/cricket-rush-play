@@ -121,7 +121,11 @@
     let i=0;while(i<profiles.length-2&&angle>profiles[i+1][0])i++;
     const a=profiles[i],b=profiles[i+1],u=clamp((angle-a[0])/(b[0]-a[0]),0,1),p=a.map((v,k)=>mix(v,b[k],u));
     const low=clamp((.5-target[1])*.35,0,.10),fr=[clamp(target[0]+p[1],-.18,.9),0,p[2]+.12];   // a long stride that reads from the bowler's end
-    const bd=unit([-.04+dx*.30,-1,-.08]),h=add(target,scale(bd,-.48));
+    const bd=unit([-.04+dx*.30,-1,-.08]);
+    // Low drives meet nearer the toe so the rendered blade clears the turf.
+    // The toe is about .72m from the hands; retain the middle on higher balls.
+    const contactAlong=clamp(.72-(target[1]-.045)/-bd[1],.48,.70);
+    const h=add(target,scale(bd,-contactAlong));
     const pelvis=[mix(start.pel[0],fr[0],.7),.71-low*.5,1.0-.12*Math.max(0,(-angle-45)/55)];   // into the front knee
     const contact={...start,fr,pel:pelvis,hy:p[3],sy:p[4],lean:29+low*50,side:4,h,bd,...(start.bk?{bk:add(start.bk,[0,0,.06])}:{}),
       kpL:[dx*.65-.10,0,1],...(start.kpR?{kpR:[-.85,-.12,.5]}:{}),rearFootPitch:.5};   // the back knee softens toward the pitch, up on the back toe
@@ -130,9 +134,9 @@
     const slot={...blend(start,contact,.65),hy:mix(start.hy,contact.hy,.85),sy:mix(start.sy,contact.sy,.45),
       h:[mix(start.h[0],h[0],.7),h[1]+.1,h[2]-.12],bd:unit([-.18+dx*.12,-.32,-.92])};
     const through={...contact,pel:add(pelvis,[0,.005,.05]),hy:p[3]+12,sy:p[4]+12,lean:22+low*30,side:5,
-      h:add(h,[dx*.16,.035,dz*.20]),bd:unit([dx*.55-.04,-.65,.75*dz]),rearFootPitch:.23};
+      h:add(h,[dx*.16,.035,dz*.20]),bd:unit([dx*.55-.04,-.65,.75*dz]),rearFootPitch:.55};
     const extension={...contact,pel:add(pelvis,[0,loft?.04:.015,.08]),hy:p[3]+22,sy:p[4]+28,lean:loft?14:19,side:loft?2:5,
-      h:add(h,[dx*.24,.18+(loft?.15:0),.30*dz]),bd:unit([dx*.9-.04,loft?.4:.12,.96*dz]),rearFootPitch:.3};
+      h:add(h,[dx*.24,.18+(loft?.15:0),.30*dz]),bd:unit([dx*.9-.04,loft?.4:.12,.96*dz]),rearFootPitch:.58};
     // along the ground the drive is checked: the bat stops pointing up in front, at the shoulders; lofted, it goes right through
     const height=loft?Math.max(1.60,p[5]+.15):p[5]-.1;
     // weight stays on the bent front knee, head and front shoulder over it (a lofted drive comes up taller)

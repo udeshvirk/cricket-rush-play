@@ -1612,6 +1612,14 @@ window.Cricket3D = function (G) {
   window.CR_CUFFANG = () => pool.filter(p => p.bat3 && p.gloveCuff && p.gripG).map(p => Object.fromEntries(['l', 'r'].map(s => {   // angle (deg) between each forearm and its glove's line
     const hp = p.lastHand && p.lastHand[s]; return [s, hp ? +hp.toFixed(1) : null]; })));
   window.CR_GRIPGAP = () => pool.filter(p => p.bat3 && p.gripResidual).map(p => Object.fromEntries(Object.entries(p.gripResidual).map(([k, v]) => [k, +v.toFixed(3)])));   // how far each wrist is from its glove (m), for checking poses
+  // Development probe: measure the actual fitted blade, after clearance and arm IK.
+  window.CR_BAT_CONTACT = point => pool.filter(p => p.g.visible && p.bat3 && p.sourceBat && !p.sourceBat.carry).map(p => {
+    const local = new T.Vector3().fromArray(point).sub(p.bat3.O).applyQuaternion(p.bat3.Bq.clone().invert());
+    let bottomY=Infinity;
+    for(const x of [bladeEnvelope.min.x,bladeEnvelope.max.x])for(const y of [bladeEnvelope.min.y,bladeEnvelope.max.y])for(const z of [bladeEnvelope.min.z,bladeEnvelope.max.z])
+      bottomY=Math.min(bottomY,new T.Vector3(x,y,z).applyQuaternion(p.bat3.Bq).add(p.bat3.O).y);
+    return { local: local.toArray(), distance: bladeEnvelope.distanceToPoint(local), bottomY, wristGap: p.gripResidual };
+  });
   if(PRODUCTION)PRODUCTION.cameraAudit=()=>{
     const invalid=[];scene.traverse(o=>{if(o.visible && o.matrixWorld.elements.some(x=>!Number.isFinite(x)))invalid.push(o.name||o.type);});
     return {position:camera.position.toArray(),target:cam.tgt.slice(),near:camera.near,fov:camera.fov,invalid,
