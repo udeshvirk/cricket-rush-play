@@ -1299,6 +1299,12 @@ const BOWL_CAM = (() => { const q = (new URLSearchParams(location.search).get('c
 const BOWL_CAM_2D = { pos: [0, 6.2, 46], tgt: [0, 0.7, 10], fov: 11.5 };
 const homeCam = () => { try { return R3D && R3D.active() ? BOWL_CAM : BOWL_CAM_2D; } catch (e) { return BOWL_CAM; } };
 const cam = { pos: BOWL_CAM.pos.slice(), tgt: BOWL_CAM.tgt.slice(), fov: BOWL_CAM.fov };
+function resetDeliveryCamera() {
+  const home=homeCam();
+  // A new delivery must not inherit a fielding/replay close-up and ease back
+  // while its bounce marker is already visible. Reset after replay restoration.
+  Object.assign(cam,{pos:home.pos.slice(),tgt:home.tgt.slice(),fov:home.fov,end:0,ro:false,uc:false,wk:false,cc:null});
+}
 let cr, cu, cf, focal;
 const NEAR = 0.3;
 
@@ -4065,7 +4071,7 @@ function skipGap() {
 function beginBall(delay, announce) {
   newFielders(); if (announce) inn.fieldNew = false;
   pending = null; ball = null; preBall = null; celebrate = null; wantCharge = false; guard = 0; camMode = 'bowl'; meter = null; swipeVis = null;
-  endReplay(); recReset();
+  endReplay(); recReset(); resetDeliveryCamera();
   setFF(!!(M.watchFast && autoBowling()));
   hideBanner(); $('timing').classList.remove('show'); $('meter').hidden = true; $('meter').classList.remove('locked');
   if (announce && M.mode === 'match') {
