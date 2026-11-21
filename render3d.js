@@ -988,7 +988,7 @@ window.Cricket3D = function (G) {
   // clears the blade. Moving only the bat would detach the hands again.
   const bladeEnvelope = new T.Box3(new T.Vector3(-.054,-.86,-.052),new T.Vector3(.054,-.30,.0124));
   // palm (optional): also prefer the bend whose forearm runs into the glove (a folded-back wrist looked like a stuck-on glove)
-  function elbowForBat(S, wrist, elbow0, L1, L2, O, Bq, palm) {
+  function elbowForBat(S, wrist, elbow0, L1, L2, O, Bq, palm, guardFront=null) {
     const base=elbowFor(S,wrist,elbow0,L1,L2),axis=wrist.clone().sub(S).normalize();
     const along=base.clone().sub(S).dot(axis),centre=S.clone().addScaledVector(axis,along),radial=base.clone().sub(centre);
     const iq=Bq.clone().invert(),a=S.clone().sub(O).applyQuaternion(iq),c=wrist.clone().sub(O).applyQuaternion(iq);
@@ -1006,7 +1006,10 @@ window.Cricket3D = function (G) {
       for(let angle=-2.1;angle<=2.1001;angle+=.1) {
         const elbow=radial.clone().applyAxisAngle(axis,angle).add(centre),fa=elbow.clone().sub(wrist).normalize();
         const up=Math.max(0,elbow.y-(S.y+wrist.y)/2);   // an elbow raised above the arm's mid-height reads as a chicken wing
-        const sc=pen(angle)+angle*angle*GRIP3.alignKeep+GRIP3.align*(1-fa.dot(line))+GRIP3.elbowUp*up*up;
+        // Keep the guard elbow on the chest side; glove alignment alone can tuck it through the torso.
+        const behind=guardFront?Math.max(0,-elbow.clone().sub(S).dot(guardFront.direction)+.025):0;
+        const inward=guardFront?Math.max(0,.04-elbow.clone().sub(S).dot(guardFront.outward)):0;
+        const sc=(guardFront?.weight||0)*(behind*behind+inward*inward)*.4+pen(angle)+angle*angle*GRIP3.alignKeep+GRIP3.align*(1-fa.dot(line))+GRIP3.elbowUp*up*up;
         if(sc<bestS){bestS=sc;bestA=angle;}
       }
       return radial.clone().applyAxisAngle(axis,bestA).add(centre);
@@ -1262,7 +1265,7 @@ window.Cricket3D = function (G) {
           const S3 = GRIP3.side[role(s)];
           const wrist = mx3(S3.cuffB).applyQuaternion(Bq).add(O), palm = mx3(S3.anchor).applyQuaternion(Bq).add(O);
           const sh = pos['upperarm_' + s], L1 = r['lowerarm_' + s].distanceTo(r['upperarm_' + s]), L2 = r['hand_' + s].distanceTo(r['lowerarm_' + s]);
-          pos['lowerarm_' + s] = elbowForBat(sh, wrist, pos['lowerarm_' + s], L1, L2, O, Bq, palm);
+          pos['lowerarm_' + s] = elbowForBat(sh, wrist, pos['lowerarm_' + s], L1, L2, O, Bq, palm, pr.bat.guardWeight ? {direction:fwd,outward:side.clone().multiplyScalar(s==='l'?1:-1),weight:pr.bat.guardWeight} : null);
           pos['hand_' + s] = pos['lowerarm_' + s].clone().add(v1.subVectors(wrist, pos['lowerarm_' + s]).normalize().multiplyScalar(L2));
           this.gripResidual[s] = pos['hand_' + s].distanceTo(wrist);
           // the (hidden, shrunk) hand points from the wrist into the glove, knuckles along the handle

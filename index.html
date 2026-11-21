@@ -1921,16 +1921,16 @@ function mixJoints(a, b, t) { const o = {}; for (const k in a) o[k] = lerp3(a[k]
 // forward from the hips (legs nearly straight, knees soft: a hinge, not a squat), arms hanging to the hands at the top of the pads, the bat's toe resting by the back foot.
 // (Before: feet 0.68 m apart, 22° lean, hands out at 0.72 m: { fr: [0.58,0,1.1], bk: [0.64,0,0.42], pel: [0.64,0.82,0.76], lean: 22,
 // h: [0.24,0.72,0.93], bd: [-0.2,-0.3,-0.93] }.)
-const STANCE = { fr: [0.6, 0, 0.96], bk: [0.66, 0, 0.56], pel: [0.76, 0.84, 0.76], hy: -90, sy: -86, lean: 31, side: 0,
-  h: [0.46, 0.68, 0.84], bd: norm([-0.05, -0.92, -0.38]), kpL: [-1, 0, 0.35], kpR: [-1, 0, -0.1],rearFootPitch:0,
+const STANCE = { fr: [0.6, 0, 0.96], bk: [0.66, 0, 0.56], pel: [0.70, 0.81, 0.76], hy: -90, sy: -86, lean: 26, side: 0,
+  h: [0.46, 0.72, 0.84], bd: norm([-0.05, -0.92, -0.38]), kpL: [-1, 0, 0.35], kpR: [-1, 0, -0.1],rearFootPitch:0,
   epL: [0.4, -1, 0.2], epR: [0.4, -1, -0.2], headOff: [0, 0, 0] };   // head up, eyes level (it pitched forward with the trunk: the hunch)   // arms hang straight, elbows in (they splayed out)
 // Cricket 07's batter is never still at the guard: he comes up a little, then bends back down into it (owner, 20 November).
 // STAND_UP is the top of that; between balls he goes slowly up and down, and he is down in the guard as the bowler comes in.
 const guardBob = { v: 0, at: 0 };
-const STAND_UP = { ...STANCE, pel: [0.74, 0.92, 0.76], lean: 16, h: [0.56, 0.86, 0.82] };
+const STAND_UP = { ...STANCE, pel: [0.70, 0.86, 0.76], lean: 23, h: [0.46, 0.77, 0.84] };
 // Compact guard: the blade stays in front of the legs until the backlift.
 // The previous raised guard ran the blade through the chest/right sleeve.
-const READY = { ...STANCE, bk: [0.64, 0, 0.52], pel: [0.7, 0.9, 0.75], lean: 22, h: [0.42, 0.85, 0.84], bd: norm([-0.2, -0.6, -0.77]) };   // (Cricket 07: he stays down in the crouch)
+const READY = { ...STANCE, bk: [0.64, 0, 0.52], pel: [0.70, 0.82, 0.75], lean: 26, h: [0.46, 0.76, 0.84], bd: norm([-0.2, -0.6, -0.77]) };   // (Cricket 07: he stays down in the crouch)
 const PREPARE = {...READY,lean:14,fr:[.42,0,1.18],pel:[.6,.87,.80],h:[.26,1.28,.82],bd:norm([-.3,.8,-.52])};   // a high backlift as the ball comes
 const GRIP_TURN = +(new URLSearchParams(location.search).get('gturn') ?? 1.2);   // how far the bat is turned in the hands at the guard (radians)
 const LEAVE = { ...READY, lean: 6, h: [0.6, 1.5, 0.66], bd: norm([0.12, 0.95, -0.28]) };
@@ -1996,8 +1996,8 @@ function bladeClear(j, h, bd) {
 // back and across with the bat going back toward the slips; the bat at the top of the backlift as the ball is released;
 // then, once he sees the length, a stride forward to a full ball or back and across to a short one. The stroke starts
 // from wherever this has got to (swing() keeps it as visualStart).
-const TRIGGER = { ...READY, bk: [0.58, 0, 0.48], fr: [0.57, 0, 1.0], pel: [0.64, 0.88, 0.74], lean: 20, h: [0.36, 0.95, 0.64], bd: norm([-0.3, -0.35, -0.89]) };
-const TOPLIFT = { ...TRIGGER, h: [0.27, 1.3, 0.8], bd: norm([-0.3, 0.8, -0.52]) };
+const TRIGGER = { ...READY, bk: [0.58, 0, 0.48], fr: [0.57, 0, 1.0], pel: [0.67, 0.83, 0.74], lean: 25, h: [0.43, 0.82, 0.78], bd: norm([-0.3, -0.35, -0.89]) };
+const TOPLIFT = { ...TRIGGER, h: [0.40, 0.91, 0.80], bd: norm([-0.25, 0.2, -0.95]) };
 // Each batter's own way of standing and picking the bat up, from his name (so it stays the same all match): wider or
 // narrower, crouched or upright, a slightly open or closed stance, a higher or lower backlift taken earlier or later, and his
 // own rhythm of taps. Strokes start from wherever this has got to, so they carry it too.
@@ -2028,7 +2028,7 @@ function waitMove(k) {
       const front = /Full|Yorker/.test(ball.length) ? 1 : 0.5;
       const tx = ball.atBat ? clamp(ball.atBat[0] - guard, -0.9, 0.9) : 0;
       const to = back
-        ? { ...P, bk: [0.42, 0, 0.3], fr: [0.5, 0, 0.96], pel: [0.5, 0.92, 0.62], lean: 8, h: [0.3, 1.38, 0.74] }
+        ? { ...P, bk: [0.42, 0, 0.3], fr: [0.5, 0, 0.96], pel: [0.58, 0.86, 0.66], lean: 22, h: [0.38, 0.98, 0.78] }
         : { ...P, fr: [clamp(tx + 0.32, 0.1, 0.72), 0, lerp(1.08, 1.24, front)], pel: [lerp(0.6, 0.55, front), 0.86 - 0.02 * front, lerp(0.78, 0.90, front)],
             lean: 14 + 2 * front, rearFootPitch: 0.25 * front, kpL: [-0.4, 0, 1] };   // (lean was 14: he stood right up before the shot; Cricket 07 stays lower until the stroke)
       // Stay ready until a stroke is chosen. A full spinner must not force every shot into a sweep-like crouch.
@@ -2092,10 +2092,11 @@ const CHAIN = { hips: +(new URLSearchParams(location.search).get('hips') || 0.04
 // Blend from the ordinary shot gaze so a miss cannot snap the head at contact.
 // Return before the practice swing finishes; fading shadow weight must not trigger a second glance.
 function missedBallGaze(shoulderYaw, after, shadowWeight=0, baseYaw=0) {
-  const turn=smooth(clamp((after-.25)/.7,0,1))
-    *(1-smooth(clamp((after-1.15)/.55,0,1)))*(1-clamp(shadowWeight,0,1));
-  const target=shoulderYaw+clamp(-125-shoulderYaw,-55,55);
-  return facing(baseYaw+clamp(target-baseYaw,-125,125)*turn);
+  const turn=smooth(clamp((after-.35)/.8,0,1))
+    *(1-smooth(clamp((after-1.25)/.85,0,1)))*(1-clamp(shadowWeight,0,1));
+  // A fixed, modest glance avoids chasing the rotating shoulders during recovery.
+  const target = -100;
+  return facing(baseYaw+clamp(target-baseYaw,-90,90)*turn);
 }
 // Recorded strokes (November 2026, owner: "pick one shot and make it perfect"): the body comes from a real player's shot
 // tracked from video (player-production/batting-clips.js), not from key poses. The clip is placed where he starts the shot
@@ -2170,7 +2171,8 @@ function batterPose(sw) {
   if (sw) {
     if (!sw.keys) sw.keys = strokeKeys(sw);
     if(!sw.curve)sw.curve=CricketMotion.prepare(sw.keys);
-    const S = dt => CricketMotion[sw.fam==='drive'?'sampleDrive':'sampleCut'](sw.curve,sw.t+dt,sw.contactAge,SWING_LAG);
+    // Upper cuts keep the rear support planted and fold the front leg.
+    const S = dt => CricketMotion[sw.fam==='ucut'?'sampleUpperCut':sw.fam==='drive'?'sampleDrive':'sampleCut'](sw.curve,sw.t+dt,sw.contactAge,SWING_LAG);
     const sampled=S(0);
     k=sampled.pose;motionTime=sampled.time;
     // the downswing whips: the bat and upper body are slower away from the top and fastest as they come into the ball
@@ -2243,10 +2245,11 @@ function batterPose(sw) {
     gripTurn = (1 - ready) * GRIP_TURN * MIR;   // a left-hander is drawn mirrored, which would turn it the other way   // at his guard the bat's face looks to the off side: the gloves stack on the handle and the arms hang together
     // alive at the crease: breathing, and a tap of the bat until the bowler is well into his run
     const br = Math.sin(clock * 1.7);
-    const tapOn = phase === 'runup' ? clamp((RUNUP - 0.5 - phaseT) / 0.25, 0, 1) : ['flight', 'play', 'result'].includes(phase) ? 0 : 1;
-    const tp = (clock * st.tap) % 1, tap = tapOn * st.tapBig * (tp < 0.2 ? Math.sin(tp / 0.2 * Math.PI) : 0);
-    k = { ...k, pel: add(k.pel, [0, br * 0.008, 0]), lean: k.lean + br * 1.2,
-          h: add(k.h, [0, 0.06 * tap, 0]), bd: norm(add(k.bd, [0, 0.35 * tap, -0.15 * tap])) };
+    const tapOn = phase === 'runup' ? 1-smooth(clamp(phaseT/.4,0,1)) : phase === 'wait' ? 1 : 0;
+    // A slow, small tap with zero velocity at both ends; the old short pulse shook the blade.
+    const tp = (clock * st.tap) % 1, tap = tapOn * st.tapBig * (tp < .65 ? Math.sin(tp / .65 * Math.PI)**2 : 0);
+    k = { ...k, pel: add(k.pel, [0, br * 0.004, 0]), lean: k.lean + br * .4,
+          h: add(k.h, [0, .018 * tap, 0]), bd: norm(add(k.bd, [0, .06 * tap, -.025 * tap])) };
     if ((phase === 'runup' || (phase === 'flight' && ball))) k = waitMove(k);   // a leave blends from here too
     if (ball && ball.left) {   // bat up out of the way; duck under a bouncer
       const lk = smooth(clamp((ball.t - ball.left) / 0.2, 0, 1));
@@ -2292,7 +2295,7 @@ function batterPose(sw) {
       width = cross(bd, p)[1] < cross(bd, m)[1] ? p : m;
     }
   }
-  return { j, hands: k.h.slice(), tip: add(k.h, mul(bd, 0.85)), pose:k,look:gaze,motionTime,width };
+  return { j, hands: k.h.slice(), tip: add(k.h, mul(bd, 0.85)), pose:k,look:gaze,motionTime,width,guardWeight:Math.abs(gripTurn)/Math.max(.001,Math.abs(GRIP_TURN)) };
 }
 
 // --- the bowler: run in, bound, deliver from just behind the crease (the ball leaves the hand at REL), follow through
@@ -5693,7 +5696,7 @@ function fielderActCore(f) {
   if (!res || res.fielder !== f || res.t == null || (res.kind !== 'caught' && res.kind !== 'runs')) return null;
   const t = pl.t, tc = res.t, pos = f.pos;
   if (CLIPS && res.slide) { const r = slideAct(f, res, t, tc); if (r !== undefined) return r; }
-  if (CLIPS && res.kind === 'caught' && res.point[1] > 2.1 && !f.keeper) { const r = jumpAct(f, res, t, tc); if (r !== undefined) return r; }
+  if (CLIPS && (res.kind === 'caught' || res.dropped) && res.point[1] > 2.1 && !f.keeper) { const r = jumpAct(f, res, t, tc); if (r !== undefined) return r; }
   const at = (face, a, b, h) => add(pos, add(add(mul([Math.sin(face), 0, Math.cos(face)], a), mul([Math.cos(face), 0, -Math.sin(face)], b)), [0, h, 0]));
   const look = Math.max(0, tc - 0.6);
   if (t < look) return null;
@@ -5776,6 +5779,7 @@ function setHands(J, hl, hr, face) {
 // of their own, so the height is a real jump (h metres, g = 9.8) timed so the top comes as the ball arrives.
 function jumpAct(f, res, t, tc) {
   const h = clamp(res.point[1] - 2.1, 0.12, 0.4), Ta = 2 * Math.sqrt(2 * h / 9.8), tOff = tc - Ta / 2, tLand = tc + Ta / 2;
+  if (res.dropped && t >= tLand + .25) return undefined;
   if (t < tOff - 0.22) return undefined;   // until then: watching it come, as for any catch
   const face = turnTo(f.face, watchAng(f, ball.play, t), 1);
   let lj, w = 1, lift = 0;
@@ -5794,13 +5798,19 @@ function jumpAct(f, res, t, tc) {
     let v = sub(res.point, shC); const d = len(v); if (d > 0.6) v = mul(v, 0.6 / d);
     const m = add(shC, v), u = smooth(clamp((t - (tOff - 0.15)) / 0.3, 0, 1));
     put(lerp3(left ? J.handL : J.handR, m, u), lerp3(left ? J.handR : J.handL, free, u));
+  } else if (res.dropped) {
+    // Missed at full stretch: keep the balance arm separate through the landing.
+    const top = add(shC, mul(norm(sub(res.point, shC)), .6));
+    const rest = add(shC, add(mul(F, .15), [0, -.45, 0]));
+    put(lerp3(top, rest, smooth(clamp((t-tc)/.5,0,1))), free);
+    w *= 1-smooth(clamp((t-tLand)/.25,0,1));
   } else {        // caught: brought down to the chest, the other hand meeting it
     const top = add(shC, mul(norm(sub(res.point, shC)), 0.58)), chest = add(sub(J.neck, [0, 0.28, 0]), mul(F, 0.28));
     const k = smooth(clamp((t - tc) / 0.35, 0, 1)), m = lerp3(top, chest, k);
     put(m, lerp3(free, add(m, mul(L, -0.12 * sgn)), k)); hold = m;
   }
   const after = t - tLand;
-  return { face, crouch: 0, handL: J.handL, handR: J.handR, clipJ: J, w, hold, u: after > 0.6 ? 1 : undefined };   // u = 1: the celebration takes over
+  return { face, crouch: 0, handL: J.handL, handR: J.handR, clipJ: J, w, hold, u: !res.dropped && after > 0.6 ? 1 : undefined };   // u = 1: the celebration takes over
 }
 // A slide near the rope: down on the grass feet first, the ball stopped by his hand at his side, up again and into the throw.
 function slideAct(f, res, t, tc) {
@@ -6138,7 +6148,7 @@ function livePeople() {
     out.push({ j, at: sr.pos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look,
                bat: { carry: true, carryHand: 'r', hands: hand, tip } });
   } else {
-    let { j, hands, tip,look,width:authoredWidth } = batterPose(ball && ball.swing ? ball.swing : null);
+    let { j, hands, tip,look,width:authoredWidth,guardWeight } = batterPose(ball && ball.swing ? ball.swing : null);
     let contact = ball && ball.swing && ball.swing.target ? ball.swing.target.slice() : null;
     let at = [0.6 + guard, 0, 0.75];
     if (guard) { const o = [guard, 0, 0]; for (const n in j) if(!/^foot(Dir|Pitch)/.test(n))j[n] = add(j[n], o); hands = add(hands, o); tip = add(tip, o); if(contact)contact=add(contact,o); }
@@ -6159,8 +6169,8 @@ function livePeople() {
       const wh = wj.handR, wt = add(wh, add([0, -0.72, 0], mul(fw, 0.22)));
       j = mixJ(j, wj, iw.w); hands = lerp3(hands, wh, iw.w); tip = lerp3(tip, wt, iw.w);
       if (iw.w > 0.5) { out.push({ j, at: iw.pos, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look: null, bat: { carry: true, carryHand: 'r', hands, tip } }); }
-      else out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look, bat: { carry: false, hands, tip, contact, width } });
-    } else out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look, bat: { carry: false, hands, tip, contact,width } });
+      else out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look, bat: { carry: false, hands, tip, contact, width, guardWeight } });
+    } else out.push({ j, at, team: 'bat', helmet, gloves: true, pid: pid(inn ? inn.striker : 0), look, bat: { carry: false, hands, tip, contact,width,guardWeight } });
   }
   // the non-striker
   const ns = runner(PITCH - 0.6, -1.5), ndw = diveW(ns), nb = nsBackup();
