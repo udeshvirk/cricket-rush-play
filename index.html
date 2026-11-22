@@ -251,6 +251,10 @@
   .myp-empty { color:var(--muted); font-size:14px; padding:6px 0; }
   @media (max-width:520px) { .myp-row { grid-template-columns:48px 1fr; } .myp-row .myp-face { width:48px; } .myp-row .acts { grid-column:1 / -1; } }
   .myp-face.on { border-color:var(--amber); box-shadow:0 0 0 2px rgba(255,176,46,.35); }
+  #mypview { background:none; align-items:end; justify-items:center; pointer-events:none; }
+  #mypview .mypview-bar { pointer-events:auto; display:flex; gap:14px; align-items:center; flex-wrap:wrap; justify-content:center; background:var(--panel);
+    padding:10px 14px; border-radius:12px; margin-bottom:env(safe-area-inset-bottom, 0px); }
+  #mypview .nm { font:800 22px var(--display); text-transform:uppercase; letter-spacing:.02em; }
   .myp-note { font-weight:500; text-transform:none; letter-spacing:0; color:var(--muted); margin-left:6px; }
   .myp-photo-sec { display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
   .myp-photo-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
@@ -920,6 +924,10 @@
       <div class="row"><button class="btn" id="mypAdd" type="button">Add a player</button><button class="btn ghost" id="mypListBack" type="button">Back</button></div>
     </div>
   </div>
+  <div id="mypview" class="screen" hidden>
+    <div class="mypview-bar"><div class="nm" id="mypViewName"></div>
+      <div class="row"><button class="btn ghost" id="mypViewZoom" type="button">Whole player</button><button class="btn" id="mypViewBack" type="button">Back</button></div></div>
+  </div>
   <div id="myplayer" class="screen" hidden>
     <div class="card">
       <div class="title sm">MY <span>PLAYER</span></div>
@@ -946,7 +954,7 @@
         <div class="sechead">Look</div>
         <div class="myp-photo-sec"><div class="lbl2">Photo <span class="myp-note">optional · stays on this device</span></div>
           <div class="myp-photo-row"><img id="mypPhotoPrev" class="myp-photo" alt="Your player's photo" hidden>
-            <button class="btn ghost" id="mypPhotoAdd" type="button">Add photo</button><button class="btn ghost" id="mypPhotoDel" type="button" hidden>Remove photo</button>
+            <button class="btn ghost" id="mypPhotoAdd" type="button">Add photo</button><button class="btn" id="mypPreview" type="button" hidden>See him in 3D</button><button class="btn ghost" id="mypPhotoDel" type="button" hidden>Remove photo</button>
             <input type="file" id="mypPhotoFile" accept="image/*" hidden></div>
           <div id="mypPhoto3dRow" hidden><div class="lbl2">On his face in the game <span class="myp-note">new, try it</span></div><div class="opts" id="mypPhoto3d"></div></div>
           <div id="mypCrop" class="myp-crop" hidden>
@@ -1242,7 +1250,10 @@ function mypClean(m) {
   return { name, team: t.id, slot: m.slot | 0, left: !!m.left, type: ['F', 'M', 'O', 'L'].includes(m.type) ? m.type : '',
            bat: Math.round(mypClamp(+m.bat || 60, MYP_MIN, MYP_MAX)), face: mypClamp(m.face | 0, 0, MYP_FACES - 1),
            tone: mypClamp(m.tone | 0, 0, MYP_TONES.length - 1), num: mypClamp(m.num | 0, 1, 99),
-           ...(mypPhotoOk(m.photo) ? { photo: m.photo, photo3d: m.photo3d !== false } : {}) };
+           ...(mypPhotoOk(m.photo) ? { photo: m.photo, photo3d: m.photo3d !== false,
+             ...(typeof m.lm === 'string' && /^[\d,]+$/.test(m.lm) && m.lm.length < 8000 ? { lm: m.lm } : {}),
+             ...(Array.isArray(m.hair) && m.hair.length === 3 ? { hair: m.hair.map(v => mypClamp(v | 0, 0, 255)) } : {}),
+             ...(Array.isArray(m.shape) && m.shape.length === 2 ? { shape: m.shape.map(v => mypClamp(+v || 1, 0.88, 1.12)) } : {}) } : {}) };
 }
 // his photo (22 November 2026, owner): a square JPEG data URL made on this device by the photo editor (mypPhotoEdit), face lined up
 // on the guide (MYP_GUIDE), shown on his cards. Never sent anywhere; it lives in the same saved list.
@@ -1257,7 +1268,7 @@ for (const m of MYPS) {
   const t = TEAMS.find(t => t.id === m.team), r = mypRatings(m);
   (t.mypOrig || (t.mypOrig = {}))[m.slot] = t.players[m.slot]; m.replaced = t.players[m.slot].name;
   t.players[m.slot] = { key: 'myp:' + m.name, name: m.name, ...r, type: m.type, left: m.left || /[?&]lefty=1/.test(location.search),
-                        mine: true, face: [m.face, MYP_TONES[m.tone].v], num: m.num, ...(m.photo ? { photo: m.photo, photo3d: m.photo3d } : {}) };
+                        mine: true, face: [m.face, MYP_TONES[m.tone].v], num: m.num, ...(m.photo ? { photo: m.photo, photo3d: m.photo3d, lm: m.lm, hair: m.hair, shape: m.shape } : {}) };
 }
 // photos decoded early, so the 3D view can put one on a face from his first frame (render3d.js photoFace)
 window.CR_PHOTO_IMGS = new Map(MYPS.filter(m => m.photo && m.photo3d).map(m => { const im = new Image(); im.src = m.photo; return [m.photo, im]; }));
@@ -2606,6 +2617,7 @@ function renderMyp() {
   $('mypPhotoPrev').hidden = !f.photo; if (f.photo) $('mypPhotoPrev').src = f.photo;
   $('mypPhotoDel').hidden = !f.photo; $('mypPhotoAdd').textContent = f.photo ? 'Change photo' : 'Add photo';
   $('mypPhoto3dRow').hidden = !f.photo;
+  $('mypPreview').hidden = !(R3D && R3D.active()) || !!M;   // (not from a paused match: the picture there is frozen)
   $('mypTone').parentElement.hidden = !!(f.photo && f.photo3d !== false);   // the photo brings its own skin colour
   optButtons('mypPhoto3d', [{ v: true, html: 'Photo face' }, { v: false, html: 'Cards only' }], it => it.v === (f.photo3d !== false), it => { f.photo3d = it.v; renderMyp(); });
   $('mypFaceNote').textContent = f.photo && f.photo3d !== false ? 'hair, ears and head shape (your photo is the face)' : 'hair and head shape';
@@ -2630,16 +2642,83 @@ function mypCropDraw() {
   x.imageSmoothingQuality = 'high'; x.drawImage(c.img, -c.img.width / 2, -c.img.height / 2);
 }
 const mypZoomS = v => mypCrop.s0 * Math.pow(6, v);   // slider 0..1: from the whole photo to 6x closer
+// Face fitting (22 November 2026, owner: "create the avatar or 3D model which looks the same as the uploaded photo"). MediaPipe's
+// face landmarker (vendor/mediapipe, Apache 2.0; loaded only when a photo is added, about 13 MB, then kept for offline use) finds
+// 468 points on the face, on this device. From them: a level, centred square photo (MYP_FIT.side face heights across), the
+// points in it (lm, for render3d.js to warp the photo onto the head point by point), the hair colour, whether he has a beard,
+// and the face's width against its length (shape: the head is made wider or longer to match). His hair, ears and head come
+// from the closest of the game's faces (MYP_HAIR, MYP_BEARD). No face found, or the landmarker can't load: the editor
+// opens to line it up by hand, as before.
+const MYP_FIT = { side: 1.75, size: 512, ratio: 0.88, yaw: 0.12 };   // ratio: width/length of the game's own head measured the same way (faces 0, 3, 7, 14 front-on: 0.86-0.89); yaw: turned further than this gets a tip
+const MYP_HAIR = [[33,22,15],[35,25,19],[67,41,27],[58,43,30],[34,24,17],[21,16,12],[22,16,11],[28,20,14],[36,31,26],[7,5,4],[52,37,27],[31,20,13],[17,10,4],[121,70,50],[9,6,3],[139,113,79],[2,1,1]];
+const MYP_BEARD = { 3: 0.5, 14: 1, 16: 0.8 };
+let faceFitP = null;
+function faceFitter() {
+  const abs = f => new URL('vendor/mediapipe/' + f, location.href).href;
+  if (!faceFitP) faceFitP = import(abs('vision_bundle.mjs')).then(V => V.FaceLandmarker.createFromOptions(
+      { wasmLoaderPath: abs('vision_wasm_internal.js'), wasmBinaryPath: abs('vision_wasm_internal.wasm') },
+      { baseOptions: { modelAssetPath: abs('face_landmarker.task'), delegate: 'CPU' }, runningMode: 'IMAGE', numFaces: 1 }))
+    .catch(e => { faceFitP = null; throw e; });
+  return faceFitP;
+}
+function areaMean(d, W, H, cx, cy, r) {   // mean colour of a square patch (pixels)
+  let s = [0, 0, 0], n = 0;
+  for (let y = Math.max(0, Math.round(cy - r)); y < Math.min(H, Math.round(cy + r)); y++) for (let x = Math.max(0, Math.round(cx - r)); x < Math.min(W, Math.round(cx + r)); x++) {
+    const i = (y * W + x) * 4; s[0] += d[i]; s[1] += d[i + 1]; s[2] += d[i + 2]; n++; }
+  return n ? s.map(v => v / n) : [0, 0, 0];
+}
+const lum = c => 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2];
+// the fitted photo: { photo, lm, hair, beard, shape, face } from an image and its landmarks (normalised to the image)
+function fitPhoto(img, pts) {
+  const W = img.naturalWidth || img.width, H = img.naturalHeight || img.height, P = i => [pts[i].x * W, pts[i].y * H];
+  const eL = P(468), eR = P(473), [l, r] = eL[0] < eR[0] ? [eL, eR] : [eR, eL], roll = Math.atan2(r[1] - l[1], r[0] - l[0]);
+  const top = P(10), chin = P(152), c = [(top[0] + chin[0]) / 2, (top[1] + chin[1]) / 2], fh = Math.hypot(chin[0] - top[0], chin[1] - top[1]);
+  const N = MYP_FIT.size, k = N / (fh * MYP_FIT.side), cv = document.createElement('canvas'); cv.width = cv.height = N;
+  const x = cv.getContext('2d', { willReadFrequently: true }), m = new DOMMatrix().translate(N / 2, N / 2).rotate(-roll * 180 / Math.PI).scale(k).translate(-c[0], -c[1]);
+  x.fillStyle = '#7a6a5c'; x.fillRect(0, 0, N, N); x.setTransform(m); x.imageSmoothingQuality = 'high'; x.drawImage(img, 0, 0); x.setTransform(1, 0, 0, 1, 0, 0);
+  const q = pts.slice(0, 468).map(p => { const v = m.transformPoint(new DOMPoint(p.x * W, p.y * H)); return [v.x / N, v.y / N]; });
+  const lm = q.map(([u, v]) => Math.round(Math.max(0, Math.min(1, u)) * 1000) + ',' + Math.round(Math.max(0, Math.min(1, v)) * 1000)).join(',');
+  // colours in the level square
+  const d = x.getImageData(0, 0, N, N).data, Q = i => [q[i][0] * N, q[i][1] * N], fhN = fh * k, at = (i, dx, dy, r) => { const p = Q(i); return areaMean(d, N, N, p[0] + dx * fhN, p[1] + dy * fhN, r * fhN); };
+  // hair: patches above the forehead and temples that clearly aren't skin (none: bald, or cropped off: his hair keeps its colour)
+  const skin = at(50, 0, 0, 0.03).map((v, i) => (v + at(280, 0, 0, 0.03)[i]) / 2), sl = Math.hypot(...skin) || 1;
+  const hairs = [at(10, 0, -0.16, 0.04), at(10, 0, -0.23, 0.04), at(10, -0.12, -0.18, 0.04), at(10, 0.12, -0.18, 0.04), at(54, -0.05, -0.12, 0.04), at(284, 0.05, -0.12, 0.04)]
+    .filter(h => Math.hypot(h[0] - skin[0], h[1] - skin[1], h[2] - skin[2]) / sl > 0.3 && lum(h) < lum(skin) * 1.15);
+  const hair = hairs.length >= 2 ? [0, 1, 2].map(ch => Math.round(hairs.reduce((s2, h) => s2 + h[ch], 0) / hairs.length)) : null;
+  const cheek = lum(at(50, 0, 0, 0.03)) / 2 + lum(at(280, 0, 0, 0.03)) / 2, chinL = (lum(at(152, 0, -0.05, 0.03)) + lum(at(148, 0.01, -0.04, 0.025)) + lum(at(377, -0.01, -0.04, 0.025))) / 3;
+  const beard = Math.max(0, Math.min(1, (0.55 - chinL / Math.max(1, cheek)) / 0.2));   // chin/cheek light: a full beard ~0.3, clean-shaven 0.6-0.85 (shadow under the chin)
+  const yaw = (Math.hypot(...[0, 1].map(i => Q(1)[i] - Q(234)[i])) - Math.hypot(...[0, 1].map(i => Q(1)[i] - Q(454)[i]))) / (Math.hypot(...[0, 1].map(i => Q(1)[i] - Q(234)[i])) + Math.hypot(...[0, 1].map(i => Q(1)[i] - Q(454)[i])));
+  const wid = Math.hypot(Q(454)[0] - Q(234)[0], Q(454)[1] - Q(234)[1]) / fhN, rr = wid / MYP_FIT.ratio, shape = [Math.max(0.9, Math.min(1.1, 1 + (rr - 1) * 0.7)), Math.max(0.9, Math.min(1.1, 1 - (rr - 1) * 0.5))].map(v => +v.toFixed(3));
+  // closest hair, with a beard where he has one
+  let best = 0, bestD = 1e9;
+  MYP_HAIR.forEach((h, i) => { if (hair && i === 13) return;   // (13 is balding: only when no hair shows)
+    const dd = (hair ? Math.hypot(h[0] - hair[0], h[1] - hair[1], h[2] - hair[2]) : 0) + 60 * Math.abs((MYP_BEARD[i] || 0) - beard); if (dd < bestD) { bestD = dd; best = i; } });
+  let q2 = 0.88, url = cv.toDataURL('image/jpeg', q2); while (url.length > 160000 && q2 > 0.5) url = cv.toDataURL('image/jpeg', q2 -= 0.08);
+  return { photo: url, lm, hair, beard: +beard.toFixed(2), chin: +(chinL / Math.max(1, cheek)).toFixed(2), yaw: +yaw.toFixed(3), shape, face: best };
+}
 function mypCropOpen(file) {
-  const url = URL.createObjectURL(file), img = new Image();
-  img.onload = () => {
+  const url = URL.createObjectURL(file), img = new Image(), msg = $('mypMsg');
+  img.onload = async () => {
+    msg.textContent = 'Finding your face… (the first time this downloads the face finder)';
+    $('mypPhotoAdd').disabled = true;
+    let fit = null;
+    try { const fl = await faceFitter(), r = fl.detect(img), pts = r.faceLandmarks && r.faceLandmarks[0]; if (pts && pts.length >= 473) fit = fitPhoto(img, pts); }
+    catch (e) { console.warn('face fitting', e); }
+    $('mypPhotoAdd').disabled = false;
+    if (fit) {
+      URL.revokeObjectURL(url); window.CR_LASTFIT = { hair: fit.hair, beard: fit.beard, chin: fit.chin, shape: fit.shape, face: fit.face };   // (tests)
+      Object.assign(mypForm, { photo: fit.photo, lm: fit.lm, shape: fit.shape, face: fit.face, photo3d: true }); if (fit.hair) mypForm.hair = fit.hair; else delete mypForm.hair;
+      msg.textContent = 'Face found. His hair and head are picked to match: change the face below if you like. Tap See him in 3D.' +
+        (Math.abs(fit.yaw) > MYP_FIT.yaw ? ' Your head is turned a little in this photo: one looking straight at the camera will look better.' : '');
+      renderMyp(); return;
+    }
     const N = MYP_GUIDE.size, c = mypCrop;
     c.img = img; c.s0 = N / Math.min(img.width, img.height); c.s = c.s0; c.x = N / 2; c.y = N / 2; c.rot = 0;
     $('mypZoom').value = 0; $('mypTilt').value = 0;
-    $('mypCrop').hidden = false; $('mypMsg').textContent = ''; mypCropDraw();
+    $('mypCrop').hidden = false; msg.textContent = 'No face found automatically. Line it up by hand, or try a clearer photo looking straight at the camera.'; mypCropDraw();
     $('mypStage').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   };
-  img.onerror = () => { URL.revokeObjectURL(url); $('mypMsg').textContent = 'That picture could not be opened. Try a JPEG or PNG photo.'; };
+  img.onerror = () => { URL.revokeObjectURL(url); msg.textContent = 'That picture could not be opened. Try a JPEG or PNG photo.'; };
   img.src = url;
 }
 function mypCropClose() { const c = mypCrop; if (c.img) URL.revokeObjectURL(c.img.src); c.img = null; c.ptrs.clear(); $('mypCrop').hidden = true; $('mypPhotoFile').value = ''; }
@@ -2668,9 +2747,36 @@ $('mypCropCancel').addEventListener('click', mypCropClose);
 $('mypCropOk').addEventListener('click', () => {
   mypCropDraw(); let q = 0.86, url = $('mypCropCv').toDataURL('image/jpeg', q);
   while (url.length > 120000 && q > 0.5) url = $('mypCropCv').toDataURL('image/jpeg', q -= 0.08);
-  mypForm.photo = url; if (mypForm.photo3d === undefined) mypForm.photo3d = true; mypCropClose(); renderMyp();
+  mypForm.photo = url; delete mypForm.lm; delete mypForm.hair; delete mypForm.shape; if (mypForm.photo3d === undefined) mypForm.photo3d = true; mypCropClose(); renderMyp();
 });
-$('mypPhotoDel').addEventListener('click', () => { delete mypForm.photo; delete mypForm.photo3d; renderMyp(); });
+// "See him in 3D" (My player): the player as he is in the form, alone in the middle of the ground, bare-headed, the camera
+// circling his face slowly (or the whole of him). Drawn by the 3D view from pr.own (render3d.js ownOf), so it needs no match.
+let mypPrev = null;
+const PREV_AT = [0, 0, PITCH / 2];
+function previewPeople() {
+  const pos = PREV_AT, ang = 0, t = clock - mypPrev.t0;
+  let j = figure(pos, ang, { seed: 7 });
+  if (CLIPS) j = mixJ(j, placeClip(clipAt('idle', t * 0.8), pos, ang), 0.5);
+  return [{ j, at: pos, team: 'bat', bare: true, pid: 'myp:' + mypPrev.own.name, own: mypPrev.own, look: mypPrev.look || null }];
+}
+function previewCam() {
+  const pr = previewPeople()[0], j = pr.j, a = sub(j.shR, j.shL), fl = Math.hypot(a[0], a[2]) || 1, f = [a[2] / fl, 0, -a[0] / fl];
+  const t = clock - mypPrev.t0, turn = Math.sin(t * 0.45) * 0.75, c = Math.cos(turn), s2 = Math.sin(turn), d = [f[0] * c - f[2] * s2, 0, f[0] * s2 + f[2] * c];
+  const far = mypPrev.whole, tgt = far ? [j.pelvis[0], j.pelvis[1] + 0.25, j.pelvis[2]] : [j.head[0], j.head[1] + 0.02, j.head[2]], dist = far ? 4.2 : 0.95;
+  cam.pos = [tgt[0] + d[0] * dist, tgt[1] + (far ? 0.2 : 0.04), tgt[2] + d[2] * dist]; cam.tgt = tgt; cam.fov = far ? 34 : 30;
+  mypPrev.look = norm(sub(cam.pos, j.head));
+}
+function mypPreviewOpen() {
+  const f = mypForm, name = ($('mypName').value || '').trim() || 'Your player';
+  mypPrev = { t0: clock, whole: false, own: { name, num: f.num, mine: true, face: [f.face, MYP_TONES[f.tone].v], ...(f.photo ? { photo: f.photo, photo3d: f.photo3d !== false, lm: f.lm, hair: f.hair, shape: f.shape } : {}) } };
+  if (f.photo) { window.CR_PHOTO_IMGS = window.CR_PHOTO_IMGS || new Map(); if (!window.CR_PHOTO_IMGS.has(f.photo)) { const im = new Image(); im.src = f.photo; window.CR_PHOTO_IMGS.set(f.photo, im); } }
+  $('mypViewName').textContent = name + ' #' + f.num; $('mypViewZoom').textContent = 'Whole player';
+  showScreen('mypview');
+}
+$('mypPreview').addEventListener('click', mypPreviewOpen);
+$('mypViewBack').addEventListener('click', () => { mypPrev = null; showScreen('myplayer'); });
+$('mypViewZoom').addEventListener('click', () => { if (!mypPrev) return; mypPrev.whole = !mypPrev.whole; $('mypViewZoom').textContent = mypPrev.whole ? 'Face' : 'Whole player'; });
+$('mypPhotoDel').addEventListener('click', () => { for (const k of ['photo', 'photo3d', 'lm', 'hair', 'shape']) delete mypForm[k]; renderMyp(); });
 function mypSkillText() { const r = mypRatings(mypForm);
   $('mypSkillTxt').textContent = mypForm.type ? 'Batting ' + r.bat + ' · bowling ' + r.bowl + '. Slide right to bat better and bowl worse.' : 'Batting ' + r.bat + '. He doesn\'t bowl.'; }
 function mypFreeSlot(team, prefer) { const t = TEAMS.find(t => t.id === team);
@@ -4794,7 +4900,7 @@ function renderTabs(tabsId, cardId, sel) {
 }
 
 // ----------------------------------------------------------------------- screens
-const SCREENS = ['menu', 'setup', 'chaseMenu', 'toss', 'break', 'pause', 'end', 'stats', 'tournament', 'settings', 'myplayers', 'myplayer'];
+const SCREENS = ['menu', 'setup', 'chaseMenu', 'toss', 'break', 'pause', 'end', 'stats', 'tournament', 'settings', 'myplayers', 'myplayer', 'mypview'];
 function showScreen(id) { for (const s of SCREENS) $(s).hidden = s !== id; if (id === 'menu') renderQuickLine(); syncWake(id); }
 // Keep the screen awake while a match is on (owner, 22 November 2026: phones dimmed and locked mid-chase): during play, the toss
 // and the innings break; let go on the menus, the pause menu and the end screen. The browser lets go by itself when the page is
@@ -5741,7 +5847,7 @@ function renderMirrored() {
 }
 
 // everyone on the field this frame: joints (world metres), team ('bat' | 'bowl'), bat, keeper; `at` = where they stand
-function people() { const p = RP ? RP.people : tossOn() ? tossPeople() : livePeople(); return MIR < 0 ? p.map(mirrorPerson) : p; }
+function people() { const p = RP ? RP.people : mypPrev ? previewPeople() : tossOn() ? tossPeople() : livePeople(); return MIR < 0 ? p.map(mirrorPerson) : p; }
 // --- left-handers. The rules, physics and computer players all work for a right-hander. When a left-hander is on strike,
 // the picture is mirrored instead: everything that moves (players, ball, camera, marks on the pitch, the mini-map) has its x
 // negated, and each body's left and right are swapped so it isn't drawn inside out. The controls are mirrored too, so left
@@ -6913,6 +7019,7 @@ function tick(dt) {
   else { clock += dt; update0(dt); }
 }
 function update0(dt) {   // behind the menus: slow drift of the camera (the toss has its own)
+  if (mypPrev) return previewCam();
   if (tossOn()) return tossCam(dt);
   const a = clock * 0.05;
   cam.pos = [Math.sin(a) * 40, 16, Math.cos(a) * 40 + 8]; cam.tgt = [0, 0, 8]; cam.fov = 42;
@@ -7175,7 +7282,7 @@ let R3D = null;
 try {
   R3D = window.Cricket3D ? window.Cricket3D({
     touch, LIGHTS, BOARDS, STAND_IN, STAND_OUT, STAND_H, PITCH, CREASE, ROPE, lerp, people, ballPos, cam, deg, $,
-    get cheer() { return cheer; }, get clock() { return clock; }, get inn() { return inn || (tossOn() ? { bat: M.teams[0], bowl: M.teams[1] } : null); }, get M() { return M; }, get cond() { return cond(); }, get rope() { return ropeR(); }, get coin() { return tossCoin(); },
+    get cheer() { return cheer; }, get clock() { return clock; }, get inn() { return inn || (tossOn() ? { bat: M.teams[0], bowl: M.teams[1] } : null); }, get M() { return M; }, get preview() { return !!mypPrev; }, get cond() { return cond(); }, get rope() { return ropeR(); }, get coin() { return tossCoin(); },
     get ball() { return RP ? RP.snap : ball; }, get stumps() { return stumpsNow(); }, get W() { return W; }, get H() { return H; }, get camShift() { return camShift; }, viewZoom, get projectionFocal() { return focal; },
   }) : null;
 } catch (e) { R3D = null; }
