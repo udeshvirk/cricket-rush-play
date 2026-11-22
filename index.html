@@ -251,6 +251,8 @@
   .myp-empty { color:var(--muted); font-size:14px; padding:6px 0; }
   @media (max-width:520px) { .myp-row { grid-template-columns:48px 1fr; } .myp-row .myp-face { width:48px; } .myp-row .acts { grid-column:1 / -1; } }
   .myp-face.on { border-color:var(--amber); box-shadow:0 0 0 2px rgba(255,176,46,.35); }
+  .chal-name { display:flex; flex-direction:column; gap:6px; max-width:320px; }
+  #chalBtns .btn { flex:1; }
   #mypview { background:none; align-items:end; justify-items:center; pointer-events:none; }
   #mypview .mypview-bar { pointer-events:auto; display:flex; gap:14px; align-items:center; flex-wrap:wrap; justify-content:center; background:var(--panel);
     padding:10px 14px; border-radius:12px; margin-bottom:env(safe-area-inset-bottom, 0px); }
@@ -818,8 +820,8 @@
         <button class="level" type="button" id="goSeries"><span class="n">Mini series</span><span class="d">Best of 3 or 5 matches</span>
           <span class="s">One opponent · series trophy · player of the series</span><span class="best" id="seriesLine"></span></button>
         <button class="level" type="button" id="goTournament"><span class="n">Tournaments</span><span class="d">Nations Cup · Club League</span><span class="best" id="tournamentLine"></span></button>
-        <button class="level" type="button" id="goChase"><span class="n">Quick chase</span><span class="d">Chase a target</span>
-          <span class="s">Gully · Club · Super Over</span><span class="best"></span></button>
+        <button class="level" type="button" id="goChase"><span class="n">Challenges</span><span class="d">Daily · challenge a friend</span>
+          <span class="s">Quick chases: Gully · Club · Super Over</span><span class="best"></span></button>
       </div>
       <div class="row"><button class="btn ghost" id="goStats" type="button">Stats &amp; records</button><button class="btn ghost" id="goMyp" type="button">My players</button><button class="btn ghost" id="goSettings" type="button">Settings</button><button class="btn ghost" id="fsMenu" type="button" hidden>Play full screen</button></div>
       <div class="menu-footnote">Bat. Bowl. Chase glory.</div>
@@ -851,6 +853,7 @@
       <div><div class="lbl2">Overs per side</div><div class="opts" id="oversPick"></div></div>
       <div><div class="lbl2">Conditions <button class="reroll" id="condRoll" type="button" title="Pick again">⟳ Shuffle</button></div><div class="opts conds" id="condPick"></div>
         <div class="condnote" id="condNote"></div></div>
+      <label class="chal-name" id="chalNameRow" hidden><span class="lbl2">Your name (your friend sees it)</span><input id="chalName" class="myp-input" maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="Your name"></label>
       <button class="setsum" id="setSummary" type="button"><span id="setSummaryText"></span><span class="chg">Settings ›</span></button>
       <div class="row setup-actions">
         <button class="btn" id="toToss" type="button">Go to the toss</button>
@@ -996,7 +999,7 @@
   </div></div>
   <div id="chaseMenu" class="screen" hidden>
     <div class="card">
-      <div class="title sm">QUICK <span>CHASE</span></div>
+      <div class="title sm">CHALL<span>ENGES</span></div>
       <div class="levels" id="levels"></div>
       <p class="how">Choose <b>Defend</b>, <b>Shot</b> or <b>Loft</b>, then as the ball reaches the bat <b>swipe anywhere</b> where you
         want it to go: down the screen is straight, left is the off side, right is the leg side, up is behind you. A plain tap lets
@@ -1021,6 +1024,16 @@
     </div>
   </div>
 
+  <div id="chalIn" class="screen" hidden>
+    <div class="card">
+      <div class="title sm">YOU'RE <span>CHALLENGED</span></div>
+      <div class="tag" id="chalInText"></div>
+      <label class="chal-name"><span class="lbl2">Your name</span><input id="chalInName" class="myp-input" maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="Your name"></label>
+      <p class="how" id="chalInNote"></p>
+      <div class="row"><button class="btn" id="chalAccept" type="button">Accept the challenge</button><button class="btn ghost" id="chalDecline" type="button">Not now</button></div>
+      <div class="scard" id="chalInCard"></div>
+    </div>
+  </div>
   <div id="break" class="screen" hidden>
     <div class="card">
       <div class="title sm" id="breakTitle">INNINGS <span>BREAK</span></div>
@@ -1073,6 +1086,11 @@
       <div class="stats" id="endStats"></div>
       <div class="stats" id="endAwards" aria-label="Player awards"></div>
       <p class="how" id="seriesChoice" hidden></p>
+      <p class="how" id="chalNote" hidden></p>
+      <div class="row" id="chalBtns" hidden>
+        <button class="btn" id="chalSend" type="button">Send to a friend</button>
+        <button class="btn ghost" id="chalCopy" type="button">Copy link</button>
+      </div>
       <div class="row">
         <button class="btn" id="again" type="button">Play again</button>
         <button class="btn ghost" id="finishSeries" type="button" hidden>Finish series</button>
@@ -4209,7 +4227,7 @@ function saveMatch() {
   if (!M || M.mode !== 'match' || quiet) return;
   try {
     const t = x => TEAMS.indexOf(x);
-    localStorage.setItem(MATCH_KEY, JSON.stringify({ a: t(M.teams[0]), b: t(M.teams[1]), overs: M.overs, diff: DIFFS.indexOf(M.diff), cur: M.cur, series: !!M.series, tournamentId: M.tournamentId, fixtureId: M.fixtureId, noBall: nbRule(), cond: M.cond, slowers: M.slowers || 0, slowAt: M.slowAt || [],
+    localStorage.setItem(MATCH_KEY, JSON.stringify({ a: t(M.teams[0]), b: t(M.teams[1]), overs: M.overs, diff: DIFFS.indexOf(M.diff), cur: M.cur, series: !!M.series, tournamentId: M.tournamentId, fixtureId: M.fixtureId, noBall: nbRule(), cond: M.cond, slowers: M.slowers || 0, slowAt: M.slowAt || [], chal: M.chal || undefined,
       innings: allInnings().map(i => ({ ...i, bat: t(i.bat), bowl: t(i.bowl) })) }));
   } catch (e) {}
   renderMatchLine();
@@ -4232,6 +4250,7 @@ function resumeMatch() {
         autoBowl: setup.autoBowl !== false, watchFast: false, series: d.series && series && !seriesState(series).done ? series : null,
         innings: all.slice(0, 2), so: all.slice(2),
         tournamentId: d.tournamentId===tournament?.id?d.tournamentId:undefined, fixtureId:d.fixtureId, noBall: d.noBall || 0, cond: d.cond || null, slowers: d.slowers || 0, slowAt: d.slowAt || [] };
+  if (d.chal) { M.chal = d.chal; if (d.chal.role === 'chase') { const T0 = chalTeam(d.chal.d.a, d.chal.d.na); M.teams[1] = T0; for (const i of M.innings) { if (i.bat === TEAMS[d.chal.d.a]) i.bat = T0; if (i.bowl === TEAMS[d.chal.d.a]) i.bowl = T0; } } }
   startInnings(M.cur);
 }
 function startOver() {
@@ -4621,6 +4640,7 @@ function endInnings() {
   phase = 'break'; showControls(); hideBatCard();
   $('pick').hidden = true; $('meter').hidden = true; $('delivery').classList.remove('show');
   if (M.mode === 'chase') return endChase();
+  if (M.chal) return chalInningsDone();
   if (M.cur === 0) {
     const a = inn;
     M.innings[1] = newInnings(a.bowl, a.bat, a.maxBalls, 10, a.runs + 1, !a.userBats);
@@ -4697,6 +4717,7 @@ function endMatch() {
     [bestB ? bestB.w + '–' + bestB.r : '-', 'Best bowling · ' + (bestB ? surname(bestB.n) : '')]]
     .map(([v, l]) => '<div><b>' + esc(v) + '</b><span>' + esc(l) + '</span></div>').join('');
   renderTabs('endTabs', 'endCard', 1);
+  $('chalNote').hidden = true; $('chalBtns').hidden = true;
   $('trophy').hidden = true; $('trophy').classList.remove('cup'); $('endTitle').classList.remove('champ-title');
   recordTournamentMatch(winner);
   renderEndOptions();
@@ -4706,6 +4727,170 @@ function endMatch() {
   clearMatch();
   showScreen('end');
 }
+
+// ---- Challenge a friend (owner, 22 November 2026: "I play I bat and then share it with my friend, then he plays from his
+// mobile and we see who wins"). No server: the link carries the challenge. The setter bats one innings (his team v theirs, the
+// computer bowls); the link (#c=, CHAL) holds the teams, overs, difficulty, no-balls, conditions and his innings card; the
+// friend's game rebuilds that innings (chalTeam: the setter's names on his side) and he chases it as the other side. The
+// result (#r=) goes back with both innings and shows "UD (India) won by 12 runs". A level score is a tie (no Super Over).
+// The payload is JSON, deflated where the browser can, base64url, with a check (CHAL.salt) so an edited score is refused.
+// Records: only your own innings goes into your players' records (recordCareers of that innings); the match counts as played.
+const CHAL = { salt: 'stumpflare-challenge-v1', nameKey: 'cricket-rush-name', v: 1 };
+let chalSetup = false, chalLink = '', chalIncoming = null;
+const chalMyName = () => { try { return localStorage.getItem(CHAL.nameKey) || ''; } catch (e) { return ''; } };
+const chalSaveName = n => { try { localStorage.setItem(CHAL.nameKey, n); } catch (e) {} };
+const chalClean = n => String(n || '').replace(/\s+/g, ' ').trim().slice(0, 16);
+function fnv(str) { let h = 2166136261; for (let k = 0; k < str.length; k++) h = Math.imul(h ^ str.charCodeAt(k), 16777619); return (h >>> 0).toString(36); }
+const b64u = b => { let s2 = ''; for (const x of b) s2 += String.fromCharCode(x); return btoa(s2).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+const unb64u = t => { const s2 = atob(t.replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(s2, c => c.charCodeAt(0)); };
+async function chalPack(o) {
+  o = { ...o, h: '' }; o.h = fnv(CHAL.salt + JSON.stringify(o));
+  let bytes = new TextEncoder().encode(JSON.stringify(o)), z = false;
+  if (typeof CompressionStream === 'function') try { bytes = new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer()); z = true; } catch (e) {}
+  return (z ? 'z' : 'j') + b64u(bytes);
+}
+async function chalUnpack(t) {
+  let bytes = unb64u(t.slice(1));
+  if (t[0] === 'z') bytes = new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+  const o = JSON.parse(new TextDecoder().decode(bytes)), h = o.h; o.h = '';
+  if (h !== fnv(CHAL.salt + JSON.stringify(o)) || o.v !== CHAL.v) throw new Error('bad check');
+  return o;
+}
+const chalUrl = (k, t) => location.origin + location.pathname + '#' + k + '=' + t;
+// an innings as plain figures, and back (on a copy of the batting side carrying the setter's names)
+function innPack(i) {
+  return { r: i.runs, w: i.wkts, b: i.balls, mb: i.maxBalls, x: i.extras, wd: i.wides, nb: i.noBalls, f4: i.fours, s6: i.sixes,
+    c: i.cards.map((c, k) => c.in ? [k, c.runs, c.balls, c.fours, c.sixes, c.out || ''] : null).filter(Boolean),
+    bw: i.bowlOrder.map(k => [k, i.bowlers[k].balls, i.bowlers[k].runs, i.bowlers[k].wkts]), fw: i.fow.map(f => [f.r, f.w, f.k, f.b]) };
+}
+function innUnpack(d, bat, bowl, userBats, target) {
+  const i = newInnings(bat, bowl, d.mb, 10, target, userBats);
+  Object.assign(i, { runs: d.r, wkts: d.w, balls: d.b, extras: d.x, wides: d.wd, noBalls: d.nb, fours: d.f4, sixes: d.s6 });
+  i.cards.forEach(c => { c.in = false; });
+  for (const [k, r, b, f4, s6, out] of d.c) if (i.cards[k]) i.cards[k] = { runs: r, balls: b, fours: f4, sixes: s6, out: out || null, in: true };
+  for (const [k, b, r, w] of d.bw) { i.bowlers[k] = { balls: b, runs: r, wkts: w, wides: 0 }; i.bowlOrder.push(k); }
+  i.fow = d.fw.map(([r, w, k, b]) => ({ r, w, k, b }));
+  return i;
+}
+const chalNames = t => t.players.map(p => p.name);
+function chalTeam(idx, names) { const t = TEAMS[idx]; return { ...t, players: t.players.map((p, k) => names && names[k] ? { ...p, name: String(names[k]).slice(0, 24) } : p) }; }
+const chalSay = (who, team) => esc(who) + ' (' + esc(team.name) + ')';
+// --- the setter: the setup in challenge mode, then one innings
+function chalOpenSetup() { chalSetup = true; setup.series = 0; setup.tournament = false; cupReplaceArmed = false; renderSetup(); showScreen('setup'); }
+function chalStartSet() {
+  const name = chalClean($('chalName').value);
+  if (!name) { $('chalName').focus(); $('chalName').placeholder = 'Type your name first'; return; }
+  chalSaveName(name); chalSetup = false;
+  const keep = series; series = null;
+  M = { mode: 'match', overs: setup.overs, diff: DIFFS[setup.diff] || DIFFS[1], teams: [TEAMS[setup.a], TEAMS[setup.b]], innings: [], cur: 0, autoplay: null,
+        autoBowl: true, watchFast: false, series: null, noBall: setup.noBall, cond: nextCond || rollCond(), chal: { role: 'set', name } };
+  series = keep; nextCond = null; ball = null; RP = null; MIR = 1;
+  beginMatch(true);
+}
+async function chalInningsDone() {
+  const c = M.chal;
+  if (c.role === 'set') {
+    const i = M.innings[0], t = x => TEAMS.indexOf(x);
+    const d = { v: CHAL.v, n: c.name, a: t(i.bat), b: t(i.bowl), o: M.overs, df: Math.max(0, DIFFS.indexOf(M.diff)), nb: nbRule(), cd: M.cond,
+                na: chalNames(i.bat), nbw: chalNames(i.bowl), i: innPack(i) };
+    phase = 'over'; recordCareers(); careerCache = null; clearMatch();
+    chalLink = chalUrl('c', await chalPack(d));
+    const tt = $('endTitle'); tt.textContent = 'TARGET SET'; tt.className = 'result';
+    $('endSub').textContent = i.bat.name + ' ' + i.runs + '/' + i.wkts + ' in ' + ovStr(i.balls) + ' overs. Send it to a friend: they chase ' + (i.runs + 1) + ' as ' + i.bowl.name + '.';
+    chalEndCommon([i], 'Your friend opens the link on a phone or computer and bats as ' + i.bowl.name + '. When they finish they can send the result back to you.');
+    return;
+  }
+  // the chaser: done (target reached, out of balls or all out)
+  phase = 'over';
+  const [a, b] = M.innings, res = chalResult(a, b, c.d.n, c.name);
+  const tt = $('endTitle'); tt.textContent = res.you === 'won' ? 'YOU WON' : res.you === 'lost' ? 'YOU LOST' : 'TIED'; tt.className = 'result' + (res.you === 'won' ? ' win' : res.you === 'lost' ? ' lose' : '');
+  if (res.you === 'won' && !quiet) { buzz('win'); confettiRain(); sndStinger('win'); sndCheer(1); sndClap(0.9, 6); }
+  $('endSub').innerHTML = res.html;
+  const keepInn = M.innings; M.innings = [b]; recordCareers(); careerCache = null; M.innings = keepInn;
+  saveRecord(res.you === 'won'); clearMatch();
+  const r = { v: CHAL.v, n: c.d.n, m: c.name, a: c.d.a, b: c.d.b, o: c.d.o, cd: c.d.cd, na: c.d.na, nbw: chalNames(b.bat), i: c.d.i, j: innPack(b) };
+  chalLink = chalUrl('r', await chalPack(r));
+  chalEndCommon([a, b], 'Send the result back to ' + c.d.n + '.');
+  $('chalSend').textContent = 'Send result to ' + c.d.n;
+}
+// who won, in cricket words; you: 'won' | 'lost' | 'tied' from the chaser's side
+function chalResult(a, b, setter, chaser) {
+  if (b.runs >= b.target) { const left = b.maxBalls - b.balls;
+    return { you: 'won', html: chalSay(chaser, b.bat) + ' won by ' + plural(b.maxWkts - b.wkts, 'wicket') + (left ? ', with ' + plural(left, 'ball') + ' to spare.' : ', off the last ball.') }; }
+  if (b.runs === b.target - 1) return { you: 'tied', html: 'Scores level: ' + esc(setter) + ' and ' + esc(chaser) + ' tied on ' + b.runs + '.' };
+  return { you: 'lost', html: chalSay(setter, a.bat) + ' won by ' + plural(b.target - 1 - b.runs, 'run') + '.' };
+}
+function chalEndCommon(list, note) {
+  const sc = i => i.bat.short + ' ' + i.runs + '/' + i.wkts;
+  $('endStats').innerHTML = list.map(i => '<div><b>' + esc(sc(i)) + '</b><span>' + ovStr(i.balls) + ' overs</span></div>').join('');
+  $('endAwards').textContent = ''; $('seriesChoice').hidden = true; $('finishSeries').hidden = true; $('endRematch').hidden = true;
+  $('trophy').hidden = true; $('endTitle').classList.remove('champ-title');
+  $('chalNote').hidden = false; $('chalNote').textContent = note; $('chalBtns').hidden = !chalLink;
+  $('chalSend').textContent = 'Send to a friend'; $('chalCopy').textContent = 'Copy link';
+  $('again').textContent = M.chal.role === 'set' ? 'Bat again' : 'Challenge back';
+  renderTabs('endTabs', 'endCard', list.length - 1);
+  showScreen('end');
+}
+function chalAgain() {   // setter: a fresh challenge, same settings; chaser: set one back as his own side
+  const c = M.chal, I = M.innings;
+  const a = c.role === 'set' ? TEAMS.indexOf(I[0].bat) : TEAMS.indexOf(I[1].bat), b = c.role === 'set' ? TEAMS.indexOf(I[0].bowl) : c.d.a;
+  Object.assign(setup, { a, b, overs: M.overs, series: 0, tournament: false });
+  chalLink = ''; toMenu(); chalOpenSetup();
+}
+async function chalShare() {
+  if (!chalLink) return;
+  const text = M && M.chal && M.chal.role === 'set' ? 'Beat my score in Stumpflare! ' + $('endSub').textContent : 'Stumpflare challenge result: ' + $('endSub').textContent;
+  if (navigator.share) { try { await navigator.share({ title: 'Stumpflare challenge', text, url: chalLink }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+  chalCopy();
+}
+async function chalCopy() {
+  try { await navigator.clipboard.writeText(chalLink); $('chalCopy').textContent = 'Copied!'; }
+  catch (e) { prompt('Copy this link:', chalLink); }
+}
+$('chalSend').addEventListener('click', chalShare);
+$('chalCopy').addEventListener('click', chalCopy);
+// --- opening a link: a challenge to accept, or a result to see
+async function chalFromHash() {
+  const m = /^#([cr])=([jz][A-Za-z0-9_-]+)$/.exec(location.hash || ''); if (!m) return;
+  history.replaceState(null, '', location.pathname + location.search);   // (a reload doesn't open it again)
+  let d; try { d = await chalUnpack(m[2]); } catch (e) { ask('This challenge link doesn\'t work', 'It may have been cut short or changed. Ask your friend to send it again.', 'OK', null); return; }
+  if (!TEAMS[d.a] || !TEAMS[d.b]) return;
+  if (m[1] === 'r') return chalShowResult(d);
+  chalIncoming = d;
+  const A = chalTeam(d.a, d.na), B = TEAMS[d.b], i = innUnpack(d.i, A, chalTeam(d.b, d.nbw), false, null);
+  $('chalInText').innerHTML = '<b>' + esc(d.n) + '</b> made <b>' + i.runs + '/' + i.wkts + '</b> for ' + esc(A.name) + ' in ' + ovStr(i.balls) + ' overs. Bat as <b>' + esc(B.name) +
+    '</b> and chase <b>' + (i.runs + 1) + '</b> off ' + i.maxBalls + ' balls.';
+  $('chalInNote').textContent = (DIFFS[d.df] || DIFFS[1]).name + ' · ' + condText(d.cd || COND0) + ' · no-balls ' + ['off', 'on', 'with free hit'][d.nb || 0] + '. The computer bowls ' + A.name + '\'s overs.';
+  $('chalInName').value = chalMyName();
+  $('chalInCard').innerHTML = scorecardHTML(i);
+  showScreen('chalIn');
+}
+function chalAccept() {
+  const d = chalIncoming, name = chalClean($('chalInName').value);
+  if (!d) return; if (!name) { $('chalInName').focus(); $('chalInName').placeholder = 'Type your name first'; return; }
+  chalSaveName(name); chalIncoming = null; audio();
+  const A = chalTeam(d.a, d.na), B = TEAMS[d.b], a = innUnpack(d.i, A, chalTeam(d.b, d.nbw), false, null);
+  const keep = series; series = null;
+  M = { mode: 'match', overs: d.o, diff: DIFFS[d.df] || DIFFS[1], teams: [B, A], innings: [], cur: 0, autoplay: null, autoBowl: true, watchFast: false, series: null,
+        noBall: d.nb || 0, cond: d.cd || rollCond(), chal: { role: 'chase', name, d } };
+  series = keep; ball = null; RP = null; MIR = 1;
+  M.innings = [a, newInnings(B, A, a.maxBalls, 10, a.runs + 1, true)];
+  startInnings(1);
+}
+$('chalAccept').addEventListener('click', chalAccept);
+$('chalDecline').addEventListener('click', () => { chalIncoming = null; toMenu(); });
+function chalShowResult(d) {   // the setter sees how his friend did
+  const A = chalTeam(d.a, d.na), B = chalTeam(d.b, d.nbw), a = innUnpack(d.i, A, B, true, null), b = innUnpack(d.j, B, A, false, d.i.r + 1);
+  M = { mode: 'match', overs: d.o, diff: DIFFS[1], teams: [A, B], innings: [a, b], cur: 1, autoplay: null, chal: { role: 'result', name: d.n, d }, cond: d.cd };
+  inn = b; phase = 'over'; chalLink = '';
+  const res = chalResult(a, b, d.n, d.m), tt = $('endTitle');
+  tt.textContent = res.you === 'won' ? d.m.toUpperCase() + ' WON' : res.you === 'lost' ? 'YOU WON' : 'TIED'; tt.className = 'result' + (res.you === 'lost' ? ' win' : res.you === 'won' ? ' lose' : '');
+  $('endSub').innerHTML = res.html;
+  chalEndCommon([a, b], 'Challenge result from ' + d.m + '.');
+  $('again').textContent = 'New challenge';
+}
+window.addEventListener('hashchange', chalFromHash);
+window.CR_CHAL = () => chalLink;   // (tests)
 
 // ---- saved stats and records: your team's results and your players' runs and wickets, kept on this device for each format
 const STATS_KEY = 'cricket-rush-stats';
@@ -4848,7 +5033,7 @@ function endChase() {
   $('endStats').innerHTML = [[i.runs + '/' + i.wkts, 'Score'], [i.fours, 'Fours'], [i.sixes, 'Sixes'], [sr, 'Strike rate']]
     .map(([v, l]) => '<div><b>' + v + '</b><span>' + l + '</span></div>').join('');
   $('endTabs').textContent = ''; $('endCard').textContent = '';
-  $('again').textContent = 'Rematch';
+  $('again').textContent = 'Rematch'; $('chalNote').hidden = true; $('chalBtns').hidden = true;
   $('endAwards').textContent = ''; $('seriesChoice').hidden = true; $('finishSeries').hidden = true; $('endRematch').hidden = true;
   if (level.daily) {
     const n = saveDaily(level, res === 'won', i.runs, left);
@@ -4900,7 +5085,7 @@ function renderTabs(tabsId, cardId, sel) {
 }
 
 // ----------------------------------------------------------------------- screens
-const SCREENS = ['menu', 'setup', 'chaseMenu', 'toss', 'break', 'pause', 'end', 'stats', 'tournament', 'settings', 'myplayers', 'myplayer', 'mypview'];
+const SCREENS = ['menu', 'setup', 'chaseMenu', 'chalIn', 'toss', 'break', 'pause', 'end', 'stats', 'tournament', 'settings', 'myplayers', 'myplayer', 'mypview'];
 function showScreen(id) { for (const s of SCREENS) $(s).hidden = s !== id; if (id === 'menu') renderQuickLine(); syncWake(id); }
 // Keep the screen awake while a match is on (owner, 22 November 2026: phones dimmed and locked mid-chase): during play, the toss
 // and the innings break; let go on the menus, the pause menu and the end screen. The browser lets go by itself when the page is
@@ -4950,8 +5135,9 @@ function renderSetup() {
     it=>{setup.league=it.v;saveSetup();renderSetup();});
   optButtons('formatPick',[{v:0,html:'One match'},{v:3,html:'3-match series'},{v:5,html:'5-match series'},{v:'cup',html:setup.league==='ipl'?'Club League':'Nations Cup'}],
     it=>it.v===(setup.tournament?'cup':setup.series||0),it=>{setup.tournament=it.v==='cup';setup.series=setup.tournament?0:it.v;saveSetup();renderSetup();});
-  $('toToss').textContent=setup.tournament?'Start tournament':setup.series?'Start series':'Go to toss';
-  $('setupTitle').innerHTML=(setup.tournament?'TOURNAMENT':setup.series?'SERIES':'MATCH')+' <span>SETUP</span>';
+  $('toToss').textContent=chalSetup?'Start batting':setup.tournament?'Start tournament':setup.series?'Start series':'Go to toss';
+  $('setupTitle').innerHTML=chalSetup?'CHALLENGE <span>A FRIEND</span>':(setup.tournament?'TOURNAMENT':setup.series?'SERIES':'MATCH')+' <span>SETUP</span>';
+  $('formatPick').parentElement.hidden=chalSetup; $('chalNameRow').hidden=!chalSetup; if(chalSetup&&!$('chalName').value)$('chalName').value=chalMyName();
   for(const [id,key,other] of [['teamA','a','b'],['teamB','b','a']]){
     const el=$(id);el.innerHTML=pool.map(({t,id})=>'<option value="'+id+'">'+esc(t.name)+' · '+teamRating(t).overall+'</option>').join('');el.value=setup[key];
     const t=TEAMS[setup[key]],r=teamRating(t),card=$(id==='teamA'?'cardA':'cardB');card.style.setProperty('--kit',t.col);
@@ -5537,6 +5723,11 @@ function renderLevels() {
     '</span><span class="best">' + esc(dailyStatus(dl)) + '</span>';
   db.addEventListener('click', () => { audio(); startChase(dl); });
   box.appendChild(db);
+  const fb = document.createElement('button');
+  fb.className = 'level daily'; fb.type = 'button'; fb.id = 'level-friend';
+  fb.innerHTML = '<span class="n">Challenge a friend</span><span class="d">Bat first, then send the link</span><span class="s">They chase your score on their phone or computer</span><span class="best"></span>';
+  fb.addEventListener('click', () => { audio(); chalOpenSetup(); });
+  box.appendChild(fb);
   LEVELS.forEach(lv => {
     const b = document.createElement('button');
     b.className = 'level'; b.type = 'button'; b.id = 'level-' + lv.id;
@@ -7217,12 +7408,13 @@ $('pauseBtn').addEventListener('click', () => { if (paused) resume(); else openP
 function renderQuickLine() { const a = TEAMS[setup.a], b = TEAMS[setup.b]; if (a && b) $('quickLine').textContent = a.name + ' v ' + b.name + ' · ' + (setup.overs === 50 ? 'ODI' : setup.overs === 20 ? 'T20' : setup.overs + ' overs'); }
 $('goQuick').addEventListener('click', () => { audio(); setup.series = 0; setup.tournament = false; cupReplaceArmed = false; startTossOne(); });
 renderQuickLine();
-$('goMatch').addEventListener('click', () => { audio(); setup.series = 0; setup.tournament=false; cupReplaceArmed=false; renderSetup(); showScreen('setup'); });
+$('goMatch').addEventListener('click', () => { audio(); chalSetup = false; setup.series = 0; setup.tournament=false; cupReplaceArmed=false; renderSetup(); showScreen('setup'); });
 $('goChase').addEventListener('click', () => { audio(); renderLevels(); showScreen('chaseMenu'); });
 renderDailyLine();
+chalFromHash();   // opened from a challenge or result link
 $('setupBack').addEventListener('click', toMenu);
 $('chaseBack').addEventListener('click', toMenu);
-$('toToss').addEventListener('click', () => { audio(); if(setup.tournament)return newTournament(); if (setup.series) newSeries(); startTossOne(); });
+$('toToss').addEventListener('click', () => { audio(); if(chalSetup)return chalStartSet(); if(setup.tournament)return newTournament(); if (setup.series) newSeries(); startTossOne(); });
 // a single match from the setup screen doesn't touch a series in progress
 function startTossOne() { if (setup.series) return startToss(); const keep = series; series = null; startToss(); series = keep; }
 $('goSettings').addEventListener('click', () => { audio(); openSettings('menu'); });
@@ -7236,7 +7428,7 @@ $('statsReset').addEventListener('click', () => { if (statsArm) { try { localSto
 $('goResume').addEventListener('click', () => { audio(); resumeMatch(); });
 renderMatchLine();
 $('goSeries').addEventListener('click', () => {
-  audio();setup.tournament=false;
+  audio();setup.tournament=false;chalSetup=false;
   if (series && !seriesState(series).done) return startToss();   // carry on where you left off
   if (!setup.series) setup.series = 3;
   renderSetup(); showScreen('setup');
@@ -7269,6 +7461,7 @@ $('endRematch').addEventListener('click', () => { audio(); rematch(true); });
 $('finishSeries').addEventListener('click', finishSeriesNow);
 $('again').addEventListener('click', () => {
   audio();if(M?.tournamentId)return showTournament();
+  if (M && M.chal) return chalAgain();
   if (M && M.mode === 'match') {
     if (M.series && seriesState(M.series).done) { Object.assign(setup, { series: M.series.n, a: M.series.a, b: M.series.b, overs: M.series.overs, diff: M.series.diff }); newSeries(); }
     if (M.series) startToss(); else rematch(true);
