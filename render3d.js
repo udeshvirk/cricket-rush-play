@@ -706,6 +706,70 @@ window.Cricket3D = function (G) {
         DARK = [[7, 1], [9, 1], [5, 0.8], [16, 0.62], [7, 0.85], [14, 0.6], [9, 1.1], [6, 0.7], [12, 0.52], [16, 0.55], [14, 0.52], [1, 0.45]],
         MIX = [...FAIR, [7, 1], [9, 1], [5, 1], [14, 1], [16, 1], [6, 1]], UMP = [[17, 1], [18, 1], [19, 1], [17, 0.8], [18, 0.85]];
   const FACE_POOL = { ind: TAN, pak: TAN, sl: TAN, ban: TAN, afg: TAN, aus: FAIR, eng: FAIR, nz: FAIR, ire: FAIR, wi: DARK, sa: MIX, rsa: MIX, zim: MIX };
+  // Your own player's photo on his face (My players, 22 November 2026, owner). The photo arrives lined up on the game's guide
+  // (index.html MYP_GUIDE: eyes and mouth at fixed places), and every face picture shares one layout (FACE_MARKS, measured on
+  // the textures), so one affine map through both eyes and the mouth lays the photo onto the face. His picked face gives the
+  // rest of the head (hair, ears, neck), tinted to the photo's skin; the photo is feathered in inside the guide's oval. Built once
+  // per photo and face (photoFaces), as { map, skin } like RIG.faces. ?photoface=0 turns it off.
+  const PHOTO_GUIDE = { eyeL: [0.385, 0.43], eyeR: [0.615, 0.43], mouth: [0.5, 0.68], oval: [0.5, 0.5, 0.29, 0.37], feather: 0.7, k: 0.94 };
+  const FACE_MARKS = { eyeL: [332 / 768, 217 / 768], eyeR: [436 / 768, 217 / 768], mouth: [384 / 768, 308 / 768] };
+  const photoFaces = new Map();
+  function affine3(p, q) {   // the 2D affine map taking points p[0..2] to q[0..2]: [a, b, c, d, e, f] as in canvas setTransform
+    const [[x1, y1], [x2, y2], [x3, y3]] = p, D = x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2);
+    const solve = v => [(v[0] * (y2 - y3) + v[1] * (y3 - y1) + v[2] * (y1 - y2)) / D, (v[0] * (x3 - x2) + v[1] * (x1 - x3) + v[2] * (x2 - x1)) / D,
+                        (v[0] * (x2 * y3 - x3 * y2) + v[1] * (x3 * y1 - x1 * y3) + v[2] * (x1 * y2 - x2 * y1)) / D];
+    const [a, c, e] = solve(q.map(v => v[0])), [b, d, f] = solve(q.map(v => v[1]));
+    return [a, b, c, d, e, f];
+  }
+  function regionMean(data, N, x0, x1, y0, y1) {   // mean colour (0-255) of the opaque pixels in a box (fractions of N)
+    let r = 0, g = 0, b = 0, n = 0;
+    for (let y = Math.round(y0 * N); y < Math.round(y1 * N); y++) for (let x = Math.round(x0 * N); x < Math.round(x1 * N); x++) {
+      const i = (y * N + x) * 4; if (data[i + 3] < 230) continue; r += data[i]; g += data[i + 1]; b += data[i + 2]; n++; }
+    return n ? [r / n, g / n, b / n] : null;
+  }
+  function buildPhotoFace(img, base) {
+    const bi = base.map.image, N = bi.width || 768, W = img.width, H = img.height, G = PHOTO_GUIDE;
+    const cv = document.createElement('canvas'); cv.width = cv.height = N; const x = cv.getContext('2d', { willReadFrequently: true });
+    x.drawImage(bi, 0, 0, N, N);
+    const ph = document.createElement('canvas'); ph.width = ph.height = N; const y = ph.getContext('2d', { willReadFrequently: true });
+    const A = affine3([G.eyeL, G.eyeR, G.mouth].map(([u, v]) => [u * W, v * H]), [FACE_MARKS.eyeL, FACE_MARKS.eyeR, FACE_MARKS.mouth].map(([u, v]) => [u * N, v * N]));
+    y.setTransform(...A); y.imageSmoothingQuality = 'high'; y.drawImage(img, 0, 0);
+    // the feathered oval, in the photo's own space so it follows the same map
+    const [cx, cy, rx, ry] = G.oval, m = new DOMMatrix(A).translate(cx * W, cy * H).scale(rx * W * G.k, ry * H * G.k);
+    y.globalCompositeOperation = 'destination-in'; y.setTransform(m);
+    const gr = y.createRadialGradient(0, 0, 0, 0, 0, 1); gr.addColorStop(0, '#000'); gr.addColorStop(G.feather, '#000'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    y.fillStyle = gr; y.fillRect(-1, -1, 2, 2); y.setTransform(1, 0, 0, 1, 0, 0); y.globalCompositeOperation = 'source-over';
+    // skin: the same patch build.py takes a face's skin from (below the eyes, across the nose)
+    const P = regionMean(y.getImageData(0, 0, N, N).data, N, 0.40, 0.60, 0.30, 0.36), bd = x.getImageData(0, 0, N, N), B = regionMean(bd.data, N, 0.40, 0.60, 0.30, 0.36);
+    if (P && B) {   // the head round the photo takes its colour (not the eyes and teeth atlas, bottom left)
+      const k = [0, 1, 2].map(c => Math.max(0.55, Math.min(1.6, P[c] / Math.max(1, B[c])))), d = bd.data;
+      for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) { if (px < 0.36 * N && py > 0.6 * N) continue;
+        const i = (py * N + px) * 4; d[i] = Math.min(255, d[i] * k[0]); d[i + 1] = Math.min(255, d[i + 1] * k[1]); d[i + 2] = Math.min(255, d[i + 2] * k[2]); }
+      x.putImageData(bd, 0, 0);
+    }
+    x.drawImage(ph, 0, 0);
+    const t = new T.CanvasTexture(cv); t.encoding = T.sRGBEncoding; t.flipY = false; t.needsUpdate = true;
+    const sk = P || B || [200, 160, 130];
+    return { map: t, skin: new T.Color().setRGB(sk[0] / 255, sk[1] / 255, sk[2] / 255).convertSRGBToLinear(), canvas: cv };
+  }
+  function photoFace(url, fi) {
+    if (renderQuery.get('photoface') === '0') return null;
+    const key = fi + '|' + url; let e = photoFaces.get(key);
+    if (e) return e.ready ? e : null;
+    const base = RIG.faces && RIG.faces[fi % RIG.faces.length];
+    if (!base || !base.map || !base.map.image) return null;   // his face picture isn't loaded yet
+    e = { ready: false }; photoFaces.set(key, e);
+    const pre = window.CR_PHOTO_IMGS && window.CR_PHOTO_IMGS.get(url);
+    if (pre && pre.complete && pre.naturalWidth) {
+      try { Object.assign(e, buildPhotoFace(pre, base), { ready: true }); return e; } catch (err) { e.failed = true; console.warn('photo face', err); return null; }
+    }
+    const img = new Image();
+    img.onload = () => { try { Object.assign(e, buildPhotoFace(img, base), { ready: true }); } catch (err) { e.failed = true; console.warn('photo face', err); } };
+    img.onerror = () => { e.failed = true; };
+    img.src = url;
+    return null;
+  }
+  if (typeof window !== 'undefined') window.CR_PHOTOFACES = photoFaces;   // tests: the built face pictures
   // what is written on the shirts: one small canvas per player for the back, one per team for the chest
   const inkFor = c => (0.3 * c.r + 0.6 * c.g + 0.1 * c.b) > 0.42 ? '#141a2c' : '#ffffff';
   const CHEST = {};
@@ -1409,7 +1473,9 @@ window.Cricket3D = function (G) {
         ub.uShirt.value.copy(shirt.color); ub.uPants.value.copy(pants.color); ub.uTrim.value.copy(shirt === M3.batShirt ? M3.batTrim.color : shirt === M3.umpShirt ? M3.umpPants.color : M3.bowlTrim.color);
         const pool = pr.umpire ? UMP : (team && FACE_POOL[team.id]) || MIX, at = team ? team.players.findIndex(p => (p.key || p.name) === pr.pid) : -1;
         const own = at >= 0 && team.players[at].face;   // your own player (Settings → My player) picked his face and skin tone
-        const [fi, shade] = own || pool[(pr.faceKey ?? (at >= 0 ? at + hash(team.id) : skinIdx)) % pool.length], face = RIG.faces[fi % RIG.faces.length];
+        let [fi, shade] = own || pool[(pr.faceKey ?? (at >= 0 ? at + hash(team.id) : skinIdx)) % pool.length], face = RIG.faces[fi % RIG.faces.length];
+        const pl = own ? team.players[at] : null, pf = pl && pl.photo && pl.photo3d ? photoFace(pl.photo, fi) : null;
+        if (pf) { face = pf; shade = 1; }   // his photo on his face: its own skin colour, so no tone on top
         if (face && face.map && P.RB_Head.material.map !== face.map) { P.RB_Head.material.map = face.map; P.RB_Head.material.needsUpdate = true; }
         // a darker tone from a lighter photo: take away more blue than red, as real darker skin has (an even darkening goes grey)
         uh.uSkin.value.setRGB(shade, Math.pow(shade, 1.22), Math.pow(shade, 1.5));

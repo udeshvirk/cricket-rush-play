@@ -251,6 +251,16 @@
   .myp-empty { color:var(--muted); font-size:14px; padding:6px 0; }
   @media (max-width:520px) { .myp-row { grid-template-columns:48px 1fr; } .myp-row .myp-face { width:48px; } .myp-row .acts { grid-column:1 / -1; } }
   .myp-face.on { border-color:var(--amber); box-shadow:0 0 0 2px rgba(255,176,46,.35); }
+  .myp-note { font-weight:500; text-transform:none; letter-spacing:0; color:var(--muted); margin-left:6px; }
+  .myp-photo-sec { display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
+  .myp-photo-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .myp-photo { width:64px; height:64px; border-radius:50%; object-fit:cover; border:2px solid var(--amber); }
+  .myp-crop { display:flex; flex-direction:column; gap:10px; }
+  .myp-stage { position:relative; width:min(300px, 100%); aspect-ratio:1; border-radius:12px; overflow:hidden; touch-action:none; cursor:grab; background:#0b1b2a; }
+  .myp-stage canvas, .myp-stage svg { position:absolute; inset:0; width:100%; height:100%; }
+  .myp-stage svg { pointer-events:none; }
+  .myp-row .myp-photo { width:56px; height:56px; }
+  @media (max-width:520px) { .myp-row .myp-photo { width:48px; height:48px; } }
   @media (max-width:520px) { .myp-grid { grid-template-columns:1fr; } }
   .sechead { font:900 18px var(--display); letter-spacing:.06em; color:var(--amber); text-transform:uppercase; border-bottom:1px solid var(--line); padding-bottom:4px; }
   .toggles .btn { padding:9px 14px; font-size:15px; }
@@ -426,6 +436,10 @@
              width: min(440px, calc(100vw - 32px)); background: var(--panel); border-radius: 12px; overflow: hidden; padding: 0 0 10px;
              border-top: 4px solid var(--c, var(--amber)); box-shadow: 0 10px 30px #0008; transition: opacity 0.3s, transform 0.3s; }
   #batcard.show { opacity: 1; transform: translate(-50%, 0); }
+  /* your own player's photo (My players), on his cards */
+  #tvcard .ph { width: 64px; height: auto; align-self: stretch; object-fit: cover; flex: none; background: #0b1b2a; }
+  #batcard .ph { position: absolute; right: 14px; top: 10px; width: 60px; height: 60px; border-radius: 50%; object-fit: cover; border: 2px solid var(--c, var(--amber)); }
+  #batcard.hasph .row1 { padding-right: 86px; } #batcard.hasph .st { padding-right: 86px; }
   #batcard .kick { display: inline-block; background: var(--k, var(--c)); color: #10131c; font: 900 13px var(--display); letter-spacing: 0.14em;
                    padding: 3px 12px 2px; border-bottom-right-radius: 8px; }
   #batcard .row1 { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 6px 16px 0; }
@@ -438,6 +452,7 @@
   @media (max-height: 460px) { #batcard { left: auto; right: calc(10px + env(safe-area-inset-right, 0px)); bottom: auto; top: calc(58px + env(safe-area-inset-top, 0px)); transform: translate(0, 10px);
       width: min(260px, 34vw); padding-bottom: 5px; border-radius: 9px; } #batcard.show { transform: translate(0, 0); }
     #batcard .row1 { padding: 2px 12px 0; } #batcard .st, #batcard .how { padding-left: 12px; gap: 10px; } #batcard .how { padding-top: 1px; }
+    #batcard .ph { width: 36px; height: 36px; right: 8px; top: 6px; } #batcard.hasph .row1, #batcard.hasph .st { padding-right: 50px; }
     #batcard .nm { font-size: 15px; } #batcard .r { font-size: 19px; } #batcard .row1, #batcard .st, #batcard .how { line-height: 1.15; } #batcard .b { font-size: 13px; } #batcard .st, #batcard .how { font-size: 11px; } #batcard .kick { font-size: 10px; padding: 2px 9px 1px; } }
   #replayTag { left: 50%; top: calc(12px + env(safe-area-inset-top, 0px) + 6vh); transform: translateX(-50%); background: var(--panel);
                font-family: var(--display); font-weight: 800; font-size: 20px; letter-spacing: 0.12em; padding: 3px 12px; display: flex; align-items: center; gap: 8px; }
@@ -734,8 +749,8 @@
   <div id="flash" class="hud"></div>
   <div id="banner" class="hud"><div class="head"></div><div class="line"></div><div class="streak"></div></div>
   <div id="comm" class="hud"><span class="mic">LIVE</span><span class="txt"></span></div>
-  <div id="tvcard" class="hud"><div class="bar"></div><div class="body"><div class="t"></div><div class="s"></div><div class="c"></div></div></div>
-  <div id="batcard" class="hud" aria-live="polite"><div class="kick"></div><div class="row1"><span class="nm"></span><span class="rb"><b class="r"></b><span class="b"></span></span></div>
+  <div id="tvcard" class="hud"><div class="bar"></div><img class="ph" alt="" hidden><div class="body"><div class="t"></div><div class="s"></div><div class="c"></div></div></div>
+  <div id="batcard" class="hud" aria-live="polite"><img class="ph" alt="" hidden><div class="kick"></div><div class="row1"><span class="nm"></span><span class="rb"><b class="r"></b><span class="b"></span></span></div>
     <div class="st"></div><div class="how"></div></div>
   <div id="replayTag" class="hud" hidden><span class="dot"></span>REPLAY<span class="skip">tap to skip</span></div>
   <div id="wipe" class="hud"></div>
@@ -855,6 +870,7 @@
         <button class="btn ghost" id="replayToggle" type="button" hidden>Replays: on</button>
         <button class="btn ghost" id="commentaryToggle" type="button" aria-pressed="false" title="Spoken commentary in the device's own voice.">Commentary: off</button>
         <button class="btn ghost" id="crowdToggle" type="button" aria-pressed="true">Crowd sound: on</button>
+        <button class="btn ghost" id="vibeToggle" type="button" aria-pressed="true" hidden title="A short buzz on sixes, fours, wickets and perfect timing (phones that can vibrate).">Vibration: on</button>
         <button class="btn ghost" id="guideToggle" type="button">Timing guide: on</button>
         <button class="btn ghost" id="runToggle" type="button" title="When you bat: run automatically, or run yourself: RUN (D) for each run, CANCEL (A) to send them back, DIVE (W) at the end of a close run.">Running: automatic</button>
         </div>
@@ -928,6 +944,22 @@
       </div>
       <div class="setsec">
         <div class="sechead">Look</div>
+        <div class="myp-photo-sec"><div class="lbl2">Photo <span class="myp-note">optional · stays on this device</span></div>
+          <div class="myp-photo-row"><img id="mypPhotoPrev" class="myp-photo" alt="Your player's photo" hidden>
+            <button class="btn ghost" id="mypPhotoAdd" type="button">Add photo</button><button class="btn ghost" id="mypPhotoDel" type="button" hidden>Remove photo</button>
+            <input type="file" id="mypPhotoFile" accept="image/*" hidden></div>
+          <div id="mypPhoto3dRow" hidden><div class="lbl2">On his face in the game <span class="myp-note">new, try it</span></div><div class="opts" id="mypPhoto3d"></div></div>
+          <div id="mypCrop" class="myp-crop" hidden>
+            <p class="how">Drag and zoom the photo so the eyes sit on the two dots and the mouth on the line. A face looking straight at the camera works best.</p>
+            <div class="myp-stage" id="mypStage"><canvas id="mypCropCv" width="384" height="384"></canvas>
+              <svg viewBox="0 0 1 1" aria-hidden="true"><path fill="rgba(5,10,20,.55)" fill-rule="evenodd" id="mypGuideShade"/><ellipse id="mypGuideOval" fill="none" stroke="#ffd58a" stroke-width=".006" stroke-dasharray=".02 .012"/>
+                <circle id="mypGuideEyeL" r=".018" fill="none" stroke="#2ed3c6" stroke-width=".006"/><circle id="mypGuideEyeR" r=".018" fill="none" stroke="#2ed3c6" stroke-width=".006"/>
+                <line id="mypGuideMouth" stroke="#2ed3c6" stroke-width=".006"/></svg></div>
+            <label><span class="lbl2">Zoom</span><input type="range" id="mypZoom" min="0" max="1" step="0.001"></label>
+            <label><span class="lbl2">Tilt</span><input type="range" id="mypTilt" min="-30" max="30" step="0.5"></label>
+            <div class="row"><button class="btn" id="mypCropOk" type="button">Use photo</button><button class="btn ghost" id="mypCropCancel" type="button">Cancel</button></div>
+          </div></div>
+        <div class="lbl2">Face <span class="myp-note" id="mypFaceNote">hair and head shape</span></div>
         <div class="myp-faces" id="mypFaces" role="radiogroup" aria-label="Face"></div>
         <div><div class="lbl2">Skin tone</div><div class="opts" id="mypTone"></div></div>
         <label><span class="lbl2">Shirt number</span><input id="mypNum" class="myp-input myp-num" type="number" min="1" max="99" inputmode="numeric"></label>
@@ -1209,8 +1241,12 @@ function mypClean(m) {
   if (!name || !t || !(m.slot >= 0 && m.slot < t.players.length)) return null;
   return { name, team: t.id, slot: m.slot | 0, left: !!m.left, type: ['F', 'M', 'O', 'L'].includes(m.type) ? m.type : '',
            bat: Math.round(mypClamp(+m.bat || 60, MYP_MIN, MYP_MAX)), face: mypClamp(m.face | 0, 0, MYP_FACES - 1),
-           tone: mypClamp(m.tone | 0, 0, MYP_TONES.length - 1), num: mypClamp(m.num | 0, 1, 99) };
+           tone: mypClamp(m.tone | 0, 0, MYP_TONES.length - 1), num: mypClamp(m.num | 0, 1, 99),
+           ...(mypPhotoOk(m.photo) ? { photo: m.photo, photo3d: m.photo3d !== false } : {}) };
 }
+// his photo (22 November 2026, owner): a square JPEG data URL made on this device by the photo editor (mypPhotoEdit), face lined up
+// on the guide (MYP_GUIDE), shown on his cards. Never sent anywhere; it lives in the same saved list.
+const mypPhotoOk = v => typeof v === 'string' && v.startsWith('data:image/jpeg;base64,') && v.length < 400000;
 // Several players (up to MYP_LIMIT, each in a different place): the list is kept under the same key (an older save holds one
 // player, not a list). A place already taken, or a player who no longer fits, is left out.
 const MYP_LIMIT = 11;
@@ -1221,8 +1257,10 @@ for (const m of MYPS) {
   const t = TEAMS.find(t => t.id === m.team), r = mypRatings(m);
   (t.mypOrig || (t.mypOrig = {}))[m.slot] = t.players[m.slot]; m.replaced = t.players[m.slot].name;
   t.players[m.slot] = { key: 'myp:' + m.name, name: m.name, ...r, type: m.type, left: m.left || /[?&]lefty=1/.test(location.search),
-                        mine: true, face: [m.face, MYP_TONES[m.tone].v], num: m.num };
+                        mine: true, face: [m.face, MYP_TONES[m.tone].v], num: m.num, ...(m.photo ? { photo: m.photo, photo3d: m.photo3d } : {}) };
 }
+// photos decoded early, so the 3D view can put one on a face from his first frame (render3d.js photoFace)
+window.CR_PHOTO_IMGS = new Map(MYPS.filter(m => m.photo && m.photo3d).map(m => { const im = new Image(); im.src = m.photo; return [m.photo, im]; }));
 // Quick chase: you against England's quicks
 const YOU = { id: 'you', name: 'You', short: 'YOU', col: '#2ed3c6', helmet: '#18245a', wk: 0,
               players: Array.from({ length: 11 }, () => ({ name: 'You', bat: 70, type: '', bowl: 0 })) };
@@ -2524,7 +2562,7 @@ const mypOrig = (t, k) => (t.mypOrig && t.mypOrig[k]) || t.players[k];   // the 
 const mypTakenBy = (team, slot) => MYPS.findIndex((m, i) => i !== mypEdit && m.team === team && m.slot === slot);
 const mypDesc = m => { const t = TEAMS.find(t => t.id === m.team), r = mypRatings(m);
   return t.name + ' · in place of ' + m.replaced + ' · bat ' + r.bat + (m.type ? ' · ' + BOWL_TYPES[m.type].name.toLowerCase() + ' ' + r.bowl : ''); };
-const mypThumb = m => '<span class="myp-face" aria-hidden="true" style="background-position:' + (m.face * 100 / (MYP_FACES - 1)) + '% 0;filter:url(#tone' + m.tone + ')"></span>';
+const mypThumb = m => m.photo ? '<img class="myp-photo" alt="" src="' + m.photo + '">' : '<span class="myp-face" aria-hidden="true" style="background-position:' + (m.face * 100 / (MYP_FACES - 1)) + '% 0;filter:url(#tone' + m.tone + ')"></span>';
 function showMyp() {
   $('mypStatus').textContent = MYPS.length ? (MYPS.length === 1 ? MYPS[0].name + ' plays for ' + TEAMS.find(t => t.id === MYPS[0].team).name + '.' : MYPS.length + ' of your players are in teams.') + ' Only on this device.'
     : 'Make your own players and put them in any team.';
@@ -2565,7 +2603,74 @@ function renderMyp() {
   optButtons('mypTone', MYP_TONES.map(x => ({ html: x.name })), (it, k) => k === f.tone, (it, k) => { f.tone = k; renderMyp(); });
   $('mypNum').value = f.num;
   $('mypRemove').hidden = mypEdit < 0;
+  $('mypPhotoPrev').hidden = !f.photo; if (f.photo) $('mypPhotoPrev').src = f.photo;
+  $('mypPhotoDel').hidden = !f.photo; $('mypPhotoAdd').textContent = f.photo ? 'Change photo' : 'Add photo';
+  $('mypPhoto3dRow').hidden = !f.photo;
+  $('mypTone').parentElement.hidden = !!(f.photo && f.photo3d !== false);   // the photo brings its own skin colour
+  optButtons('mypPhoto3d', [{ v: true, html: 'Photo face' }, { v: false, html: 'Cards only' }], it => it.v === (f.photo3d !== false), it => { f.photo3d = it.v; renderMyp(); });
+  $('mypFaceNote').textContent = f.photo && f.photo3d !== false ? 'hair, ears and head shape (your photo is the face)' : 'hair and head shape';
 }
+// The photo editor: the picture is moved (drag), zoomed (slider, pinch or wheel) and tilted under a fixed guide, and the square
+// under it is kept (MYP_GUIDE.size px, JPEG). The guide puts the eyes and mouth at the same places every time, so the 3D view can
+// lay the face onto the head's own face picture (render3d.js photoFace()).
+const MYP_GUIDE = { size: 384, eyeL: [0.385, 0.43], eyeR: [0.615, 0.43], mouth: [0.5, 0.68], oval: [0.5, 0.5, 0.29, 0.37] };
+const mypCrop = { img: null, x: 0, y: 0, s: 1, s0: 1, rot: 0, ptrs: new Map(), pinch: 0 };
+(function drawGuide() {
+  const g = MYP_GUIDE, [cx, cy, rx, ry] = g.oval, set = (id, a) => { const el = $(id); for (const k in a) el.setAttribute(k, a[k]); };
+  set('mypGuideOval', { cx, cy, rx, ry });
+  set('mypGuideShade', { d: 'M0 0H1V1H0Z M' + (cx - rx) + ' ' + cy + 'a' + rx + ' ' + ry + ' 0 1 0 ' + 2 * rx + ' 0a' + rx + ' ' + ry + ' 0 1 0 ' + (-2 * rx) + ' 0Z' });
+  set('mypGuideEyeL', { cx: g.eyeL[0], cy: g.eyeL[1] }); set('mypGuideEyeR', { cx: g.eyeR[0], cy: g.eyeR[1] });
+  set('mypGuideMouth', { x1: g.mouth[0] - 0.07, x2: g.mouth[0] + 0.07, y1: g.mouth[1], y2: g.mouth[1] });
+})();
+function mypCropDraw() {
+  const c = mypCrop, cv = $('mypCropCv'), x = cv.getContext('2d'), N = MYP_GUIDE.size;
+  x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = '#c8b29a'; x.fillRect(0, 0, N, N);
+  if (!c.img) return;
+  x.translate(c.x, c.y); x.rotate(c.rot * Math.PI / 180); x.scale(c.s, c.s);
+  x.imageSmoothingQuality = 'high'; x.drawImage(c.img, -c.img.width / 2, -c.img.height / 2);
+}
+const mypZoomS = v => mypCrop.s0 * Math.pow(6, v);   // slider 0..1: from the whole photo to 6x closer
+function mypCropOpen(file) {
+  const url = URL.createObjectURL(file), img = new Image();
+  img.onload = () => {
+    const N = MYP_GUIDE.size, c = mypCrop;
+    c.img = img; c.s0 = N / Math.min(img.width, img.height); c.s = c.s0; c.x = N / 2; c.y = N / 2; c.rot = 0;
+    $('mypZoom').value = 0; $('mypTilt').value = 0;
+    $('mypCrop').hidden = false; $('mypMsg').textContent = ''; mypCropDraw();
+    $('mypStage').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); $('mypMsg').textContent = 'That picture could not be opened. Try a JPEG or PNG photo.'; };
+  img.src = url;
+}
+function mypCropClose() { const c = mypCrop; if (c.img) URL.revokeObjectURL(c.img.src); c.img = null; c.ptrs.clear(); $('mypCrop').hidden = true; $('mypPhotoFile').value = ''; }
+function mypZoomAt(s, px, py) {   // zoom about a point of the square (px, py in canvas pixels), so it stays under the finger
+  const c = mypCrop, k = Math.max(c.s0 * 0.6, Math.min(c.s0 * 8, s)) / c.s;
+  c.x = px + (c.x - px) * k; c.y = py + (c.y - py) * k; c.s *= k;
+  $('mypZoom').value = Math.max(0, Math.min(1, Math.log(c.s / c.s0) / Math.log(6))); mypCropDraw();
+}
+const mypStagePt = e => { const r = $('mypStage').getBoundingClientRect(), N = MYP_GUIDE.size; return [(e.clientX - r.left) / r.width * N, (e.clientY - r.top) / r.height * N]; };
+$('mypStage').addEventListener('pointerdown', e => { if (!mypCrop.img) return; $('mypStage').setPointerCapture(e.pointerId); mypCrop.ptrs.set(e.pointerId, mypStagePt(e)); mypCrop.pinch = 0; });
+$('mypStage').addEventListener('pointermove', e => {
+  const c = mypCrop; if (!c.ptrs.has(e.pointerId)) return;
+  const p = mypStagePt(e), prev = c.ptrs.get(e.pointerId); c.ptrs.set(e.pointerId, p);
+  if (c.ptrs.size === 1) { c.x += p[0] - prev[0]; c.y += p[1] - prev[1]; mypCropDraw(); return; }
+  const [a, b] = [...c.ptrs.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+  if (c.pinch) mypZoomAt(c.s * d / c.pinch, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+  c.pinch = d;
+});
+for (const ev of ['pointerup', 'pointercancel']) $('mypStage').addEventListener(ev, e => { mypCrop.ptrs.delete(e.pointerId); mypCrop.pinch = 0; });
+$('mypStage').addEventListener('wheel', e => { if (!mypCrop.img) return; e.preventDefault(); const p = mypStagePt(e); mypZoomAt(mypCrop.s * Math.exp(-e.deltaY * 0.0015), p[0], p[1]); }, { passive: false });
+$('mypZoom').addEventListener('input', () => { const N = MYP_GUIDE.size; mypZoomAt(mypZoomS(+$('mypZoom').value), N / 2, N / 2); });
+$('mypTilt').addEventListener('input', () => { mypCrop.rot = +$('mypTilt').value; mypCropDraw(); });
+$('mypPhotoAdd').addEventListener('click', () => $('mypPhotoFile').click());
+$('mypPhotoFile').addEventListener('change', () => { const f = $('mypPhotoFile').files[0]; if (f) mypCropOpen(f); });
+$('mypCropCancel').addEventListener('click', mypCropClose);
+$('mypCropOk').addEventListener('click', () => {
+  mypCropDraw(); let q = 0.86, url = $('mypCropCv').toDataURL('image/jpeg', q);
+  while (url.length > 120000 && q > 0.5) url = $('mypCropCv').toDataURL('image/jpeg', q -= 0.08);
+  mypForm.photo = url; if (mypForm.photo3d === undefined) mypForm.photo3d = true; mypCropClose(); renderMyp();
+});
+$('mypPhotoDel').addEventListener('click', () => { delete mypForm.photo; delete mypForm.photo3d; renderMyp(); });
 function mypSkillText() { const r = mypRatings(mypForm);
   $('mypSkillTxt').textContent = mypForm.type ? 'Batting ' + r.bat + ' · bowling ' + r.bowl + '. Slide right to bat better and bowl worse.' : 'Batting ' + r.bat + '. He doesn\'t bowl.'; }
 function mypFreeSlot(team, prefer) { const t = TEAMS.find(t => t.id === team);
@@ -2576,7 +2681,7 @@ function openMyp(i) {
   else { const team = (TEAMS[setup.a] || TEAMS[0]).id;
     mypForm = { name: '', team, slot: Math.max(0, mypFreeSlot(team, 5)), left: false, type: '', bat: 75, face: 0, tone: 0, num: 7 }; }
   $('mypName').value = mypForm.name; $('mypMsg').textContent = '';
-  renderMyp(); showScreen('myplayer');
+  mypCropClose(); renderMyp(); showScreen('myplayer');
 }
 $('mypOpen').addEventListener('click', () => openMypList('settings'));
 $('goMyp').addEventListener('click', () => openMypList('menu'));
@@ -3879,7 +3984,7 @@ function contact() {
   if (h.playedOn) return;
   const { fp, res, angle } = h;
   // the sparkle at the bat only when a perfectly timed hit is going for six (owner's request: not for a four or a catch)
-  if (ball.perfect && !d.defend && res.kind === 'six') { fxPerfect(); $('timing').classList.add('perfect'); }
+  if (ball.perfect && !d.defend && res.kind === 'six') { buzz('perfect'); fxPerfect(); $('timing').classList.add('perfect'); }
   ball.play = { fp, res, t: 0, angle, startT: clock, edge: d.kind === 'edge' };
   phase = 'play'; phaseT = 0;
   camMode = 'chase';
@@ -4079,7 +4184,7 @@ function beginBall(delay, announce) {
     const fig = f && f.balls ? ' · ' + f.wkts + '–' + f.runs + ' (' + ovStr(f.balls) + ')' : '';
     const last = inn.lastOver ? 'Last over ' + plural(inn.lastOver.runs, 'run') + (inn.lastOver.wkts ? ', ' + plural(inn.lastOver.wkts, 'wicket') : '') + ' · ' : '';
     tvCard('Over ' + (ov + 1) + ' · ' + b.name, [BOWL_TYPES[btype(b)].name + fig, FIELD_INFO[inn.field][0] + ' field' + (inn.fieldNote ? ', ' + inn.fieldNote + ' back' : ''), last.replace(/ · $/, '')].filter(Boolean).join('\n'), inn.bowl.col,
-      fig ? 3.4 : 4.4, fig ? '' : careerLine(b, true));   // his first over of the match: his record in the game
+      fig ? 3.4 : 4.4, fig ? '' : careerLine(b, true), b.photo);   // his first over of the match: his record in the game
   } else if (inn.fieldNew && M.mode === 'match' && !quiet) {
     inn.fieldNew = false;
     tvCard('Field change', inn.fieldNote.charAt(0).toUpperCase() + inn.fieldNote.slice(1) + ' goes back to cut off your shots', inn.bowl.col);
@@ -4087,7 +4192,7 @@ function beginBall(delay, announce) {
     // a batter's first ball (an opener's first or second: the first ball of the innings has the over's card): his record in the game
     inn.shownIn[inn.striker] = true; inn.lastIn = inn.striker;
     const p = batterP(inn.striker), opener = inn.striker < 2 && inn.wkts === 0;
-    tvCard((opener ? 'Opening · ' : 'New batter · ') + p.name + (p.left ? ' (left-handed)' : ''), inn.bat.name + ' ' + inn.runs + '/' + inn.wkts + ' · ' + ovStr(inn.balls) + ' overs', inn.bat.col, 4.4, careerLine(p, false));
+    tvCard((opener ? 'Opening · ' : 'New batter · ') + p.name + (p.left ? ' (left-handed)' : ''), inn.bat.name + ' ' + inn.runs + '/' + inn.wkts + ' · ' + ovStr(inn.balls) + ' overs', inn.bat.col, 4.4, careerLine(p, false), p.photo);
   }
   if (userBowling()) {
     phase = 'aim'; phaseT = 0;
@@ -4375,18 +4480,18 @@ function finishBall(o, line) {
   }
   if (o.out) {
     showBanner(hatN >= 3 ? 'HAT-TRICK!' : 'OUT!', chaseMode ? line : line + ' · ' + who + c.runs + ' (' + c.balls + ')', 'bw', 0, streak);
-    if (ours) { sndOoh(1, true); sndClap(0.25, 3); fxResult('out'); }
-    else { sndCrowd(0.9, 3); sndCheer(1); sndClap(0.7); cheer = 0.8; fxResult(hatN >= 3 ? 'milestone' : 'wicket'); }
+    if (ours) { sndOoh(1, true); sndClap(0.25, 3); fxResult('out'); buzz('out'); }
+    else { sndCrowd(0.9, 3); sndCheer(1); sndClap(0.7); cheer = 0.8; fxResult(hatN >= 3 ? 'milestone' : 'wicket'); buzz(hatN >= 3 ? 'milestone' : 'wicket'); }
   } else if (o.wide) showBanner('WIDE', line, 'small');
   else if (o.notOut) showBanner(o.noBall ? 'NO BALL' : 'NOT OUT', line, o.noBall ? 'small bnb' : 'small');
   else if (o.noBall && o.runs < 4) showBanner('NO BALL', line, 'small bnb');
-  else if (o.runs === 6) { showBanner('SIX!', line, 'b6', 0, streak); fxResult('six', ours, i.bat.col); if (ours) { sndCrowd(1, 3.5); sndCheer(1); sndClap(0.8, 5); sndHorn(); cheer = 1; } else { sndCrowd(0.3, 2); sndClap(0.35); } }
-  else if (o.runs === 4) { showBanner('FOUR!', line, 'b4', 0, streak); fxResult('four', ours); if (ours) { sndCrowd(0.5, 2.2); sndCheer(0.6); sndClap(0.6); cheer = 0.7; } else { sndCrowd(0.2, 1.5); sndClap(0.3); } }
+  else if (o.runs === 6) { showBanner('SIX!', line, 'b6', 0, streak); fxResult('six', ours, i.bat.col); if (ours) { buzz('six'); sndCrowd(1, 3.5); sndCheer(1); sndClap(0.8, 5); sndHorn(); cheer = 1; } else { sndCrowd(0.3, 2); sndClap(0.35); } }
+  else if (o.runs === 4) { showBanner('FOUR!', line, 'b4', 0, streak); fxResult('four', ours); if (ours) { buzz('four'); sndCrowd(0.5, 2.2); sndCheer(0.6); sndClap(0.6); cheer = 0.7; } else { sndCrowd(0.2, 1.5); sndClap(0.3); } }
   else if (o.runs === 0) showBanner('', line || 'Dot ball', 'small quiet');   // a dot ball is the commonest ball: no big word for it
   else showBanner(o.runs + (o.runs === 1 ? ' RUN' : ' RUNS'), line, 'small');
   if (boundary && bs >= 3 && ours) fxResult('streak');
   bigMoments(i, milestone, hatN, ours);
-  if (milestone) { batCard(batterP(k), c, i.bat, milestone); showBanner(milestone === 100 ? 'HUNDRED!' : 'FIFTY!', who + c.runs + ' off ' + c.balls, 'bmil pop'); sndClap(1, 7); sndCrowd(0.6, 4); sndCheer(0.9); fxResult('milestone'); }
+  if (milestone) { batCard(batterP(k), c, i.bat, milestone); showBanner(milestone === 100 ? 'HUNDRED!' : 'FIFTY!', who + c.runs + ' off ' + c.balls, 'bmil pop'); sndClap(1, 7); sndCrowd(0.6, 4); sndCheer(0.9); fxResult('milestone'); if (ours) buzz('milestone'); }
   phase = 'result'; phaseT = 0;
 }
 
@@ -4464,7 +4569,7 @@ function endMatch() {
   commentaryCall('match',{text});
   const t = $('endTitle');
   if (!winner) { t.textContent = 'TIED'; t.className = 'result'; }
-  else if (winner === you) { t.textContent = 'YOU WON'; t.className = 'result win'; if (!quiet) { confettiRain(); sndStinger('win'); sndCheer(1); sndClap(0.9, 6); } }
+  else if (winner === you) { t.textContent = 'YOU WON'; t.className = 'result win'; if (!quiet) { buzz('win'); confettiRain(); sndStinger('win'); sndCheer(1); sndClap(0.9, 6); } }
   else { t.textContent = 'YOU LOST'; t.className = 'result lose'; }
   $('endSub').textContent = text;
   const sr = M.series;
@@ -4639,7 +4744,11 @@ function endChase() {
   $('endTabs').textContent = ''; $('endCard').textContent = '';
   $('again').textContent = 'Rematch';
   $('endAwards').textContent = ''; $('seriesChoice').hidden = true; $('finishSeries').hidden = true; $('endRematch').hidden = true;
-  if (res === 'won') saveBest(level.id, left);
+  if (level.daily) {
+    const n = saveDaily(level, res === 'won', i.runs, left);
+    s.textContent += res === 'won' ? (n >= 2 ? ' 🔥 ' + n + ' days in a row!' : ' Daily challenge done.') + ' A new one tomorrow.' : ' Try the daily challenge again.';
+  } else if (res === 'won') saveBest(level.id, left);
+  if (res === 'won' && !quiet) buzz('win');
   renderLevels();
   showScreen('end');
 }
@@ -4686,7 +4795,19 @@ function renderTabs(tabsId, cardId, sel) {
 
 // ----------------------------------------------------------------------- screens
 const SCREENS = ['menu', 'setup', 'chaseMenu', 'toss', 'break', 'pause', 'end', 'stats', 'tournament', 'settings', 'myplayers', 'myplayer'];
-function showScreen(id) { for (const s of SCREENS) $(s).hidden = s !== id; if (id === 'menu') renderQuickLine(); }
+function showScreen(id) { for (const s of SCREENS) $(s).hidden = s !== id; if (id === 'menu') renderQuickLine(); syncWake(id); }
+// Keep the screen awake while a match is on (owner, 22 November 2026: phones dimmed and locked mid-chase): during play, the toss
+// and the innings break; let go on the menus, the pause menu and the end screen. The browser lets go by itself when the page is
+// hidden, so it is asked again on coming back. Browsers without it (or that refuse) just carry on as before.
+let wakeLock = null, wakeWant = false;
+function syncWake(id) {
+  wakeWant = !!M && !quiet && phase !== 'over' && (id == null || id === 'toss' || id === 'break');
+  if (wakeWant && !wakeLock && !document.hidden && navigator.wakeLock) {
+    navigator.wakeLock.request('screen').then(l => { if (!wakeWant) { l.release().catch(() => {}); return; }
+      wakeLock = l; l.addEventListener('release', () => { if (wakeLock === l) wakeLock = null; }); }).catch(() => {});
+  } else if (!wakeWant && wakeLock) { const l = wakeLock; wakeLock = null; l.release().catch(() => {}); }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && wakeWant) syncWake(SCREENS.find(s => !$(s).hidden) ?? null); });
 function toMenu() {
   M = null; inn = null; ball = null; phase = 'menu'; paused = false; setFF(false);
   $('pick').hidden = true; $('meter').hidden = true; $('batline').hidden = true;
@@ -4752,6 +4873,21 @@ function kitSVG(t){return '<svg viewBox="0 0 60 76" aria-hidden="true"><path d="
 // Settings: the player's own preferences (difficulty, bowling, no-balls; sound, replays, help), from the menu, the setup or the pause menu
 let settingsFrom='menu';
 let nextCond=null;   // the conditions shown in the setup, used by the next match started from it
+// Vibration (owner, 22 November 2026): a short buzz for your big moments, on phones that can (Android; iPhones can't, so the
+// button hides there). On by default, 'cricket-rush-vibrate'. Never in simulations, auto-play, fast-forward or replays.
+const VIBE = { six: [35, 50, 35, 50, 70], four: [45], perfect: [18], wicket: [70, 50, 90], out: [160], milestone: [40, 40, 40, 40, 120],
+               win: [60, 60, 60, 60, 200] };
+const canVibe = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
+let vibeOn = true;
+try { vibeOn = localStorage.getItem('cricket-rush-vibrate') !== 'off'; } catch(e) {}
+function renderVibe() { const b = $('vibeToggle'); b.hidden = !canVibe; b.textContent = 'Vibration: ' + (vibeOn ? 'on' : 'off'); b.setAttribute('aria-pressed', String(vibeOn)); }
+function buzz(kind) {
+  if (!canVibe || !vibeOn || quiet || ff || (M && M.autoplay) || RP || !VIBE[kind]) return;
+  try { navigator.vibrate(VIBE[kind]); } catch(e) {}
+}
+$('vibeToggle').addEventListener('click', () => { vibeOn = !vibeOn; try { localStorage.setItem('cricket-rush-vibrate', vibeOn ? 'on' : 'off'); } catch(e) {}
+  renderVibe(); if (vibeOn) buzz('four'); });
+renderVibe();
 function renderSettings(){
   optButtons('diffPick',DIFFS.map(d=>({html:d.name})),(it,k)=>k===setup.diff,(it,k)=>{setup.diff=k;saveSetup();renderSettings();});
   optButtons('bowlPick',[{v:true,html:'Computer bowls'},{v:false,html:"I'll bowl"}],it=>it.v===setup.autoBowl,it=>{setup.autoBowl=it.v;saveSetup();renderSettings();});
@@ -5151,7 +5287,7 @@ function beginMatch(userBatsFirst) {
 function startChase(lv) {
   level = lv;
   M = { mode: 'chase', overs: lv.balls / 6, teams: [YOU, CHASE_OPP], innings: [], cur: 0, autoplay: null,
-        diff: { id: lv.id, name: lv.name, win: lv.win, catchAI: lv.catchSkill, userCatch: 0.86, aiBat: 1, aiBowl: 1, speed: lv.speed }, cond: rollCond() };
+        diff: { id: lv.id, name: lv.name, win: lv.win, catchAI: lv.catchSkill, userCatch: 0.86, aiBat: 1, aiBowl: 1, speed: lv.speed }, cond: lv.cond ? { ...lv.cond } : rollCond() };
   M.innings = [newInnings(YOU, CHASE_OPP, lv.balls, lv.wickets, lv.target, true)];
   startInnings(0);
 }
@@ -5238,9 +5374,63 @@ function saveBest(id, spare) {
 function loadRecord() { try { return JSON.parse(localStorage.getItem('boundary-rush-record') || '{"played":0,"won":0}'); } catch (e) { return { played: 0, won: 0 }; } }
 function saveRecord(won) { try { const r = loadRecord(); r.played++; if (won) r.won++; localStorage.setItem('boundary-rush-record', JSON.stringify(r)); } catch (e) {} }
 function renderRecord() { const r = loadRecord(); $('recordLine').textContent = r.played ? 'Won ' + r.won + ' of ' + r.played : ''; }
+// Daily challenge (owner, 22 November 2026): one chase a day, the same for everyone on that date (target, balls, wickets, pace and
+// conditions all come from the date), at the top of the Quick chase screen. Played as many times as you like; a win counts once
+// toward the streak of days in a row. Kept on the device: 'cricket-rush-daily' { days: { 'yyyy-mm-dd': { tries, won, spare, best } },
+// streak: { n, last } }. ?daily=yyyy-mm-dd plays another day's (tests).
+const DAILY_KEY = 'cricket-rush-daily';
+const DAILY_SHAPES = [{ balls: 6, wickets: 2, rate: [2.4, 3.2] }, { balls: 12, wickets: 2, rate: [2.0, 2.6] },
+                      { balls: 12, wickets: 3, rate: [2.1, 2.8] }, { balls: 18, wickets: 3, rate: [1.8, 2.3] }];
+const DAILY_PACE = [{ speed: [112, 126], win: 1.3, catchSkill: 0.72, name: 'gentle pace', k: 1.08 },
+                    { speed: [124, 139], win: 1.0, catchSkill: 0.85, name: 'medium-fast', k: 1 },
+                    { speed: [134, 149], win: 0.82, catchSkill: 0.92, name: 'express pace', k: 0.86 }];
+function dayKey(d) { d = d || new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function dailyLevel(day) {
+  day = day || new URLSearchParams(location.search).get('daily') || dayKey();
+  let h = 2166136261; for (const c of 'stumpflare-daily-' + day) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  const rnd = () => { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296; };
+  const sh = DAILY_SHAPES[(rnd() * DAILY_SHAPES.length) | 0], pc = DAILY_PACE[(rnd() * DAILY_PACE.length) | 0];
+  const target = Math.max(8, Math.round(sh.balls * (sh.rate[0] + rnd() * (sh.rate[1] - sh.rate[0])) * pc.k));
+  const cond = { g: (rnd() * 3) | 0, t: (rnd() * 3) | 0, s: rnd() < 0.3 ? 1 : 0, p: (rnd() * 3) | 0 };
+  const ov = sh.balls === 6 ? '6 balls' : plural(sh.balls / 6, 'over');
+  return { id: 'daily', daily: day, name: 'Daily challenge', target, balls: sh.balls, wickets: sh.wickets, speed: pc.speed, win: pc.win,
+           catchSkill: pc.catchSkill, cond, desc: target + ' off ' + ov, sub: plural(sh.wickets, 'wicket') + ' · ' + pc.name + ' · ' + GROUNDS[cond.g].name };
+}
+function loadDaily() { try { const d = JSON.parse(localStorage.getItem(DAILY_KEY) || '{}'); return { days: d.days || {}, streak: d.streak || { n: 0, last: '' } }; } catch (e) { return { days: {}, streak: { n: 0, last: '' } }; } }
+function dailyStreak(d) {   // a streak only counts while it reaches today or yesterday
+  const y = new Date(); y.setDate(y.getDate() - 1);
+  return d.streak.last === dayKey() || d.streak.last === dayKey(y) ? d.streak.n : 0;
+}
+// records one try at a day's challenge; returns the streak after it
+function saveDaily(lv, won, runs, spare) {
+  const d = loadDaily(), e = d.days[lv.daily] || (d.days[lv.daily] = { tries: 0, won: false, spare: 0, best: 0 });
+  e.tries++; e.best = Math.max(e.best, runs);
+  if (won) { if (!e.won || spare > e.spare) e.spare = spare;
+    if (!e.won && lv.daily === dayKey()) { const prev = dailyStreak(d); d.streak = { n: d.streak.last === dayKey() ? prev : prev + 1, last: dayKey() }; }
+    e.won = true; }
+  for (const k of Object.keys(d.days).sort().slice(0, -40)) delete d.days[k];   // keep the last 40 days
+  try { localStorage.setItem(DAILY_KEY, JSON.stringify(d)); } catch (e2) {}
+  renderDailyLine();
+  return dailyStreak(d);
+}
+function dailyStatus(lv) {
+  const d = loadDaily(), e = d.days[lv.daily], n = dailyStreak(d);
+  const st = n >= 2 ? ' · 🔥 ' + n + ' days in a row' : '';
+  if (e && e.won) return '✓ Done today' + (e.spare ? ', ' + plural(e.spare, 'ball') + ' to spare' : '') + st;
+  if (e) return 'Best ' + e.best + ' · ' + e.tries + (e.tries === 1 ? ' try' : ' tries') + st;
+  return 'New today' + st;
+}
+function renderDailyLine() { const el = document.querySelector('#goChase .best'); if (!el) return; const lv = dailyLevel(), e = loadDaily().days[lv.daily];
+  el.textContent = e && e.won ? 'Daily challenge ✓' : 'Daily: ' + lv.desc; }
 function renderLevels() {
   const best = loadBest(), box = $('levels');
   box.textContent = '';
+  const dl = dailyLevel(), db = document.createElement('button');
+  db.className = 'level daily'; db.type = 'button'; db.id = 'level-daily';
+  db.innerHTML = '<span class="n">Daily challenge</span><span class="d">' + dl.desc + '</span><span class="s">' + esc(dl.sub) +
+    '</span><span class="best">' + esc(dailyStatus(dl)) + '</span>';
+  db.addEventListener('click', () => { audio(); startChase(dl); });
+  box.appendChild(db);
   LEVELS.forEach(lv => {
     const b = document.createElement('button');
     b.className = 'level'; b.type = 'button'; b.id = 'level-' + lv.id;
@@ -6562,9 +6752,10 @@ let last = performance.now();
 // ======================================================================= TV touches: info cards and replays
 // a card at the top (the bowler for this over, the last over, the new batter), in the batting side's colour
 let cardUntil = 0;
-function tvCard(title, sub, col, dur = 3.4, line = '') {   // line: a third line (a player's record in the game)
+function tvCard(title, sub, col, dur = 3.4, line = '', photo = '') {   // line: a third line (a player's record in the game); photo: your own player's
   const c = $('tvcard');
   if (quiet || !c) return;
+  const ph = c.querySelector('.ph'); ph.hidden = !photo; if (photo) ph.src = photo; else ph.removeAttribute('src');
   c.querySelector('.t').textContent = title; c.querySelector('.s').textContent = sub || ''; c.querySelector('.s').hidden = !sub; c.querySelector('.c').textContent = line;
   c.style.setProperty('--c', col || 'var(--amber)');
   c.classList.add('show'); cardUntil = clock + dur;
@@ -6578,6 +6769,7 @@ function batCard(p, c, team, kind, how) {
   const el = $('batcard'); if (quiet || ff || (M && M.autoplay) || !el) return;
   const kick = { out: 'OUT', duck: 'OUT FOR A DUCK', golden: 'GOLDEN DUCK', 50: 'FIFTY', 100: 'HUNDRED' }[kind];
   el.querySelector('.kick').textContent = kick;
+  const ph = el.querySelector('.ph'); ph.hidden = !p.photo; if (p.photo) ph.src = p.photo; else ph.removeAttribute('src'); el.classList.toggle('hasph', !!p.photo);
   el.querySelector('.nm').textContent = p.name;
   el.querySelector('.r').textContent = c.runs; el.querySelector('.b').textContent = '(' + c.balls + ')';
   el.querySelector('.st').innerHTML = '<span><b>' + c.fours + '</b> fours</span><span><b>' + c.sixes + '</b> sixes</span><span>SR <b>' + (c.balls ? Math.round(c.runs / c.balls * 100) : 0) + '</b></span>';
@@ -6920,6 +7112,7 @@ $('goQuick').addEventListener('click', () => { audio(); setup.series = 0; setup.
 renderQuickLine();
 $('goMatch').addEventListener('click', () => { audio(); setup.series = 0; setup.tournament=false; cupReplaceArmed=false; renderSetup(); showScreen('setup'); });
 $('goChase').addEventListener('click', () => { audio(); renderLevels(); showScreen('chaseMenu'); });
+renderDailyLine();
 $('setupBack').addEventListener('click', toMenu);
 $('chaseBack').addEventListener('click', toMenu);
 $('toToss').addEventListener('click', () => { audio(); if(setup.tournament)return newTournament(); if (setup.series) newSeries(); startTossOne(); });

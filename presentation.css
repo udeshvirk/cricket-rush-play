@@ -152,3 +152,7 @@ button:focus-visible,summary:focus-visible,select:focus-visible{outline:3px soli
 /* Very short landscape phones (e.g. 735x253): the whole menu fits without scrolling, so Settings is in view. */
 @media(max-height:300px){#menu{padding:10px 20px}#menu .menu-section-label{display:none}.menu-play{padding:10px}#goQuick{min-height:50px;padding:7px 12px}#goQuick .n{font-size:23px}#menu .level{min-height:44px;padding:6px 10px}#menu .level .n{font-size:17px}#menu .levels{gap:6px}#menu .menu-play>.row{margin-top:8px}#menu .menu-play>.row .btn{padding:7px 8px}#menu .title{font-size:62px}}
 @media(max-height:300px){#menu .level .n,#menu .level .d,#menu .level .best{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}#menu .level{min-height:0}#menu .levels:has(#goResume:not([hidden])) .level .n{font-size:15px}}
+/* Daily challenge: the first chase, picked out in amber */
+#chaseMenu .level.daily{border-color:#ffc36770;background:linear-gradient(140deg,#ffc3671f,#ffffff04)}
+#chaseMenu .level.daily .n{color:#ffd58a}
+#chaseMenu .level.daily .best{color:#ffd58a}
