@@ -1361,7 +1361,9 @@ const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
 // ======================================================================= camera and projection
 // Tight batting view: larger striker, far crease near mid-screen and release still visible.
 // Camera-only framing pass against the owner's Cricket 07 recording; player scale is unchanged.
-const BOWL_CAM = (() => { const q = (new URLSearchParams(location.search).get('cam') || '').split(':').map(Number); return q.length === 7 ? { pos: q.slice(0, 3), tgt: q.slice(3, 6), fov: q[6] } : { pos:[0,6.6,52],tgt:[0,.8,7.5],fov:7.8 }; })();
+// 22 November 2026 (owner: hard to time since the camera change): raised from 6.6 m to 8 m. From 6.6 m a full ball crossed only
+// 7% of the screen on its way to the bat (16% before), so it seemed to hang; now 18%, the batter the same size.
+const BOWL_CAM = (() => { const q = (new URLSearchParams(location.search).get('cam') || '').split(':').map(Number); return q.length === 7 ? { pos: q.slice(0, 3), tgt: q.slice(3, 6), fov: q[6] } : { pos:[0,8,52],tgt:[0,.8,6],fov:7.8 }; })();
 // Preserve the independent legacy 2D framing.
 const BOWL_CAM_2D = { pos: [0, 6.2, 46], tgt: [0, 0.7, 10], fov: 11.5 };
 const homeCam = () => { try { return R3D && R3D.active() ? BOWL_CAM : BOWL_CAM_2D; } catch (e) { return BOWL_CAM; } };
@@ -3426,17 +3428,21 @@ const lineToPitch = (line, pz) => line + (REL_X - line) * pz / (PITCH - 0.6);
 // a delivery from a description: speed, pitching spot (px, pz = metres in front of the batter's stumps), style, variation
 function buildDelivery(spec) {
   const T = BOWL_TYPES[spec.type], spin = !!T.turn, vname = T.vars[spec.vi || 0];
-  let kmh = spec.kmh, ax = 0, turn = spin ? T.turn * rand(0.9, 1.7) : 0, grip = spin ? 0.84 : 0.86;
-  let seam = spin ? 0.15 : 0.35, bounce = 0.56;
+  // grip: forward speed kept off the pitch. It was 0.86 / 0.84: a short ball then reached the bat about 30 ms later than a
+  // yorker at the same speedometer reading (60 ms for spin), half the timing window (owner, 22 November 2026: "balls come a
+  // little slower some time"). Now 0.93 / 0.92: about half that, still a touch slower off the pitch. Contact heights are
+  // unchanged within about 1 cm (pace, bounce 0.59) and 3 cm (spin).
+  let kmh = spec.kmh, ax = 0, turn = spin ? T.turn * rand(0.9, 1.7) : 0, grip = spin ? 0.92 : 0.93;
+  let seam = spin ? 0.15 : 0.35, bounce = spin ? 0.56 : 0.59;   // 0.59 (was 0.56) keeps a quick's ball at the same height at the bat with the new grip
   // trick: how a computer batter who doesn't pick it gets it wrong (mu: early < 0 < late, sig: wider timing spread)
   const trick = { mu: 0, sig: 1, loft: 0, streak: 0 };
   switch (vname) {
     case 'Slower': kmh *= 0.8; trick.mu = -0.045; trick.sig = 1.1; break;
-    case 'Cutter': kmh *= 0.9; turn = rand(0.8, 1.3); grip = 0.8; trick.mu = -0.02; trick.sig = 1.15; break;
+    case 'Cutter': kmh *= 0.9; turn = rand(0.8, 1.3); grip = 0.87; trick.mu = -0.02; trick.sig = 1.15; break;
     case 'Outswing': ax = -rand(2.0, 3.2); trick.sig = 1.18; break;   // moves away from the bat in the air
     case 'Inswing': ax = rand(2.0, 3.2); trick.sig = 1.18; break;     // moves in toward the pads
     case 'Arm ball': kmh *= 1.08; turn *= 0.1; trick.mu = 0.02; trick.sig = 1.2; break;      // looks like the off-break, goes straight on
-    case 'Top-spinner': kmh *= 1.04; turn *= 0.3; grip = 0.9; trick.sig = 1.2; break;        // little turn, hurries on off the pitch
+    case 'Top-spinner': kmh *= 1.04; turn *= 0.3; grip = 0.96; trick.sig = 1.2; break;        // little turn, hurries on off the pitch
     case 'Flighted': kmh *= 0.88; turn *= 1.35; trick.sig = 1.1; trick.loft = 0.25; break;
     case 'Quicker': kmh *= 1.13; turn *= 0.4; trick.mu = 0.03; break;
     case 'Doosra': case 'Googly': turn = -turn; trick.sig = 1.3; break;
