@@ -3426,23 +3426,25 @@ const chipRuns = v => v === 'wd' ? 1 : v === 'W' ? 0 : v[0] === 'n' ? 1 + (+v.sl
 const lineToPitch = (line, pz) => line + (REL_X - line) * pz / (PITCH - 0.6);
 
 // a delivery from a description: speed, pitching spot (px, pz = metres in front of the batter's stumps), style, variation
+const BALL_FEEL = { pace: 1.07, spin: 1.1 };   // 1, 1 = as before 23 November 2026
 function buildDelivery(spec) {
   const T = BOWL_TYPES[spec.type], spin = !!T.turn, vname = T.vars[spec.vi || 0];
   // grip: forward speed kept off the pitch. It was 0.86 / 0.84: a short ball then reached the bat about 30 ms later than a
   // yorker at the same speedometer reading (60 ms for spin), half the timing window (owner, 22 November 2026: "balls come a
-  // little slower some time"). Now 0.93 / 0.92: about half that, still a touch slower off the pitch. Contact heights are
-  // unchanged within about 1 cm (pace, bounce 0.59) and 3 cm (spin).
-  let kmh = spec.kmh, ax = 0, turn = spin ? T.turn * rand(0.9, 1.7) : 0, grip = spin ? 0.92 : 0.93;
-  let seam = spin ? 0.15 : 0.35, bounce = spin ? 0.56 : 0.59;   // 0.59 (was 0.56) keeps a quick's ball at the same height at the bat with the new grip
+  // little slower some time"). 22 November: 0.93 / 0.92 (half the gap); 23 November, owner still felt short balls come slower:
+  // 1.0 / 0.98, so every length reaches the bat when the speedometer says (spin 6 ms apart). Contact heights kept within
+  // about 2-3 cm (pace, bounce 0.63) and 3-5 cm (spin, bounce 0.58) of how they always were.
+  let kmh = spec.kmh, ax = 0, turn = spin ? T.turn * rand(0.9, 1.7) : 0, grip = spin ? 0.98 : 1.0;
+  let seam = spin ? 0.15 : 0.35, bounce = spin ? 0.58 : 0.63;   // (was 0.56) keeps the ball at the same height at the bat with the new grip
   // trick: how a computer batter who doesn't pick it gets it wrong (mu: early < 0 < late, sig: wider timing spread)
   const trick = { mu: 0, sig: 1, loft: 0, streak: 0 };
   switch (vname) {
     case 'Slower': kmh *= 0.8; trick.mu = -0.045; trick.sig = 1.1; break;
-    case 'Cutter': kmh *= 0.9; turn = rand(0.8, 1.3); grip = 0.87; trick.mu = -0.02; trick.sig = 1.15; break;
+    case 'Cutter': kmh *= 0.9; turn = rand(0.8, 1.3); grip = 0.94; trick.mu = -0.02; trick.sig = 1.15; break;
     case 'Outswing': ax = -rand(2.0, 3.2); trick.sig = 1.18; break;   // moves away from the bat in the air
     case 'Inswing': ax = rand(2.0, 3.2); trick.sig = 1.18; break;     // moves in toward the pads
     case 'Arm ball': kmh *= 1.08; turn *= 0.1; trick.mu = 0.02; trick.sig = 1.2; break;      // looks like the off-break, goes straight on
-    case 'Top-spinner': kmh *= 1.04; turn *= 0.3; grip = 0.96; trick.sig = 1.2; break;        // little turn, hurries on off the pitch
+    case 'Top-spinner': kmh *= 1.04; turn *= 0.3; grip = 1.0; trick.sig = 1.2; break;        // little turn, hurries on off the pitch
     case 'Flighted': kmh *= 0.88; turn *= 1.35; trick.sig = 1.1; trick.loft = 0.25; break;
     case 'Quicker': kmh *= 1.13; turn *= 0.4; trick.mu = 0.03; break;
     case 'Doosra': case 'Googly': turn = -turn; trick.sig = 1.3; break;
@@ -3477,6 +3479,12 @@ function buildDelivery(spec) {
     t += dt;
   }
   path.push({ t, p: p.slice() });
+  // BALL_FEEL (owner, 23 November 2026: "balls should come slightly quicker for both pace and spin"): the same path, played
+  // this much faster, so its line, bounce and height at the bat are unchanged and the speedometer keeps real numbers
+  // (a 142 km/h ball now reaches the bat in 0.44 s instead of 0.47; an 84 km/h spinner in 0.72 s instead of 0.80).
+  const feel = spin ? BALL_FEEL.spin : BALL_FEEL.pace;
+  for (const q of path) q.t /= feel;
+  Tstar /= feel; tBounce /= feel;
   const atBat = samplePath(path, Tstar);
   // does it hit the stumps?
   let stumps = false;
@@ -3687,7 +3695,7 @@ function shotReach(family, at, intent=0, loft=false) {
     drive:[-.50,.40,.06,1.05], fdef:[-.50,.45,.03,1.05], push:[-.50,.45,.03,1.05],
     bdrive:[-.50,.40,.30,1.75], bdef:[-.50,.45,.03,1.75],
     cut:[-.70,.12,.25,1.50], lcut:[-.65,.12,.25,1.55], ucut:[-.70,.12,1.05,1.90],
-    flick:[-.20,.55,.12,1.05], glance:[-.20,.55,loft?.25:.12,1.05],
+    flick:[-.20,.55,.11,1.05], glance:[-.20,.55,loft?.25:.11,1.05],   // .11 (was .12): a full ball now comes through at 0.1199 m (23 Nov)
     slog:[-.08,.50,.40,1.05], pull:[-.20,.60,.40,1.45], hook:[-.18,.55,1.25,1.90],
     sweep:[-.20,.35,.16,1.05], rsweep:[-.45,.15,.16,1.05]
   };
@@ -4762,7 +4770,10 @@ async function chalUnpack(t) {
   if (h !== fnv(CHAL.salt + JSON.stringify(o)) || o.v !== CHAL.v) throw new Error('bad check');
   return o;
 }
-const chalUrl = (k, t) => location.origin + location.pathname + '#' + k + '=' + t;
+// links always lead to the game's own site; inside another site's frame (itch.io) the page's own address can't be shared
+const CHAL_HOME = 'https://stumpflare.starquill.org/';
+const chalBase = () => /(^|\.)(starquill\.org|pages\.dev|github\.io)$|^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? location.origin + location.pathname : CHAL_HOME;
+const chalUrl = (k, t) => chalBase() + '#' + k + '=' + t;
 // an innings as plain figures, and back (on a copy of the batting side carrying the setter's names)
 function innPack(i) {
   return { r: i.runs, w: i.wkts, b: i.balls, mb: i.maxBalls, x: i.extras, wd: i.wides, nb: i.noBalls, f4: i.fours, s6: i.sixes,
@@ -7497,7 +7508,9 @@ requestAnimationFrame(frame);
 
 <script>
   // works offline once installed (sw.js); skipped where it isn't allowed
-  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  // not inside another site's frame (itch.io): offline play means nothing there, and an old cached copy could outlive a new upload
+  let framed = true; try { framed = window.self !== window.top; } catch (e) {}
+  if ('serviceWorker' in navigator && location.protocol === 'https:' && !framed) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
 </html>
