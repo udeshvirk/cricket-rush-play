@@ -1117,6 +1117,13 @@
 <script src="player-production/locomotion.js"></script>
 <script src="player-production/motion.js"></script>
 <script src="player-production/batting-clips.js"></script>
+<script src="player-production/cut-recordings.js"></script>
+<script src="player-production/defence-recordings.js"></script>
+<script src="player-production/drive-recordings.js"></script>
+<script src="player-production/leg-recordings.js"></script>
+<script src="player-production/slog-recordings.js"></script>
+<script src="player-production/stance-recordings.js"></script>
+<script src="player-production/sweep-recordings.js"></script>
 <script src="player-production/diagnostics.js"></script>
 <script src="commentary.js"></script>
 <script src="identity-migration.js"></script>
@@ -2090,21 +2097,85 @@ function bodyCapsules(j) {
 }
 function closestOnSeg(p, a, b) { const ab = sub(b, a), t = clamp(dot(sub(p, a), ab) / Math.max(1e-9, dot(ab, ab)), 0, 1); return add(a, mul(ab, t)); }
 function bladeClear(j, h, bd) {
-  const caps = bodyCapsules(j);
-  for (let iter = 0; iter < 16; iter++) {
-    let worst = null;
-    for (const [a, b, r] of caps) for (let u = 0.3; u <= 1.0001; u += 0.1) {
-      const p = add(h, mul(bd, 0.85 * u)), q = closestOnSeg(p, a, b), d = len(sub(p, q)), pen = r + BLADE_GAP - d;
-      if (pen > 0 && (!worst || pen > worst.pen)) worst = { pen, p, q, u };
+  const heel = 0.255, toe = 0.85, span = toe - heel, bladeRadius = 0.058;
+  const caps = bodyCapsules(j).map(([a, b, radius]) => {
+    // Cover the helmet's small backward follow-through shift.
+    if (a === j.head) b = sub(b, [0, 0, 0.035]);
+    const axis = sub(b, a);
+    return { from: sub(h, a), axis, size: dot(axis, axis), radius: radius + bladeRadius };
+  });
+  let awayX, awayY, awayZ, reach;
+  // Find the exact closest pair on each pair of finite segments. Keep the
+  // distance checks allocation-free, since the fallback tries many angles.
+  const overlap = (x, y, z) => {
+    reach = y < 0 ? toe : heel;
+    const edge = bladeRadius * Math.sqrt(Math.max(0, 1 - y * y));
+    let worst = edge - (h[1] + reach * y);
+    awayX = 0; awayY = 1; awayZ = 0;
+    for (const { from, axis, size, radius } of caps) {
+      const rx = from[0] + heel * x, ry = from[1] + heel * y, rz = from[2] + heel * z;
+      const c = rx * x + ry * y + rz * z;
+      const b = axis[0] * x + axis[1] * y + axis[2] * z;
+      const f = rx * axis[0] + ry * axis[1] + rz * axis[2];
+      const denom = size - b * b;
+      let s = denom > 1e-9 ? clamp((b * f - c * size) / denom, 0, span) : 0;
+      let t = size ? (b * s + f) / size : 0;
+      if (t <= 0 || t >= 1) {
+        t = clamp(t, 0, 1);
+        s = clamp(t * b - c, 0, span);
+      }
+      const dx = rx + s * x - t * axis[0], dy = ry + s * y - t * axis[1], dz = rz + s * z - t * axis[2];
+      const distance2 = dx * dx + dy * dy + dz * dz, limit = radius - worst;
+      if (limit <= 0 || distance2 >= limit * limit) continue;
+      const distance = Math.sqrt(distance2);
+      worst = radius - distance;
+      awayX = dx; awayY = dy; awayZ = dz; reach = heel + s;
     }
-    if (!worst) break;
-    // push that point of the blade straight out of the body part, keeping the hands where they are
-    let out = sub(worst.p, worst.q); out = sub(out, mul(bd, dot(out, bd)));
-    if (len(out) < 1e-6) out = norm(cross(bd, [0, 1, 0]));
-    const reach = 0.85 * worst.u;
-    bd = norm(add(mul(bd, reach), mul(norm(out), worst.pen + 0.01)));
+    return worst;
+  };
+  let direction = bd, pen = overlap(bd[0], bd[1], bd[2]);
+  if (pen <= 0) return bd;
+  let bestDirection = bd, bestPen = pen;
+  for (let i = 0; i < 12; i++) {
+    const away = [awayX, awayY, awayZ], tangent = sub(away, mul(direction, dot(away, direction)));
+    if (len(tangent) < 1e-7) break;
+    direction = norm(add(mul(direction, reach), mul(norm(tangent), pen + 0.003)));
+    pen = overlap(direction[0], direction[1], direction[2]);
+    if (pen <= 0) return direction;
+    if (pen < bestPen) { bestPen = pen; bestDirection = direction; }
   }
-  return bd;
+  // Several capsules can trap the local correction. Search outward from
+  // the requested angle for an escape, then narrow the turn on that arc.
+  const side = norm(cross(bd, Math.abs(bd[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0]));
+  const up = cross(bd, side);
+  const bearings = Array.from({ length: 16 }, (_, i) => {
+    const bearing = i * Math.PI / 8;
+    return add(mul(side, Math.cos(bearing)), mul(up, Math.sin(bearing)));
+  });
+  let inner = 0;
+  for (const degrees of [7.5, 15, 22.5, 30, 37.5, 45, 52.5, 60, 67.5, 75, 90, 110, 135, 160, 180]) {
+    const angle = degrees * deg;
+    let escape = null, turn = angle;
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    for (const tangent of bearings) {
+      const x = bd[0] * cos + tangent[0] * sin;
+      const y = bd[1] * cos + tangent[1] * sin;
+      const z = bd[2] * cos + tangent[2] * sin;
+      const pen = overlap(x, y, z);
+      if (pen < bestPen) { bestPen = pen; bestDirection = [x, y, z]; }
+      if (pen > 0) continue;
+      let low = inner, high = angle;
+      for (let n = 0; n < 7; n++) {
+        const mid = (low + high) / 2, c = Math.cos(mid), s = Math.sin(mid);
+        if (overlap(bd[0] * c + tangent[0] * s, bd[1] * c + tangent[1] * s, bd[2] * c + tangent[2] * s) > 0) low = mid;
+        else high = mid;
+      }
+      if (!escape || high < turn) { turn = high; escape = tangent; }
+    }
+    if (escape) return add(mul(bd, Math.cos(turn)), mul(escape, Math.sin(turn)));
+    inner = angle;
+  }
+  return bestDirection;
 }
 // Before the shot, the batter moves like a real one: as the bowler jumps into his delivery, a small trigger step
 // back and across with the bat going back toward the slips; the bat at the top of the backlift as the ball is released;
@@ -2269,17 +2340,81 @@ function recordedBladeCurve(c) {
   }
   return recordedBladeCurves.get(c);
 }
+function recordingFor(sw) {
+  const clips = clipsOn() && window.BATTING_CLIPS;
+  if (!clips) return null;
+  const loft = sw.loft ? 'Loft' : '';
+  if (sw.fam === 'drive') {
+    const a = sw.intent || 0;
+    const name = a < -75 ? 'Square' : a < -35 ? 'Cover' : a < -10 ? 'Off' : a <= 10 ? 'Straight' : 'On';
+    const variant = clips['drive' + name + loft];
+    const loftBase = sw.loft && (clips.driveStraightLoft || clips.driveLoft);
+    const canonical = loftBase ? 'Straight' : 'Cover';
+    const base = loftBase || clips.driveCover || clips.drive;
+    if (variant && (name === canonical || variant !== base)) return variant;
+    if (!base || name === canonical) return base;
+
+    // Reuse the tracked stride and pivot. Steer the upper body and blade
+    // together through impact and extension so the gloves stay on their arc.
+    // Use the same samples for contact placement and blade-face transport.
+    const recordings = recordingFor.directionalDrives ??= new WeakMap();
+    let variants = recordings.get(base);
+    if (!variants) {
+      variants = new Map();
+      recordings.set(base, variants);
+    }
+    const key = name + loft;
+    if (!variants.has(key)) {
+      const angles = { Square: -90, Cover: -45, Off: -22, Straight: 0, On: 28 };
+      const turn = clamp(angles[name] - angles[canonical], -72, 58);
+      const upper = ['neck', 'head', 'shL', 'shR', 'elL', 'elR', 'handL', 'handR'];
+      const impact = clipFrame(base, base.contact);
+      const sweetSpot = add(mul(add(impact.handL, impact.handR), .5), mul(norm(impact.bd), .48));
+      const radius = sub(sweetSpot, impact.pelvis);
+      const frames = base.frames.map((frame, i) => {
+        const t = (i - base.contact) / base.fps;
+        const extension = smooth(clamp(t / .16, 0, 1));
+        const yaw = turn * Math.PI / 180 * (.2 * smooth(clamp((t + .12) / .12, 0, 1)) + .8 * extension);
+        if (!yaw) return frame;
+        const s = Math.sin(yaw), c = Math.cos(yaw);
+        const rotate = ([x, y, z]) => [c * x + s * z, y, c * z - s * x];
+        const steered = { ...frame, bd: rotate(frame.bd) };
+        for (const joint of upper) steered[joint] = add(frame.pelvis, rotate(sub(frame[joint], frame.pelvis)));
+        // Keep extension through the ball as the angle changes. A turn
+        // about the pelvis alone can pull the blade back behind impact.
+        const [x, , z] = sub(radius, rotate(radius));
+        const reach = [clamp(x, -.2, .2), 0, clamp(z, -.24, .24)];
+        for (const joint of ['elL', 'elR', 'handL', 'handR'])
+          steered[joint] = add(steered[joint], mul(reach, extension * (joint.startsWith('hand') ? 1 : .5)));
+        return steered;
+      });
+      variants.set(key, { ...base, frames });
+    }
+    return variants.get(key);
+  }
+  return clips[sw.fam + loft] || clips[sw.fam];
+}
+function recordedContactPlacement(sw, clip) {
+  const lever = clip.contactLever ?? 0.48;
+  if (sw.fam !== 'glance' || sw.target[1] >= 0.375) return { lever };
+  // A low glance meets the ball farther down the face. Move the stance
+  // toward the grip so the fitted arms can reach without pulling the bat away.
+  const low = smooth(clamp((0.375 - sw.target[1]) / 0.03, 0, 1));
+  return { lever: lerp(lever, 0.72, low), stanceOffset: [0.15 * low, 0, -0.08 * low] };
+}
 function clipBody(sw, motionTime) {
-  const c = clipsOn() && window.BATTING_CLIPS[sw.fam];
+  const c = recordingFor(sw);
   if (!c) return null;
   const tc = motionTime - SWING_LAG, ft = clipPlaybackFrame(c, tc);
   if (!sw.clipO) {   // placed once per shot: his hands at contact where the keys meet the ball (the ball's line moves his feet
     // into line, as a batter's would); only the height is left for the arms and knees to make up
-    const fc = clipFrame(c, c.contact), keysAt = sub(sw.target, mul(norm(fc.bd), 0.48)), hc = mul(add(fc.handL, fc.handR), 0.5);
+    const { lever, stanceOffset } = recordedContactPlacement(sw, c);
+    const fc = clipFrame(c, c.contact), keysAt = sub(sw.target, mul(norm(fc.bd), lever)), hc = mul(add(fc.handL, fc.handR), 0.5);
     sw.clipO = [keysAt[0] - hc[0], 0, keysAt[2] - hc[2]];
     sw.clipD = [0, keysAt[1] - hc[1], 0];
+    sw.clipStanceO = stanceOffset ? add(sw.clipO, stanceOffset) : sw.clipO;
   }
-  const f = clipFrame(c, ft), O = sw.clipO, D = sw.clipD;
+  const f = clipFrame(c, ft), O = sw.clipStanceO, D = sw.clipD;
   const r = tc < 0 ? smooth(clamp(1 + tc / CLIP.reachIn, 0, 1)) : 1 - smooth(clamp(tc / CLIP.reachOut, 0, 1));
   const body = [0, Math.min(0, D[1]) * 0.3 * r, 0];
   const j = {};
@@ -2290,12 +2425,14 @@ function clipBody(sw, motionTime) {
   j.footPitchL = [leftFoot.pitch, 0, 0]; j.footPitchR = [rightFoot.pitch, 0, 0];
   j.kneeL = ik(j.hipL, add(j.footL, [0, 0.07, 0]), LEG, LEG, sub(f.kneeL, mul(add(f.hipL, f.footL), 0.5)));
   j.kneeR = ik(j.hipR, add(j.footR, [0, 0.07, 0]), LEG, LEG, sub(f.kneeR, mul(add(f.hipR, f.footR), 0.5)));
-  const h = add(add(mul(add(f.handL, f.handR), 0.5), O), mul(D, r));
-  // The recorded pull supplies the swivel for both trajectories. On the loft,
-  // the gloves carry up through the ball before the blade wraps behind them.
-  const lift = sw.fam === 'pull' && sw.loft ? smooth(clamp(tc / .14, 0, 1)) : 0;
-  h[1] += .075 * lift;
-  const bd = lift ? norm(add(f.bd, [0, .24 * lift, 0])) : f.bd;
+  const h = add(add(mul(add(f.handL, f.handR), 0.5), sw.clipO), mul(D, r));
+  // Carry the gloves and blade upward on loft inputs that share a grounded take.
+  // Keep the source footwork and contact sample, including its measured blade angle.
+  const sharedLoft = sw.loft && !window.BATTING_CLIPS[sw.fam + 'Loft'];
+  const carry = sharedLoft && ['pull', 'hook', 'cut', 'glance', 'flick'].includes(sw.fam)
+    ? smooth(clamp(tc / .14, 0, 1)) : 0;
+  h[1] += .075 * carry;
+  const bd = carry ? norm(add(f.bd, [0, .24 * carry, 0])) : f.bd;
   return { j, h, bd, bladeCurve: recordedBladeCurve(c), bladeTime: SWING_LAG + (ft - c.contact) / c.fps, poleL: sub(f.elL, mul(add(f.shL, f.handL), 0.5)), poleR: sub(f.elR, mul(add(f.shR, f.handR), 0.5)) };
 }
 function blendBody(a, b, w) {   // joints part way from a to b (the limbs re-solved so they keep their lengths)
@@ -2303,6 +2440,36 @@ function blendBody(a, b, w) {   // joints part way from a to b (the limbs re-sol
   for (const key in b) o[key] = Array.isArray(b[key]) && Array.isArray(a[key]) && b[key].length === 3 ? lerp3(a[key], b[key], w) : b[key];
   for (const key in a) if (o[key] === undefined) o[key] = a[key];
   return o;
+}
+
+// The guard and its trigger share one observed preparation. At release the idle
+// loop settles onto a frame of the same take; the remaining frames play with the delivery.
+function recordedGuard(st, ready) {
+  const c = window.BATTING_STANCE;
+  const t = (clock * c.fps * st.tap) % c.loopEnd;
+  const loop = clipFrame(c, t);
+  const seam = smooth(clamp((t - (c.loopEnd - 5)) / 5, 0, 1));
+  const tap = mixPose(loop, c.frames[0], seam);
+  // Settle the torso around the posture it takes before the pickup. Keep the
+  // recorded bat angle and most of the glove movement relative to the hips.
+  const rest = c.frames[c.prepStart];
+  let k = mixPose(rest, tap, 0.2);
+  k.h = add(k.pel, lerp3(sub(rest.h, rest.pel), sub(tap.h, tap.pel), 0.7));
+  k.bd = tap.bd;
+  let ft = c.prepStart, pickup = 0;
+  if (phase === 'flight' && ball) {
+    const back = ball.short || ball.atBat[1] > 1.05;
+    pickup = smooth(clamp((WAIT.start - (ball.Tstar - ball.t)) / (WAIT.start - WAIT.top), 0, 1));
+    ft += pickup * ((back ? c.prepShort : c.prepFull) - ft);
+  }
+  if (ready) k = mixPose(k, clipFrame(c, ft), ready);
+  // The reference pickup starts with the hips already outside the feet.
+  // Recenter the waiting posture and ease back onto the filmed stride.
+  const waiting = 1 - pickup;
+  const shift = [((rest.fr[0] + rest.bk[0]) * .5 - rest.pel[0]) * .7 * waiting, 0,
+                 ((rest.fr[2] + rest.bk[2]) * .5 - rest.pel[2]) * .6 * waiting];
+  return styled({ ...k, pel: add(k.pel, shift), h: add(k.h, shift),
+                  lean: k.lean - 7 * waiting }, st);
 }
 
 function batterPose(sw) {
@@ -2375,29 +2542,36 @@ function batterPose(sw) {
   else {
     const ready = phase === 'runup' ? smooth(clamp((phaseT - RUNUP + 0.4) / 0.35, 0, 1)) : (phase === 'flight' || phase === 'result') && ball ? 1 : 0;
     const st = batStyle();
-    // up and down at the guard: slowly between balls; once the bowler is running he comes up, then settles down for the ball
-    const bob = phase === 'runup' ? 0.6 * Math.sin(Math.PI * clamp((phaseT - 0.2) / Math.max(0.8, RUNUP - 1.2), 0, 1))
-              : phase === 'wait' ? 0.5 - 0.5 * Math.cos(clock * 2 * Math.PI / 4.2) : 0;
-    const dtc = clamp(clock - guardBob.at, 0, 0.1); guardBob.at = clock; guardBob.v += (bob - guardBob.v) * Math.min(1, dtc * 6);   // eased: no jump when the run-up starts
-    const guardK = mixPose(styled(STANCE, st), styled(STAND_UP, st), smooth(clamp(guardBob.v, 0, 1)));
-    k = ready ? mixPose(guardK, styled(READY, st), ready) : guardK;
-    gripTurn = (1 - ready) * GRIP_TURN * MIR;   // a left-hander is drawn mirrored, which would turn it the other way   // at his guard the bat's face looks to the off side: the gloves stack on the handle and the arms hang together
-    // alive at the crease: breathing, and a tap of the bat until the bowler is well into his run
-    const br = Math.sin(clock * 1.7);
-    const tapOn = phase === 'runup' ? 1-smooth(clamp(phaseT/.4,0,1)) : phase === 'wait' ? 1 : 0;
-    // A slow, small tap with zero velocity at both ends; the old short pulse shook the blade.
-    const tp = (clock * st.tap) % 1, tap = tapOn * st.tapBig * (tp < .65 ? Math.sin(tp / .65 * Math.PI)**2 : 0);
-    k = { ...k, pel: add(k.pel, [0, br * 0.004, 0]), lean: k.lean + br * .4,
-          h: add(k.h, [0, .018 * tap, 0]), bd: norm(add(k.bd, [0, .06 * tap, -.025 * tap])) };
-    if ((phase === 'runup' || (phase === 'flight' && ball))) k = waitMove(k);   // a leave blends from here too
+    if (clipsOn() && window.BATTING_STANCE) {
+      k = recordedGuard(st, ready);
+      gripTurn = (1 - ready) * GRIP_TURN * MIR;
+    } else {
+      // up and down at the guard: slowly between balls; once the bowler is running he comes up, then settles down for the ball
+      const bob = phase === 'runup' ? 0.6 * Math.sin(Math.PI * clamp((phaseT - 0.2) / Math.max(0.8, RUNUP - 1.2), 0, 1))
+                : phase === 'wait' ? 0.5 - 0.5 * Math.cos(clock * 2 * Math.PI / 4.2) : 0;
+      const dtc = clamp(clock - guardBob.at, 0, 0.1); guardBob.at = clock; guardBob.v += (bob - guardBob.v) * Math.min(1, dtc * 6);   // eased: no jump when the run-up starts
+      const guardK = mixPose(styled(STANCE, st), styled(STAND_UP, st), smooth(clamp(guardBob.v, 0, 1)));
+      k = ready ? mixPose(guardK, styled(READY, st), ready) : guardK;
+      gripTurn = (1 - ready) * GRIP_TURN * MIR;   // a left-hander is drawn mirrored, which would turn it the other way   // at his guard the bat's face looks to the off side: the gloves stack on the handle and the arms hang together
+      // alive at the crease: breathing, and a tap of the bat until the bowler is well into his run
+      const br = Math.sin(clock * 1.7);
+      const tapOn = phase === 'runup' ? 1-smooth(clamp(phaseT/.4,0,1)) : phase === 'wait' ? 1 : 0;
+      // A slow, small tap with zero velocity at both ends; the old short pulse shook the blade.
+      const tp = (clock * st.tap) % 1, tap = tapOn * st.tapBig * (tp < .65 ? Math.sin(tp / .65 * Math.PI)**2 : 0);
+      k = { ...k, pel: add(k.pel, [0, br * 0.004, 0]), lean: k.lean + br * .4,
+            h: add(k.h, [0, .018 * tap, 0]), bd: norm(add(k.bd, [0, .06 * tap, -.025 * tap])) };
+      if ((phase === 'runup' || (phase === 'flight' && ball))) k = waitMove(k);   // a leave blends from here too
+    }
     if (ball && ball.left) {   // bat up out of the way; duck under a bouncer
       const lk = smooth(clamp((ball.t - ball.left) / 0.2, 0, 1));
       k = mixPose(k, ball.atBat[1] > 1.45 ? DUCK : LEAVE, lk);
     }
   }
+  const cb = sw && clipBody(sw, motionTime);
+  // Join the guard actually displayed on input directly to the filmed downswing.
+  if (cb && sw.visualStart && motionTime < CLIP.blendIn) k = sw.visualStart;
   let bd = norm(k.bd);
   let j = buildBody({ ...k, hL: sub(k.h, mul(bd, 0.045)), hR: add(k.h, mul(bd, 0.045)), headOff: [0, 0, 0.04] });
-  const cb = sw && clipBody(sw, motionTime);
   let clipWeight = 0;
   if (cb) {   // the recorded stroke: blends in at the start, out as he lets the finish go
     const w = smooth(clamp(motionTime / CLIP.blendIn, 0, 1)) * (1 - (sw.rx || 0) / 0.9);
