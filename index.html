@@ -703,15 +703,15 @@
   #game:has(> .screen:not([hidden])) :is(#comm, #fxLayer, #flash) { visibility: hidden; }
   #game:has(> #batcard.show) #comm { opacity: 0; }   /* the batter's card has the same place on phones: the commentary line steps aside */
   /* the menu: one big PLAY button, tiles that slide in, a shine on the title */
-  #goQuick { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; cursor: pointer;
+  #menu .menu-primary { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; cursor: pointer;
              background: linear-gradient(100deg, #ffb02e, #ff8a2e); color: #1a1205; border: 0; border-radius: 6px; padding: 14px 18px;
              font-family: var(--ui); box-shadow: 0 8px 28px rgba(255,150,40,0.35); position: relative; overflow: hidden; }
-  #goQuick .n { font-family: var(--display); font-weight: 900; font-size: 34px; letter-spacing: 0.04em; line-height: 1; }
-  #goQuick .d { font-size: 15px; font-weight: 600; opacity: 0.85; }
-  #goQuick .go { font-family: var(--display); font-weight: 900; font-size: 30px; }
-  #goQuick::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 35%, rgba(255,255,255,0.55) 50%, transparent 65%) -150% 0 / 250% 100% no-repeat;
+  #menu .menu-primary .n { font-family: var(--display); font-weight: 900; font-size: 34px; letter-spacing: 0.04em; line-height: 1; }
+  #menu .menu-primary .d { font-size: 15px; font-weight: 600; opacity: 0.85; }
+  #menu .menu-primary .go { font-family: var(--display); font-weight: 900; font-size: 30px; }
+  #menu .menu-primary::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 35%, rgba(255,255,255,0.55) 50%, transparent 65%) -150% 0 / 250% 100% no-repeat;
                     animation: sweep 3.2s ease-in-out 1s infinite; }
-  #goQuick:hover { filter: brightness(1.07); }
+  #menu .menu-primary:hover { filter: brightness(1.07); }
   @keyframes sweep { 0% { background-position: 150% 0; } 40%, 100% { background-position: -150% 0; } }
   #menu:not([hidden]) .levels > * { animation: tileIn 0.45s cubic-bezier(.2,1.2,.4,1) both; }
   #menu .levels > :nth-child(2) { animation-delay: 0.06s; } #menu .levels > :nth-child(3) { animation-delay: 0.12s; }
@@ -719,11 +719,11 @@
   @keyframes tileIn { from { opacity: 0; transform: translateY(14px); } }
   #menu .title span { background: linear-gradient(100deg, var(--amber) 40%, #fff3c4 50%, var(--amber) 60%) 0 0 / 260% 100%; -webkit-background-clip: text; background-clip: text;
                       color: transparent; animation: shine 2.4s ease-in-out 0.6s infinite alternate; }
-  @media (max-height: 460px) { #goQuick { padding: 8px 12px; } #goQuick .n { font-size: 24px; } #goQuick .go { font-size: 22px; } }
+  @media (max-height: 460px) { #menu .menu-primary { padding: 8px 12px; } #menu .menu-primary .n { font-size: 24px; } #menu .menu-primary .go { font-size: 22px; } }
   /* the pause menu: Resume stands out, the rest are smaller */
   #pause .row .btn.ghost { font-size: 14px; padding: 8px 12px; }
   #pause #resume { min-width: 180px; }
-  @media (prefers-reduced-motion: reduce) { #banner .head, #banner .line, #goQuick::after, #menu .levels > *, #needText.hot, #fireTag { animation: none !important; } }
+  @media (prefers-reduced-motion: reduce) { #banner .head, #banner .line, #menu .menu-primary::after, #menu .levels > *, #needText.hot, #fireTag { animation: none !important; } }
 </style>
 <link rel="preload" href="vendor/fonts/barlow-condensed-800.ttf" as="font" type="font/ttf" crossorigin>
 <link rel="stylesheet" href="presentation.css">
@@ -775,7 +775,7 @@
   </div>
 
   <div id="batpad">
-    <div id="swipeHint" class="hud" hidden></div>
+    <div id="swipeHint" class="hud" hidden>Arrows + S to hit · Hold Shift to loft</div>
     <div class="shotsel" id="shotSel">
       <button type="button" data-k="defend">DEFEND</button>
       <button type="button" data-k="shot" class="on">SHOT</button>
@@ -813,10 +813,10 @@
       <div class="menu-play">
       <div class="menu-section-label">YOUR NEXT INNINGS <span>LET'S PLAY</span></div>
       <div class="levels">
-        <button type="button" id="goQuick"><span><span class="n">PLAY NOW</span><br><span class="d" id="quickLine">Quick match</span></span><span class="go">▶</span></button>
-        <button class="level" type="button" id="goMatch"><span class="n">Play a match</span><span class="d">Bat and bowl, two innings</span>
+        <button type="button" id="goQuick" class="menu-primary"><span><span class="n">PLAY NOW</span><br><span class="d" id="quickLine">Quick match</span></span><span class="go">▶</span></button>
+        <button class="level" type="button" id="goMatch"><span class="n">Custom match</span><span class="d">Bat and bowl, two innings</span>
           <span class="s">Pick your team · 2 overs up to T20 and ODI</span><span class="best" id="recordLine"></span></button>
-        <button class="level" type="button" id="goResume" hidden><span class="n">Continue match</span><span class="d" id="resumeLine"></span></button>
+        <button class="menu-primary" type="button" id="goResume" hidden><span><span class="n">Continue match</span><br><span class="d" id="resumeLine"></span></span><span class="go" aria-hidden="true">▶</span></button>
         <button class="level" type="button" id="goSeries"><span class="n">Mini series</span><span class="d">Best of 3 or 5 matches</span>
           <span class="s">One opponent · series trophy · player of the series</span><span class="best" id="seriesLine"></span></button>
         <button class="level" type="button" id="goTournament"><span class="n">Tournaments</span><span class="d">Nations Cup · Club League</span><span class="best" id="tournamentLine"></span></button>
@@ -1072,6 +1072,12 @@
         <button class="btn ghost" id="restartMatch" type="button">Rematch</button>
         <button class="btn ghost" id="quit" type="button">Quit match</button>
       </div>
+      <details class="pause-controls"><summary>Controls</summary>
+        <p><b>Batting</b> · Hold arrows and press S to hit. S alone defends. Hold Shift to loft. Press D to step out or A to leave. Move across with left or right before the run-up.</p>
+        <p><b>Touch batting</b> · Pick a shot type and swipe in your chosen direction as the ball arrives.</p>
+        <p><b>Manual running</b> · D to run, A to cancel, W to dive. On touch, use the running buttons.</p>
+        <p><b>Bowling</b> · Click the pitch or use arrows to aim. Use the number keys to choose a variation or change effort. Press Space to start the run-up and again to lock the meter.</p>
+      </details>
       <div class="tabs" id="pauseTabs"></div>
       <div class="scard" id="pauseCard"></div>
     </div>
@@ -1093,6 +1099,7 @@
       </div>
       <div class="row">
         <button class="btn" id="again" type="button">Play again</button>
+        <button class="btn ghost" id="winningBall" type="button" hidden>Watch winning ball</button>
         <button class="btn ghost" id="finishSeries" type="button" hidden>Finish series</button>
         <button class="btn ghost" id="endRematch" type="button" hidden>Rematch (standalone)</button>
         <button class="btn ghost" id="toMenu" type="button">Main menu</button>
@@ -4506,10 +4513,15 @@ function loadMatch() {
 function clearMatch() { try { localStorage.removeItem(MATCH_KEY); } catch (e) {} renderMatchLine(); }
 function renderMatchLine() {
   const el = $('goResume'); if (!el) return;
-  const d = loadMatch(); el.hidden = !d;
+  const d = loadMatch(), quick = $('goQuick');
+  el.hidden = !d;
+  quick.className = d ? 'level' : 'menu-primary';
+  quick.querySelector('.go').hidden = !!d;
+  const primary = d ? el : quick;
+  if (primary.parentElement.firstElementChild !== primary) primary.parentElement.prepend(primary);
   if (d) { const i = d.innings[d.cur];
     $('resumeLine').textContent = TEAMS[d.a].short + ' v ' + TEAMS[d.b].short + ' · ' + (d.overs === 20 ? 'T20' : d.overs === 50 ? 'ODI' : d.overs + ' overs') +
-      ' · ' + TEAMS[i.bat].short + ' ' + i.runs + '/' + i.wkts + (i.superOver ? ' in the Super Over' : ' after ' + Math.floor(i.balls / 6) + ' overs') + (i.target ? ', chasing ' + i.target : ''); }
+      ' · ' + TEAMS[i.bat].short + ' ' + i.runs + '/' + i.wkts + (i.superOver ? ' in the Super Over' : ' after ' + ovStr(i.balls) + ' overs') + (i.target ? ', chasing ' + i.target : ''); }
 }
 function resumeMatch() {
   const d = loadMatch(); if (!d) return;
@@ -4550,7 +4562,10 @@ function celCam() {
   }
   if (c.kind && phaseT >= celT0(c) && c.mAt) {
     const f = c.mFace + 0.75, F = [Math.sin(f), 0, Math.cos(f)];
-    return { kind: 'mil', pos: add(c.mAt, add(mul(F, 7.6), [0, 1.5, 0])), tgt: add(c.mAt, [0, 0.72, 0]), fov: 30, rate: 2.2 };   // (framed high: the card sits below him)
+    const join = smooth(clamp((phaseT - celT0(c) - (c.kind === 100 ? CEL.nsHundred : CEL.nsFifty)) / 2, 0, 1));
+    const towardsPartner = norm(sub(celSpots(c).n, celSpots(c).s));
+    const centre = add(c.mAt, mul(towardsPartner, 0.65 * join));
+    return { kind: 'mil', pos: add(centre, add(mul(F, 8 + join), [0, 1.65, 0])), tgt: add(centre, [0, 1.48, 0]), fov: 31 + 4 * join, rate: 2.2 };
   }
   return null;
 }
@@ -4833,6 +4848,7 @@ function finishBall(o, line) {
   const wicketPair = o.out ? [i.striker, i.non] : null;
   recMark(o, line);
   recordBall(o);
+  rec.decidingInnings = i.target && inningsOver() && !quiet && !ff && !M.autoplay ? i : null;
   if (o.noBall && i.freeHit) line += ' · free hit next';
   else if (o.wide && i.freeHit) line += ' · still a free hit';
   updateScore();
@@ -4961,6 +4977,7 @@ function endMatch() {
     text = 'Scores level. ' + winner.name + ' won the Super Over (' + sc(x) + ', ' + sc(y) + ').';
   } else if (b.runs === b.target - 1) text = 'Scores level. The match is tied.';
   else { winner = a.bat; text = a.bat.name + ' won by ' + plural(b.target - 1 - b.runs, 'run') + '.'; }
+  $('winningBall').hidden = !(winner && rec.decidingInnings === inn && canReplay() && replayWindow(true));
   commentaryCall('match',{text});
   const t = $('endTitle');
   if (!winner) { t.textContent = 'TIED'; t.className = 'result'; }
@@ -5358,7 +5375,7 @@ function renderTabs(tabsId, cardId, sel) {
 
 // ----------------------------------------------------------------------- screens
 const SCREENS = ['menu', 'setup', 'chaseMenu', 'chalIn', 'toss', 'break', 'pause', 'end', 'stats', 'tournament', 'settings', 'myplayers', 'myplayer', 'mypview'];
-function showScreen(id) { for (const s of SCREENS) $(s).hidden = s !== id; if (id === 'menu') renderQuickLine(); syncWake(id); }
+function showScreen(id) { if (id !== 'end') $('winningBall').hidden = true; for (const s of SCREENS) $(s).hidden = s !== id; if (id === 'menu') renderQuickLine(); syncWake(id); }
 // Keep the screen awake while a match is on (owner, 22 November 2026: phones dimmed and locked mid-chase): during play, the toss
 // and the innings break; let go on the menus, the pause menu and the end screen. The browser lets go by itself when the page is
 // hidden, so it is asked again on coming back. Browsers without it (or that refuse) just carry on as before.
@@ -6200,13 +6217,8 @@ function update(dt) {
     const mv = canMove();
     if ($('moveL').disabled === mv) { $('moveL').disabled = !mv; $('moveR').disabled = !mv; }
   }
-  const hint = $('swipeHint'), showHint = !touch && inn && inn.userBats && (M.batBalls || 0) < 4 && ['wait', 'runup', 'flight'].includes(phase) && !(ball && (ball.swing || ball.left));
-  if (showHint) {
-    const t = shotType === 'defend' ? 'DEFEND' : shotType === 'loft' ? 'LOFT' : 'SHOT';
-    const txt = touch ? t + ' chosen · swipe where you want it as the ball arrives' + (runOwn ? ' · RUN, CANCEL, DIVE to run' : '')
-      : 'Arrows + S to hit · S alone defends · Shift = loft · D = step out · A = leave · ◀ ▶ before the run-up = move across' + (runOwn ? ' · after the hit: D = run, A = cancel, W = dive' : '');
-    if (hint.textContent !== txt) hint.textContent = txt;
-  }
+  const hint = $('swipeHint'), showHint = !touch && inn && inn.userBats && (M.batBalls || 0) < 4 && phase === 'runup';
+  if (showHint) hint.style.opacity = clamp((RUNUP - phaseT) / 0.22, 0, 1);
   hint.hidden = !showHint;
 
   // between balls
@@ -7626,6 +7638,7 @@ function drawAimGuide() {
 }
 
 function renderMap(bp) {
+  mapCanvas.classList.toggle('milestone-map', phase === 'result' && cam.cc === 'mil' && !RP);
   const S = mapCanvas.width, c = S / 2, k = (S / 2 - 8) / STAND_IN;
   mctx.clearRect(0, 0, S, S);
   mctx.fillStyle = 'rgba(10,16,36,0.78)'; mctx.beginPath(); mctx.arc(c, c, S / 2 - 2, 0, Math.PI * 2); mctx.fill();
@@ -7672,7 +7685,7 @@ function batCard(p, c, team, kind, how) {
   el.querySelector('.how').textContent = how || '';
   el.style.setProperty('--c', team.col); el.style.setProperty('--k', kind === 50 || kind === 100 || kind === 'golden' ? '#ffd36a' : kind === 'duck' ? '#f3efe4' : '#ff6a5a');
   el.classList.toggle('gold', kind === 100 || kind === 'golden');
-  bcFrom = clock + (typeof kind === 'number' ? BATCARD.milAt : BATCARD.outAt); bcUntil = bcFrom + BATCARD.dur;
+  bcFrom = clock + (typeof kind === 'number' ? (celebrate?.kind ? celT0(celebrate) + (kind === 100 ? 1.7 : 1.1) : BATCARD.milAt) : BATCARD.outAt); bcUntil = bcFrom + BATCARD.dur;
 }
 function batCardStep() {
   const el = $('batcard'), d = clock - bcLast; bcLast = clock; if (!el || !bcUntil) return;
@@ -7690,7 +7703,7 @@ let replaysOn = true;
 try { replaysOn = localStorage.getItem(REPLAY_KEY) !== 'off'; } catch (e) {}
 const rec = { frames: [], t: 0, acc: 0, rel: null, hit: null, end: null, kind: null, shown: false };
 let RP = null;   // the replay on screen
-function recReset() { rec.frames = []; rec.t = 0; rec.acc = 0; rec.rel = rec.hit = rec.end = rec.kind = null; rec.shown = false; }
+function recReset() { rec.decidingInnings = null; rec.frames = []; rec.t = 0; rec.acc = 0; rec.rel = rec.hit = rec.end = rec.kind = null; rec.shown = false; }
 function recFrame(dt) {
   if (!ball && phase !== 'runup') return;
   rec.t += dt; rec.acc += dt;
@@ -7709,13 +7722,19 @@ function recMark(o, line) {
   rec.kind = o.out ? (o.out.how === 'caught' ? 'catch' : o.out.how === 'run out' ? 'runout' : 'stumps') : o.runs === 6 ? 'six' : /^Dropped/.test(line) ? 'catch' : null;
 }
 const canReplay = () => replaysOn && R3D && R3D.active() && !quiet && !ff && !M.autoplay && rec.frames.length > 20;
-function startReplay() {
+function replayWindow(requireFinish = false) {
   const f = rec.frames, last = f[f.length - 1].t;
   const ro = rec.kind === 'runout';   // a run-out: the last two seconds of the run, slowed down as the bails come off
   const start = Math.max(f[0].t, ro ? rec.end - 2.2 : (rec.rel !== null ? rec.rel : rec.end) - 0.6);
   const end = Math.min(last, rec.end + (rec.kind === 'six' ? 1.4 : ro ? 1.1 : 0.9));
-  if (end - start < 0.8) return;
-  RP = { t: start, start, end, kind: rec.kind, pivot: ro ? rec.end + 0.1 : rec.hit !== null ? rec.hit : rec.end, i: 0, trail: [], saved: { pos: cam.pos.slice(), tgt: cam.tgt.slice(), fov: cam.fov },
+  return end - start >= 0.8 && (!requireFinish || last >= rec.end - 0.15) ? { start, end } : null;
+}
+function startReplay(fromResult = false) {
+  const range = replayWindow(fromResult);
+  if (!range) return;
+  const { start, end } = range, ro = rec.kind === 'runout';
+  if (fromResult) $('end').hidden = true;
+  RP = { fromResult, t: start, start, end, kind: rec.kind, pivot: ro ? rec.end + 0.1 : rec.hit !== null ? rec.hit : rec.end, i: 0, trail: [], saved: { pos: cam.pos.slice(), tgt: cam.tgt.slice(), fov: cam.fov },
          people: [], ball: null, snap: {}, look: null };
   replayPose(); replayCam();
   hideBanner(); hideCard();
@@ -7725,6 +7744,7 @@ function startReplay() {
 function endReplay() {
   if (!RP) return;
   Object.assign(cam, { pos: RP.saved.pos, tgt: RP.saved.tgt, fov: RP.saved.fov });
+  if (RP.fromResult) { $('end').hidden = false; $('winningBall').focus(); }
   RP = null;
   $('replayTag').hidden = true; document.body.classList.remove('replaying');
   wipe();
@@ -8041,6 +8061,7 @@ $('settingsBack').addEventListener('click', closeSettings);
 $('goStats').addEventListener('click', () => { audio(); statsArm = false; renderStats(); showScreen('stats'); });
 $('statsBack').addEventListener('click', () => showScreen('menu'));
 $('statsReset').addEventListener('click', () => { if (statsArm) { try { localStorage.removeItem(STATS_KEY); } catch (e) {} } statsArm = !statsArm; renderStats(); });
+$('winningBall').addEventListener('click', () => startReplay(true));
 $('goResume').addEventListener('click', () => { audio(); resumeMatch(); });
 renderMatchLine();
 $('goSeries').addEventListener('click', () => {

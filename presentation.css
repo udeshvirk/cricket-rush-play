@@ -37,13 +37,13 @@ button:focus-visible,summary:focus-visible,select:focus-visible{outline:3px soli
 #menu .levels{gap:10px;grid-template-columns:repeat(2,minmax(0,1fr))}
 #menu .level{min-height:96px;gap:5px;padding:15px 16px}
 #menu .level .n{font-size:25px;line-height:1.05;letter-spacing:.01em}
-#menu .level::after{content:'↗';position:absolute;right:12px;bottom:10px;color:#7c9bb4;font:16px var(--ui)}
+#menu .level::after{content:'↗';position:absolute;right:12px;bottom:10px;color:var(--teal);font:16px var(--ui)}
 #menu .level .d{padding-right:8px}#menu .best{margin:0;min-height:0}
-#goQuick{border-radius:10px;background:linear-gradient(110deg,#ffe4ab,#ffc367);box-shadow:0 5px 0 #96642a,0 15px 36px #ffc36714;padding:22px 20px;margin-bottom:7px;min-height:106px;box-sizing:border-box}
-#goQuick .n{font-size:39px;font-weight:800;letter-spacing:.015em}
-#goQuick .d{font-size:12px;line-height:1.8;font-weight:600}
-#goQuick .go{display:grid;place-items:center;width:42px;height:42px;border:1px solid #1a120533;border-radius:50%;font-size:18px}
-#goQuick::after{animation-duration:7s;pointer-events:none;opacity:.45}
+#menu .menu-primary{border-radius:10px;background:linear-gradient(110deg,#ffe4ab,#ffc367);box-shadow:0 5px 0 #96642a,0 15px 36px #ffc36714;padding:22px 20px;margin-bottom:7px;min-height:106px;box-sizing:border-box}
+#menu .menu-primary .n{font-size:39px;font-weight:800;letter-spacing:.015em}
+#menu .menu-primary .d{font-size:12px;line-height:1.8;font-weight:600}
+#menu .menu-primary .go{display:grid;place-items:center;width:42px;height:42px;border:1px solid #1a120533;border-radius:50%;font-size:18px}
+#menu .menu-primary::after{animation-duration:7s;pointer-events:none;opacity:.45}
 #menu .menu-play>.row{margin-top:20px;gap:8px}
 #menu .menu-play>.row .btn{font-size:10px;padding:10px 12px;letter-spacing:.03em;flex:1;white-space:nowrap}
 .menu-footnote{text-align:center;font-size:10px;letter-spacing:.04em;color:#718a9e;margin-top:18px}
@@ -78,8 +78,8 @@ button:focus-visible,summary:focus-visible,select:focus-visible{outline:3px soli
 #banner.b4 .head{color:#8cf2cf}#banner.bw .head{color:#ff7d86}#timing{font-size:13px}#comm .txt{font-size:12px;line-height:1.5;border-radius:0 7px 7px 0}#comm .mic{border-radius:7px 0 0 7px}
 @media(min-width:721px) and (min-height:461px){#tvbar #scorebar>div{padding:5px 10px}#tvbar #batline{padding:5px 10px}#tvbar #overchips{padding:6px 10px 8px}}
 @media(max-width:800px){#menu{padding:28px 22px}#menu>.card{gap:24px;grid-template-columns:.85fr 1.15fr}#menu .title{font-size:84px}.menu-play{padding:18px}.eyebrow{font-size:8px;letter-spacing:.1em}.hero-art{margin:0 -15px}.hero-caption{font-size:8px}#menu .menu-play>.row{flex-wrap:wrap}#menu .menu-play>.row .btn{flex:auto}}
-@media(max-width:600px){.screen{padding:20px 14px;align-items:start}.screen:not(#menu):not(#toss)>.card{padding:20px 16px;border-radius:13px;gap:17px}.title.sm{font-size:36px}#setup .title{font-size:36px}#menu{padding:26px 20px}#menu>.card{grid-template-columns:1fr;gap:25px}.eyebrow{margin-bottom:18px;font-size:8px}#menu .title{font-size:76px;line-height:.88}#menu .title span{display:inline;margin-left:8px}#menu .tag{font-size:15px;margin-top:14px;line-height:1.5}#menu .tag br{display:none}#menu .tag br::after{content:' '}.hero-art{position:absolute;right:-8px;bottom:-10px;width:140px;opacity:.7;display:none}.hero-caption{display:none}.menu-play{padding:18px;border-radius:14px}.menu-section-label{font-size:8px;margin-bottom:14px}#menu .level{min-height:85px;padding:13px}#menu .level .n{font-size:23px}#menu .level .d{font-size:11px}#goQuick{padding:18px;min-height:94px}#goQuick .n{font-size:34px}#goQuick .d{font-size:11px}#menu .menu-play>.row .btn{font-size:9px;padding:10px}#menu .menu-play>.row{margin-top:16px}.menu-footnote{margin-top:15px}.tc{padding:10px;gap:8px;min-height:70px}.tc .nm{font-size:21px}.tc .rt{font-size:10px}.opts{gap:6px}.opt{padding:9px 10px;font-size:12px}#settings .setsec{padding:14px}#settings .toggles .btn{font-size:11px;padding:10px}.stats b{font-size:28px}.stats div{padding:10px}.stats span{font-size:9px}#tvbar{max-width:calc(100% - 100px)}#tvbar #scorebar .runs{font-size:22px}#tvbar #scorebar .team{font-size:10px}#tvbar #scorebar .overs,#tvbar #scorebar .need{font-size:10px}#tvbar #batline{font-size:9px;gap:7px}#banner .line{font-size:11px}#comm .txt{font-size:11px}}
-@media(max-height:460px){.screen{padding:12px 16px;align-items:start}.screen:not(#menu):not(#toss)>.card{padding:16px;gap:12px}#menu{padding:16px 24px}#menu>.card{grid-template-columns:.8fr 1.2fr;gap:28px;align-items:center}#menu .title{font-size:70px}#menu .title span{display:block;margin-left:0}.eyebrow{margin-bottom:14px;font-size:7px}#menu .tag{font-size:14px;margin-top:16px}.hero-art,.hero-caption,.menu-footnote{display:none}.menu-play{padding:14px}.menu-section-label{margin-bottom:10px;font-size:8px}#menu .levels{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}#menu .level{min-height:56px;padding:9px 11px}#menu .level .n{font-size:20px}#menu .level .d{font-size:9px}#goQuick{min-height:64px;padding:10px 13px;margin-bottom:4px}#goQuick .n{font-size:27px}#goQuick .d{font-size:10px}#goQuick .go{width:30px;height:30px;font-size:13px}#menu .menu-play>.row{margin-top:12px;gap:5px}#menu .menu-play>.row .btn{font-size:8px;padding:8px}.title.sm,#setup .title{font-size:30px}.btn{padding:10px 14px}.tc{min-height:58px}#tvbar #scorebar .runs{font-size:18px}#tvbar #scorebar .team,#tvbar #scorebar .overs,#tvbar #scorebar .need{font-size:9px}#tvbar #batline{font-size:8px}#tvbar .chip{font-size:8px}#delivery,#nextTag{font-size:10px}#banner .line{font-size:10px;padding:3px 10px}#timing{font-size:11px}}
+@media(max-width:600px){.screen{padding:20px 14px;align-items:start}.screen:not(#menu):not(#toss)>.card{padding:20px 16px;border-radius:13px;gap:17px}.title.sm{font-size:36px}#setup .title{font-size:36px}#menu{padding:26px 20px}#menu>.card{grid-template-columns:1fr;gap:25px}.eyebrow{margin-bottom:18px;font-size:8px}#menu .title{font-size:76px;line-height:.88}#menu .title span{display:inline;margin-left:8px}#menu .tag{font-size:15px;margin-top:14px;line-height:1.5}#menu .tag br{display:none}#menu .tag br::after{content:' '}.hero-art{position:absolute;right:-8px;bottom:-10px;width:140px;opacity:.7;display:none}.hero-caption{display:none}.menu-play{padding:18px;border-radius:14px}.menu-section-label{font-size:8px;margin-bottom:14px}#menu .level{min-height:85px;padding:13px}#menu .level .n{font-size:23px}#menu .level .d{font-size:11px}#menu .menu-primary{padding:18px;min-height:94px}#menu .menu-primary .n{font-size:34px}#menu .menu-primary .d{font-size:11px}#menu .menu-play>.row .btn{font-size:9px;padding:10px}#menu .menu-play>.row{margin-top:16px}.menu-footnote{margin-top:15px}.tc{padding:10px;gap:8px;min-height:70px}.tc .nm{font-size:21px}.tc .rt{font-size:10px}.opts{gap:6px}.opt{padding:9px 10px;font-size:12px}#settings .setsec{padding:14px}#settings .toggles .btn{font-size:11px;padding:10px}.stats b{font-size:28px}.stats div{padding:10px}.stats span{font-size:9px}#tvbar{max-width:calc(100% - 100px)}#tvbar #scorebar .runs{font-size:22px}#tvbar #scorebar .team{font-size:10px}#tvbar #scorebar .overs,#tvbar #scorebar .need{font-size:10px}#tvbar #batline{font-size:9px;gap:7px}#banner .line{font-size:11px}#comm .txt{font-size:11px}}
+@media(max-height:460px){.screen{padding:12px 16px;align-items:start}.screen:not(#menu):not(#toss)>.card{padding:16px;gap:12px}#menu{padding:16px 24px}#menu>.card{grid-template-columns:.8fr 1.2fr;gap:28px;align-items:center}#menu .title{font-size:70px}#menu .title span{display:block;margin-left:0}.eyebrow{margin-bottom:14px;font-size:7px}#menu .tag{font-size:14px;margin-top:16px}.hero-art,.hero-caption,.menu-footnote{display:none}.menu-play{padding:14px}.menu-section-label{margin-bottom:10px;font-size:8px}#menu .levels{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}#menu .level{min-height:56px;padding:9px 11px}#menu .level .n{font-size:20px}#menu .level .d{font-size:9px}#menu .menu-primary{min-height:64px;padding:10px 13px;margin-bottom:4px}#menu .menu-primary .n{font-size:27px}#menu .menu-primary .d{font-size:10px}#menu .menu-primary .go{width:30px;height:30px;font-size:13px}#menu .menu-play>.row{margin-top:12px;gap:5px}#menu .menu-play>.row .btn{font-size:8px;padding:8px}.title.sm,#setup .title{font-size:30px}.btn{padding:10px 14px}.tc{min-height:58px}#tvbar #scorebar .runs{font-size:18px}#tvbar #scorebar .team,#tvbar #scorebar .overs,#tvbar #scorebar .need{font-size:9px}#tvbar #batline{font-size:8px}#tvbar .chip{font-size:8px}#delivery,#nextTag{font-size:10px}#banner .line{font-size:10px;padding:3px 10px}#timing{font-size:11px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 /* Menus own the screen: match tools must not remain clickable through the backdrop. */
 #game:has(> .screen:not([hidden])) #mapwrap{visibility:hidden}
@@ -122,12 +122,12 @@ button:focus-visible,summary:focus-visible,select:focus-visible{outline:3px soli
   #tossBtns .btn:nth-child(2){animation-delay:.05s}
   @media(hover:hover){
     .opt:hover:not(:disabled),.tools button:hover,.batside button:hover:not(:disabled){transform:translateY(-1px);border-color:#d3e5ef80}
-    #goQuick:hover .go{transform:translateX(3px);background:#fff2}
+    #menu .menu-primary:hover .go{transform:translateX(3px);background:#fff2}
     .tcard:hover .tc svg{transform:translateY(-2px) rotate(-2deg)}
   }
   button:active:not(:disabled){transform:translateY(1px) scale(.985)}
 }
-#goQuick .go,.tc svg{transition:transform .22s ease,background-color .22s ease}
+#menu .menu-primary .go,.tc svg{transition:transform .22s ease,background-color .22s ease}
 @keyframes panel-arrive{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
 @keyframes caption-arrive{from{opacity:0}to{opacity:1}}
 @keyframes ball-drift{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
@@ -150,9 +150,17 @@ button:focus-visible,summary:focus-visible,select:focus-visible{outline:3px soli
 @media(prefers-reduced-motion:no-preference){#menu:not([hidden]) .hero-art img{animation:ball-drift 6s ease-in-out infinite}}
 @media(max-width:600px) and (min-height:461px){.hero-art img{max-height:140px}}
 /* Very short landscape phones (e.g. 735x253): the whole menu fits without scrolling, so Settings is in view. */
-@media(max-height:300px){#menu{padding:10px 20px}#menu .menu-section-label{display:none}.menu-play{padding:10px}#goQuick{min-height:50px;padding:7px 12px}#goQuick .n{font-size:23px}#menu .level{min-height:44px;padding:6px 10px}#menu .level .n{font-size:17px}#menu .levels{gap:6px}#menu .menu-play>.row{margin-top:8px}#menu .menu-play>.row .btn{padding:7px 8px}#menu .title{font-size:62px}}
+@media(max-height:300px){#menu{padding:10px 20px}#menu .menu-section-label{display:none}.menu-play{padding:10px}#menu .menu-primary{min-height:50px;padding:7px 12px}#menu .menu-primary .n{font-size:23px}#menu .level{min-height:44px;padding:6px 10px}#menu .level .n{font-size:17px}#menu .levels{gap:6px}#menu .menu-play>.row{margin-top:8px}#menu .menu-play>.row .btn{padding:7px 8px}#menu .title{font-size:62px}}
 @media(max-height:300px){#menu .level .n,#menu .level .d,#menu .level .best{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}#menu .level{min-height:0}#menu .levels:has(#goResume:not([hidden])) .level .n{font-size:15px}}
 /* Daily challenge: the first chase, picked out in amber */
 #chaseMenu .level.daily{border-color:#ffc36770;background:linear-gradient(140deg,#ffc3671f,#ffffff04)}
 #chaseMenu .level.daily .n{color:#ffd58a}
 #chaseMenu .level.daily .best{color:#ffd58a}
+
+#minimap.milestone-map{visibility:hidden}
+#winningBall,.pause-controls summary{color:var(--teal)}
+.pause-controls{font-size:14px;line-height:1.45;text-align:left}
+.pause-controls summary{cursor:pointer;font-weight:700}
+.pause-controls p{margin:8px 0}
+#game:has(#minimap.milestone-map) #tvcard{visibility:hidden}
+@media(min-height:461px){#game:has(#minimap.milestone-map) #batcard{bottom:calc(16px + env(safe-area-inset-bottom,0px))}}
