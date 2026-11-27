@@ -2111,7 +2111,10 @@ function bladeClear(j, h, bd) {
 // then, once he sees the length, a stride forward to a full ball or back and across to a short one. The stroke starts
 // from wherever this has got to (swing() keeps it as visualStart).
 const TRIGGER = { ...READY, bk: [0.58, 0, 0.48], fr: [0.57, 0, 1.0], pel: [0.67, 0.83, 0.74], lean: 25, h: [0.43, 0.82, 0.78], bd: norm([-0.3, -0.35, -0.89]) };
-const TOPLIFT = { ...TRIGGER, h: [0.40, 0.91, 0.80], bd: norm([-0.25, 0.2, -0.95]) };
+// The top of the backlift: hands up by the back hip, the bat nearly upright behind him (Cricket 07, and the strokes' keys were
+// built from this height: PREPARE). It used to stop at hip height pointing back at the keeper, so every stroke in a match
+// started from a pose its keys were not made for.
+const TOPLIFT = { ...TRIGGER, h: [0.34, 1.14, 0.78], lean: 23, bd: norm([-0.3, 0.8, -0.5]) };
 // Each batter's own way of standing and picking the bat up, from his name (so it stays the same all match): wider or
 // narrower, crouched or upright, a slightly open or closed stance, a higher or lower backlift taken earlier or later, and his
 // own rhythm of taps. Strokes start from wherever this has got to, so they carry it too.
@@ -2128,23 +2131,28 @@ function styled(k, st) {
   return { ...k, fr: [k.fr[0], k.fr[1], k.fr[2] + st.width * 0.5], bk: [k.bk[0], k.bk[1], k.bk[2] - st.width * 0.5],
            pel: add(k.pel, [0, -st.crouch, 0]), hy: k.hy + st.open, sy: k.sy + st.open * 0.6, lean: k.lean + st.lean };
 }
+// Timing from the owner's Cricket 07 recording (26 November 2026, 25 shots at 30-60 fps): the batter is still in his stance
+// until about a third of a second before contact, then trigger, backlift and stride go together in one movement, reaching
+// the top of the backlift as the stroke starts (SWING_LAG before contact). It used to start 0.7 s before contact, with the
+// bat at the top at the release and held there while the ball travelled, which read as pose, pause, swing.
+const WAIT = { start: 0.36, top: SWING_LAG };   // seconds before contact
 function waitMove(k) {
-  const tt = phase === 'runup' ? phaseT - RUNUP : ball.t, st = batStyle();   // time from the release
-  const trig = smooth(clamp((tt + 0.32 + st.liftAt) / 0.28, 0, 1)), lift = smooth(clamp((tt + 0.12 + st.liftAt) / 0.32, 0, 1));
-  let P = mixPose(k, styled(TRIGGER, st), trig);
+  if (phase !== 'flight' || !ball || !ball.Tstar) return k;   // still while the bowler runs in
+  const st = batStyle(), toC = ball.Tstar - ball.t + st.liftAt * 0.3;   // time left to contact (his own timing a touch earlier or later)
+  const lift = smooth(clamp((WAIT.start - toC) / (WAIT.start - WAIT.top), 0, 1));
+  let P = mixPose(k, styled(TRIGGER, st), lift);
   P = mixPose(P, { ...styled(TOPLIFT, st), h: add(TOPLIFT.h, [0, st.lift, -st.lift * 0.3]) }, lift);
-  P.bk = add(P.bk, [0, 0.06 * Math.sin(Math.PI * trig), 0]);   // the back foot lifts as it moves
-  if (phase === 'flight' && ball && ball.Tstar) {
-    const T0 = 0.1, T1 = Math.max(T0 + 0.14, Math.min(ball.Tstar - SWING_LAG - 0.02, T0 + 0.34));
-    const u = clamp((ball.t - T0) / (T1 - T0), 0, 1), w = smooth(u);
+  P.bk = add(P.bk, [0, 0.04 * Math.sin(Math.PI * lift), 0]);   // the back foot lifts as it moves
+  {
+    const u = clamp((WAIT.start - toC) / (WAIT.start - WAIT.top + 0.02), 0, 1), w = smooth(u);
     if (w > 0) {
       const back = ball.short || (ball.atBat && ball.atBat[1] > 1.05);
       const front = /Full|Yorker/.test(ball.length) ? 1 : 0.5;
       const tx = ball.atBat ? clamp(ball.atBat[0] - guard, -0.9, 0.9) : 0;
       const to = back
         ? { ...P, bk: [0.42, 0, 0.3], fr: [0.5, 0, 0.96], pel: [0.58, 0.86, 0.66], lean: 22, h: [0.38, 0.98, 0.78] }
-        : { ...P, fr: [clamp(tx + 0.32, 0.1, 0.72), 0, lerp(1.08, 1.24, front)], pel: [lerp(0.6, 0.55, front), 0.86 - 0.02 * front, lerp(0.78, 0.90, front)],
-            lean: 14 + 2 * front, rearFootPitch: 0.25 * front, kpL: [-0.4, 0, 1] };   // (lean was 14: he stood right up before the shot; Cricket 07 stays lower until the stroke)
+        : { ...P, fr: [clamp(tx + 0.32, 0.1, 0.72), 0, lerp(1.08, 1.24, front)], pel: [lerp(0.6, 0.55, front), 0.80 - 0.03 * front, lerp(0.78, 0.90, front)],
+            lean: 22 + 2 * front, rearFootPitch: 0.25 * front, kpL: [-0.4, 0, 1] };   // he stays down in the crouch as he strides (Cricket 07; it was pelvis .86 and lean 14: he stood up tall into every shot)
       // Stay ready until a stroke is chosen. A full spinner must not force every shot into a sweep-like crouch.
       P = mixPose(P, to, w);
       const step = 0.08 * Math.sin(Math.PI * w);   // the moving foot comes off the ground
@@ -2212,12 +2220,10 @@ function missedBallGaze(shoulderYaw, after, shadowWeight=0, baseYaw=0) {
   const target = -100;
   return facing(baseYaw+clamp(target-baseYaw,-90,90)*turn);
 }
-// Recorded strokes (November 2026, owner: "pick one shot and make it perfect"): the body comes from a real player's shot
-// tracked from video (player-production/batting-clips.js), not from key poses. The clip is placed where he starts the shot
-// (back foot on his), blends in over CLIP.blendIn, and at contact the hands (and a share of the body) shift so the middle of the
-// bat meets the ball wherever it is, fading after. The clip supplies the bat direction too.
-// ?clip=0 turns it off to compare.
-const CLIP = { blendIn: 0.1, reachIn: 0.12, reachOut: 0.3, bodyShare: 0.4 };
+// Align the recorded contact horizontally with the chosen delivery. A lower ball
+// also lowers the hips during the reach. The clip supplies the blade path and
+// joint bend directions throughout the swing. Use ?clip=0 for the authored pull.
+const CLIP = { blendIn: 0.1, reachIn: 0.12, reachOut: 0.3 };
 const clipsOn = () => window.BATTING_CLIPS && new URLSearchParams(location.search).get('clip') !== '0';
 function clipFrame(c, ft) {   // the clip at frame time ft (frames, fractional): Catmull-Rom through the frames
   // Clamp before calculating u: repeating the last frame in Catmull-Rom otherwise
@@ -2249,7 +2255,21 @@ function clipFoot(f, side, offset) {
   foot[1] += Math.max(0, .14 * s + .06 * c, -.07 * s + .06 * c);
   return { foot, pitch };
 }
-function clipBody(sw, motionTime, k, j0) {
+// Use the recorded blade path to orient its face. Transporting the width along
+// the procedural fallback makes a recorded bat twist as the two paths diverge.
+const recordedBladeCurves = new WeakMap();
+function recordedBladeCurve(c) {
+  if (!recordedBladeCurves.has(c)) {
+    const keys = [[0, { bd: clipFrame(c, c.contact - SWING_LAG * c.fps).bd }]];
+    c.frames.forEach((frame, i) => {
+      const t = SWING_LAG + (i - c.contact) / c.fps;
+      if (t > 1e-7) keys.push([t, { bd: frame.bd }]);
+    });
+    recordedBladeCurves.set(c, CricketMotion.prepare(keys));
+  }
+  return recordedBladeCurves.get(c);
+}
+function clipBody(sw, motionTime) {
   const c = clipsOn() && window.BATTING_CLIPS[sw.fam];
   if (!c) return null;
   const tc = motionTime - SWING_LAG, ft = clipPlaybackFrame(c, tc);
@@ -2261,21 +2281,26 @@ function clipBody(sw, motionTime, k, j0) {
   }
   const f = clipFrame(c, ft), O = sw.clipO, D = sw.clipD;
   const r = tc < 0 ? smooth(clamp(1 + tc / CLIP.reachIn, 0, 1)) : 1 - smooth(clamp(tc / CLIP.reachOut, 0, 1));
-  const body = [D[0] * CLIP.bodyShare * r, Math.min(0, D[1]) * 0.3 * r, D[2] * CLIP.bodyShare * r];
+  const body = [0, Math.min(0, D[1]) * 0.3 * r, 0];
   const j = {};
   for (const key of ['pelvis', 'hipL', 'hipR', 'neck', 'shL', 'shR', 'head']) j[key] = add(add(f[key], O), body);
   const leftFoot = clipFoot(f, 'L', O), rightFoot = clipFoot(f, 'R', O);
   j.footL = leftFoot.foot; j.footR = rightFoot.foot;
   j.footDirL = f.footDirL; j.footDirR = f.footDirR;
   j.footPitchL = [leftFoot.pitch, 0, 0]; j.footPitchR = [rightFoot.pitch, 0, 0];
-  j.kneeL = ik(j.hipL, add(j.footL, [0, 0.07, 0]), LEG, LEG, sub(add(f.kneeL, O), mul(add(f.hipL, f.footL), 0.5)));
-  j.kneeR = ik(j.hipR, add(j.footR, [0, 0.07, 0]), LEG, LEG, sub(add(f.kneeR, O), mul(add(f.hipR, f.footR), 0.5)));
+  j.kneeL = ik(j.hipL, add(j.footL, [0, 0.07, 0]), LEG, LEG, sub(f.kneeL, mul(add(f.hipL, f.footL), 0.5)));
+  j.kneeR = ik(j.hipR, add(j.footR, [0, 0.07, 0]), LEG, LEG, sub(f.kneeR, mul(add(f.hipR, f.footR), 0.5)));
   const h = add(add(mul(add(f.handL, f.handR), 0.5), O), mul(D, r));
-  return { j, h, bd: f.bd, poleL: sub(add(f.elL, O), mul(add(f.shL, f.handL), 0.5)), poleR: sub(add(f.elR, O), mul(add(f.shR, f.handR), 0.5)) };
+  // The recorded pull supplies the swivel for both trajectories. On the loft,
+  // the gloves carry up through the ball before the blade wraps behind them.
+  const lift = sw.fam === 'pull' && sw.loft ? smooth(clamp(tc / .14, 0, 1)) : 0;
+  h[1] += .075 * lift;
+  const bd = lift ? norm(add(f.bd, [0, .24 * lift, 0])) : f.bd;
+  return { j, h, bd, bladeCurve: recordedBladeCurve(c), bladeTime: SWING_LAG + (ft - c.contact) / c.fps, poleL: sub(f.elL, mul(add(f.shL, f.handL), 0.5)), poleR: sub(f.elR, mul(add(f.shR, f.handR), 0.5)) };
 }
 function blendBody(a, b, w) {   // joints part way from a to b (the limbs re-solved so they keep their lengths)
   if (w >= 0.999) return b; const o = {};
-  for (const key in b) o[key] = Array.isArray(b[key]) && Array.isArray(a[key]) && b[key].length === 3 && key.indexOf('Pitch') < 0 ? lerp3(a[key], b[key], w) : b[key];
+  for (const key in b) o[key] = Array.isArray(b[key]) && Array.isArray(a[key]) && b[key].length === 3 ? lerp3(a[key], b[key], w) : b[key];
   for (const key in a) if (o[key] === undefined) o[key] = a[key];
   return o;
 }
@@ -2372,14 +2397,18 @@ function batterPose(sw) {
   }
   let bd = norm(k.bd);
   let j = buildBody({ ...k, hL: sub(k.h, mul(bd, 0.045)), hR: add(k.h, mul(bd, 0.045)), headOff: [0, 0, 0.04] });
-  const cb = sw && clipBody(sw, motionTime, k, j);
+  const cb = sw && clipBody(sw, motionTime);
+  let clipWeight = 0;
   if (cb) {   // the recorded stroke: blends in at the start, out as he lets the finish go
     const w = smooth(clamp(motionTime / CLIP.blendIn, 0, 1)) * (1 - (sw.rx || 0) / 0.9);
-    bd = norm(lerp3(bd, cb.bd, w));   // the bat's angle as read off the video
+    clipWeight = w;
+    bd = CricketMotion.blendDirection(bd, cb.bd, w);   // the bat's angle as read off the video
     const h = lerp3(k.h, cb.h, w), hL = sub(h, mul(bd, 0.045)), hR = add(h, mul(bd, 0.045)), c = cb.j;
     c.handL = hL; c.handR = hR;
     c.elL = ik(c.shL, hL, UPARM, FOREARM, cb.poleL); c.elR = ik(c.shR, hR, UPARM, FOREARM, cb.poleR);
     j = blendBody(j, c, w);
+    // Hands already include the transition. A second blend here separates the grip from the bat.
+    j.handL = hL; j.handR = hR;
     if (w < 0.999) { j.kneeL = ik(j.hipL, add(j.footL, [0, 0.07, 0]), LEG, LEG, sub(j.kneeL, mul(add(j.hipL, j.footL), 0.5)));
       j.kneeR = ik(j.hipR, add(j.footR, [0, 0.07, 0]), LEG, LEG, sub(j.kneeR, mul(add(j.hipR, j.footR), 0.5)));
       j.elL = ik(j.shL, j.handL, UPARM, FOREARM, sub(j.elL, mul(add(j.shL, j.handL), 0.5))); j.elR = ik(j.shR, j.handR, UPARM, FOREARM, sub(j.elR, mul(add(j.shR, j.handR), 0.5))); }
@@ -2396,7 +2425,14 @@ function batterPose(sw) {
       gaze = norm(add(gaze, [0, 0.9 * smooth(clamp((after - 0.2) / 0.4, 0, 1)), 0]));
   }
   if(sw?.loft)j.head[2]-=.035*follow;
-  let width=sw ? CricketMotion.pathWidth(sw.curve,motionTime,bd,k.batRoll||0) : null;
+  let width = sw && clipWeight < 1 ? CricketMotion.pathWidth(sw.curve, motionTime, bd, k.batRoll || 0) : null;
+  if (clipWeight > 0) {
+    const recordedWidth = CricketMotion.pathWidth(cb.bladeCurve, cb.bladeTime, bd, k.batRoll || 0);
+    if (width) {
+      const rollAngle = Math.atan2(dot(bd, cross(width, recordedWidth)), dot(width, recordedWidth)) * clipWeight;
+      width = add(mul(width, Math.cos(rollAngle)), mul(cross(bd, width), Math.sin(rollAngle)));
+    } else width = recordedWidth;
+  }
   if (!sw && gripTurn) { const n = mul(bd, -1), w0 = norm(sub([1, 0, 0], mul(n, n[0]))); width = norm(add(mul(w0, Math.cos(gripTurn)), mul(cross(n, w0), Math.sin(gripTurn)))); }
   // the wrists roll over after contact to keep the ball down (strokes whose keys don't roll the bat themselves): the face
   // (cross(bd, width), as the renderer builds the bat) turns toward the ground, and comes back as he lets the finish go
@@ -3643,16 +3679,14 @@ function swing(loft, pressT, aim, w, you = false) {   // you: the player's own s
   ball.swing.fam = strokeFamily(ball.swing.intent, ball.swing.loft, ball.swing.defend, ball.swing.push, ball.short, !!(BOWL_TYPES[ball.type] || {}).turn, atBat);
   if (ball.swing.fam === 'ucut') ball.swing.loft = true;   // an upper cut always goes in the air
   ball.swing.short = !!ball.short;   // (looks: up on the toes for the upper cut to a short ball)
-  const reach = shotReach(ball.swing.fam, atBat, ball.swing.intent, ball.swing.loft);
+  const reach = shotReach(ball.swing.fam, atBat, ball.swing.intent);
   ball.swing.target = reach.target;
   ball.swing.reachable = reach.reachable;
-  // Timing cannot rescue the wrong shot or a ball beyond this stroke's comfortable reach.
-  // Keep the bounded swing path; do not stretch the hands/body to manufacture contact.
   if (!reach.reachable) { kind = 'miss'; q = 0; }
-  if (kind !== 'hit' && reach.reachable) {   // a timing miss/edge stays inside the stroke's reach too
+  if (kind !== 'hit' && reach.reachable) {
     const side = atBat[0] < 0.1 ? 1 : -1, m = kind === 'miss' ? 1 : 0.35;
-    ball.swing.target = shotReach(ball.swing.fam,
-      [atBat[0] + side * 0.16 * m, atBat[1] + (high ? -0.3 : 0.07) * m, 1.02],ball.swing.intent,ball.swing.loft).target; }
+    ball.swing.target = [atBat[0] + side * 0.16 * m, atBat[1] + (high ? -0.3 : 0.07) * m, 1.02];
+  }
   ball.swing.angle = kind === 'hit' ? angle : (atBat[0] < 0.1 ? -150 : 150);
   ball.swing.how = { kind, e: clamp(-dtTiming / okW, -1.5, 1.5) };   // how it looks: hit / edge / miss, and how early (+) or late (-)
   ball.decision = { you, kind, q, angle, fam: ball.swing.fam, loft: ball.swing.loft, defend: ball.swing.defend, push: !!(aim && aim.defend && aimed), dtTiming, power: ((aim && aim.power) || 1) * (ball.charge && !(aim && aim.defend) ? 1.1 : 1) };
@@ -3680,33 +3714,18 @@ function swing(loft, pressT, aim, w, you = false) {   // you: the player's own s
   if (!quiet) showTiming(dtTiming, kind, kind === 'hit' ? sn : '', w);
 }
 
-// Comfortable contact zones in the batter's local frame, after moving across/stepping out.
-// These are limits, not extra timing forgiveness: outside the zone the selected stroke must miss.
-// In particular, a leg-side loft cannot chase a wide off-side ball or scoop a yorker by folding the torso.
-// Disabled at the owner's request: the experimental zones still reject shots that feel playable.
-// Retain the prototype for later work, but use normal timing-based contact in the game.
-let SHOT_REACH_ENABLED = false;
-function shotReach(family, at, intent=0, loft=false) {
-  if (!SHOT_REACH_ENABLED) return {target:[at[0],at[1],1.02],reachable:true};
-  const zones = {
-    // Contact heights come from buildDelivery(), not the pitching-length label: a normal full
-    // pace ball is about .21 m high, and a short spinner can still be below waist height.
-    // Include the .036 m ball centre for a grounded defensive block.
-    drive:[-.50,.40,.06,1.05], fdef:[-.50,.45,.03,1.05], push:[-.50,.45,.03,1.05],
-    bdrive:[-.50,.40,.30,1.75], bdef:[-.50,.45,.03,1.75],
-    cut:[-.70,.12,.25,1.50], lcut:[-.65,.12,.25,1.55], ucut:[-.70,.12,1.05,1.90],
-    flick:[-.20,.55,.11,1.05], glance:[-.20,.55,loft?.25:.11,1.05],   // .11 (was .12): a full ball now comes through at 0.1199 m (23 Nov)
-    slog:[-.08,.50,.40,1.05], pull:[-.20,.60,.40,1.45], hook:[-.18,.55,1.25,1.90],
-    sweep:[-.20,.35,.16,1.05], rsweep:[-.45,.15,.16,1.05]
-  };
-  const z=(zones[family] || zones.drive).slice();
-  if(family==='drive') { if(intent<-35)z[1]=.18; else if(intent>10)z[0]=-.18; }
-  const target=[clamp(at[0],z[0],z[1]),clamp(at[1],z[2],z[3]),1.02];
-  const reachable=at[0]>=z[0]&&at[0]<=z[1]&&at[1]>=z[2]&&at[1]<=z[3];
-  // Keep a visible gap on a reach miss, even just outside the boundary; don't scrape along the ball.
-  if(at[0]<z[0]||at[0]>z[1])target[0]=clamp(at[0],z[0]+.10,z[1]-.10);
-  if(at[1]<z[2]||at[1]>z[3])target[1]=clamp(at[1],z[2]+.10,z[3]-.10);
-  return {target,reachable};
+// Line in metres relative to the batter's guard, with room to play across the line.
+const WRONG_LINE = { off: -0.50, leg: 0.45, missGap: 0.10 };
+function shotReach(family, at, intent) {
+  const drive = family === 'drive' || family === 'bdrive';
+  const offSide = ['cut', 'lcut', 'ucut', 'rsweep'].includes(family) || (drive && intent < -10);
+  const legSide = ['flick', 'glance', 'slog', 'pull', 'hook', 'sweep'].includes(family) || (drive && intent > 10);
+  const [x, y] = at;
+  if (offSide && x > WRONG_LINE.leg)
+    return { target: [WRONG_LINE.leg - WRONG_LINE.missGap, y, 1.02], reachable: false };
+  if (legSide && x < WRONG_LINE.off)
+    return { target: [WRONG_LINE.off + WRONG_LINE.missGap, y, 1.02], reachable: false };
+  return { target: [x, y, 1.02], reachable: true };
 }
 
 // stepping out (D): the batter meets the ball further down the pitch, so earlier and usually before it rises
@@ -3819,26 +3838,22 @@ function aiPlanInner(b, s, aggr) {
   let [sigL, loftL] = LEN_PLAY[b.length];
   if (onTo && b.length === 'Yorker') { sigL = 0.85; loftL = 1.2; }
   const defend = !onTo && b.stumps && !b.short && b.length !== 'Full toss' && Math.random() < 0.55 - aggr * 0.5;
-  let loft = !defend && Math.random() < clamp(aggr * 0.6 * loftL + b.trick.loft * aggr + (onTo ? 0.15 : 0), 0, 0.9);
+  const loft = !defend && Math.random() < clamp(aggr * 0.6 * loftL + b.trick.loft * aggr + (onTo ? 0.15 : 0), 0, 0.9);
   const read = Math.random() < s * 0.45 + b.trick.streak * 0.25;   // picked the variation
   const lineL = atBat[0] > 0.2 ? 0.85 : atBat[0] < -0.45 ? 1.1 : 1;   // easy on the legs, hard well outside off
   const sig = (0.105 - 0.06 * s) * sigL * lineL * habit * (read ? 1 : b.trick.sig) * (1 + BOWL_EDGE.ai * bowlEdge());   // a better bowler is harder to time
   const err = (read ? 0 : b.trick.mu) + gauss() * sig;
   let aim = defend ? { defend: true } : { angle: findGap(naturalAngle(atBat, b.short), loft) };
-  // The computer obeys the same reach limits. Choose a playable stroke rather than repeatedly
-  // attempting an impossible loft (especially against yorkers); timing/skill still decide the result.
-  const fits=(a,l)=>{
-    const family=strokeFamily(a.angle||0,l,!!a.defend,false,b.short,!!(BOWL_TYPES[b.type]||{}).turn,atBat);
-    return shotReach(family,atBat,a.angle||0,l).reachable;
+  // If the gap is across a clearly wrong line, try the closest reachable direction.
+  const fits = angle => {
+    const family = strokeFamily(angle, loft, false, false, b.short, !!(BOWL_TYPES[b.type] || {}).turn, atBat);
+    return shotReach(family, atBat, angle).reachable;
   };
-  if(!fits(aim,loft)){
-    const preferred=aim.angle||0,candidates=[0,-45,45,-90,90,-135,135]
-      .sort((a,b)=>Math.abs(wrapA(a-preferred))-Math.abs(wrapA(b-preferred)));
-    let angle=candidates.find(a=>fits({angle:a},loft));
-    if(angle===undefined && loft){loft=false;angle=candidates.find(a=>fits({angle:a},false));}
-    if(angle!==undefined)aim={angle};
-    else if(fits({defend:true},false)){aim={defend:true};loft=false;}
-    else return null;
+  if (!aim.defend && !fits(aim.angle)) {
+    const angle = [0, -45, 45, -90, 90, -135, 135]
+      .sort((a, b) => Math.abs(wrapA(a - aim.angle)) - Math.abs(wrapA(b - aim.angle)))
+      .find(fits);
+    aim = { angle };
   }
   if (!aim.defend && !loft && Math.random() < 0.55 - aggr * 0.4) aim.power = rand(0.55, 0.85);   // placed for a single
   return { t: Math.max(0.02, b.Tstar - SWING_LAG + err), loft, aim };
@@ -7112,8 +7127,10 @@ function recReset() { rec.frames = []; rec.t = 0; rec.acc = 0; rec.rel = rec.hit
 function recFrame(dt) {
   if (!ball && phase !== 'runup') return;
   rec.t += dt; rec.acc += dt;
-  if (rec.acc < 1 / 30 || rec.frames.length > 420) return;
-  rec.acc = 0;
+  // Capture the fast part of the swing at display rate (up to 60 Hz).
+  const interval = ball?.swing && ball.swing.t < SWING_LAG + .3 ? 1 / 60 : 1 / 30;
+  if (rec.acc + 1e-9 < interval || rec.frames.length > 450) return;
+  rec.acc = Math.max(0, rec.acc - interval) % interval;
   const bp = liveBallPos();
   rec.frames.push({ t: rec.t, people: livePeople(), ball: bp && bp.slice(),
     tilt: ball && ball.tilt ? ball.tilt.slice() : null, tiltT: ball ? ball.tiltT || 0 : 0,
@@ -7161,9 +7178,16 @@ function replayPose() {
   const same = a.people.length === b.people.length && a.people.every((p, k) => p.pid === b.people[k].pid && p.team === b.people[k].team);
   RP.people = !same ? a.people : a.people.map((p, k) => {
     const q = b.people[k];
-    return { ...p, j: mixJoints(p.j, q.j, u), at: lerp3(p.at, q.at, u),
-             bat: p.bat && q.bat ? { ...p.bat, hands: lerp3(p.bat.hands, q.bat.hands, u), tip: lerp3(p.bat.tip, q.bat.tip, u),
-               width:p.bat.width && q.bat.width ? CricketMotion.blendDirection(p.bat.width,q.bat.width,u) : p.bat.width } : p.bat };
+    let bat = p.bat;
+    if (bat && q.bat) {
+      const hands = lerp3(bat.hands, q.bat.hands, u);
+      const from = sub(bat.tip, bat.hands), to = sub(q.bat.tip, q.bat.hands);
+      const axis = CricketMotion.blendDirection(norm(from), norm(to), u);
+      const tip = add(hands, mul(axis, lerp(len(from), len(to), u)));
+      const width = bat.width && q.bat.width ? CricketMotion.blendDirection(bat.width, q.bat.width, u) : bat.width;
+      bat = { ...bat, hands, tip, width };
+    }
+    return { ...p, j: mixJoints(p.j, q.j, u), at: lerp3(p.at, q.at, u), bat };
   });
   RP.ball = a.ball && b.ball ? lerp3(a.ball, b.ball, u) : a.ball;
   RP.snap = { tilt: a.tilt, tiltT: lerp(a.tiltT, b.tiltT, u), bails: a.bails, play: a.play, trail: RP.trail };
@@ -7173,7 +7197,8 @@ function replayCam() {
   if (RP.kind === 'runout') {   // high from the bowler's end, down the pitch with the batter, then the same low side-on view as live
     const a = RP.t < RP.pivot - 0.8 ? { pos: [1.2, 3.6, 25], tgt: [-0.5, 0.7, 3], fov: 24 } : RO_CAM;
     cam.pos = a.pos.slice(); cam.tgt = a.tgt.slice(); cam.fov = a.fov;
-  } else if (RP.t < RP.pivot + (RP.kind === 'stumps' ? -0.32 : 0.12)) {
+  } else if (RP.t < RP.pivot + (RP.kind === 'stumps' ? -0.32 : 0.32)) {
+    // Keep the hands and blade in shot until the follow-through reaches its finish.
     // the bowler's end, high and tight on the batter
     cam.pos = [0.6, 4.6, 32]; cam.tgt = [0.45, 1.0, 1.4]; cam.fov = 8.5;
   } else if (RP.kind === 'stumps') {
