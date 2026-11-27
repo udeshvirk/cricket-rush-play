@@ -572,21 +572,81 @@ window.Cricket3D = function (G) {
     return { helmet: [[helmetShell, two(M3.helmet)], [merge(bars), steel], [merge(strap), strapM]], cap: [[capGeo, two(M3.cap)], [merge(band), seamM]],
              hat: [[crown, hatM], [hband, two(hatBand)], [brim, two(hatM)]] };
   })();
-  // the wicketkeeper's gloves: big padded mitts built in code, in the batting glove's frame (origin = palm centre, fingers -Y,
-  // palm -X for the left hand; the right is mirrored): white leather, padded finger rolls on the back, a thumb, a tan rubber palm
-  // and a cuff in the fielding side's colour (M3.cap)
+  // Keeping glove in the hand-bone frame. Fingers point down -Y, the palm
+  // faces -X and the index is on the +Z side. The rig mirrors the right glove.
   const KEEPGLOVE = (() => {
-    const g = new T.Group(), leather = new T.MeshStandardMaterial({ color: 0xf1efe8, roughness: 0.62 }),
-      rubber = new T.MeshStandardMaterial({ color: 0xa8784a, roughness: 0.85 });
-    const add = (geo, m) => { const x = new T.Mesh(geo, m); x.castShadow = true; x.frustumCulled = false; g.add(x); return x; };
-    const body = new T.CapsuleGeometry(0.072, 0.13, 6, 16); body.scale(0.5, 1, 1.05); body.translate(0.006, -0.055, 0); add(body, leather);
-    for (const z of [-0.048, -0.016, 0.016, 0.048]) {   // finger rolls on the back
-      const r = new T.CapsuleGeometry(0.017, 0.15, 4, 8); r.translate(0.03, -0.075, z); add(r, leather);
+    const leather = [], grip = [];
+    // One 12 mm repeat of the moulded rubber grip, projected across the palm.
+    const gripUV = p => [p.z / .012, p.y / .012];
+    const gripTexture = canvasTex(32, 32, ctx => {
+      ctx.fillStyle = '#485053'; ctx.fillRect(0, 0, 32, 32);
+      for (const [x, y] of [[8, 8], [24, 24]]) {
+        ctx.fillStyle = '#677174'; ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+      }
+    }, true);
+    // Sew two half shells along the edges of each stall. The rubber facing
+    // continues to the fingertips. Each section is [height, x, z, radii X/Z].
+    function paddedShell(sections) {
+      for (const [parts, start] of [[leather, -Math.PI / 2], [grip, Math.PI / 2]]) {
+        const rings = sections.map(([y, x, z, depth, width]) => {
+          const points = [];
+          for (let i = 0; i <= 8; i++) {
+            const a = start + Math.PI * i / 8;
+            points.push(new T.Vector3(x + depth * Math.cos(a), y, z + width * Math.sin(a)));
+          }
+          return points;
+        });
+        parts.push(gLoft(rings, false, false, parts === grip ? gripUV : null));
+      }
     }
-    const th = new T.CapsuleGeometry(0.03, 0.07, 4, 10); th.rotateX(-0.55); th.translate(-0.006, -0.005, 0.085); add(th, leather);   // the thumb
-    const palm = new T.SphereGeometry(0.07, 16, 10); palm.scale(0.16, 1.45, 0.95); palm.translate(-0.03, -0.06, 0); add(palm, rubber);
-    const cuff = new T.CylinderGeometry(0.06, 0.056, 0.06, 18, 1, false); cuff.scale(0.72, 1, 1); cuff.translate(0, 0.095, 0); add(cuff, M3.cap);
-    return g;
+    paddedShell([
+      [.065, .002, 0, .022, .045], [.034, .002, .002, .033, .056],
+      [-.016, .004, .002, .038, .068], [-.048, .004, 0, .034, .068],
+      [-.068, .003, 0, .025, .060], [-.078, .003, 0, 0, 0],
+    ]);
+    // Progressively splay the fingers and curl the tips into the catching face.
+    for (const [rootZ, tipZ, tipY] of [
+      [-.049, -.067, -.137], [-.017, -.023, -.161],
+      [.017, .021, -.170], [.049, .063, -.157],
+    ]) {
+      const midZ = (rootZ + tipZ) / 2;
+      paddedShell([
+        [-.037, .006, rootZ, .025, .019], [-.069, .005, rootZ, .027, .020],
+        [tipY + .040, -.002, midZ, .023, .017], [tipY + .014, -.013, tipZ, .019, .016],
+        [tipY + .005, -.017, tipZ, .014, .012], [tipY, -.019, tipZ, 0, 0],
+      ]);
+    }
+    paddedShell([
+      [.039, .001, .042, .021, .024], [.014, -.004, .059, .030, .030],
+      [-.016, -.012, .084, .028, .027], [-.048, -.023, .104, .024, .023],
+      [-.067, -.030, .113, .019, .019], [-.080, -.033, .115, 0, 0],
+    ]);
+    // Single leather web, inset from the line between the thumb and index tips.
+    const web = new T.BufferGeometry();
+    web.setAttribute('position', new T.Float32BufferAttribute([
+      -.014, -.134, .066, -.024, -.064, .111, -.012, -.027, .081, .000, -.057, .056,
+    ], 3));
+    web.setIndex([0, 1, 2, 0, 2, 3]); web.computeVertexNormals();
+    leather.push(web);
+
+    // Fold the open gauntlet over at its lip and taper it down to the palm.
+    const cuffRing = (y, depth, width, flare = 0) => Array.from({length: 21}, (_, i) => {
+      const a = i * Math.PI * 2 / 21;
+      return new T.Vector3(depth * Math.cos(a), y + flare * Math.cos(a), width * Math.sin(a));
+    });
+    const cuff = gLoft([
+      cuffRing(.090, .038, .052, .014), cuffRing(.113, .047, .067, .016),
+      cuffRing(.112, .052, .072, .016), cuffRing(.086, .046, .064, .012),
+      cuffRing(.052, .035, .050), cuffRing(.036, .032, .049),
+    ]);
+    const group = new T.Group();
+    const hide = new T.MeshStandardMaterial({color: 0xe9e3d6, roughness: .78, side: T.DoubleSide});
+    const rubber = new T.MeshStandardMaterial({map: gripTexture, roughness: .92});
+    for (const [geometry, material] of [[gMerge(leather), hide], [gMerge(grip), rubber], [cuff, M3.cap]]) {
+      const mesh = new T.Mesh(geometry, material);
+      mesh.castShadow = true; mesh.frustumCulled = false; group.add(mesh);
+    }
+    return group;
   })();
 
   function part(geo, m, parent) { const x = new T.Mesh(geo, m); x.castShadow = true; x.matrixAutoUpdate = true; parent.add(x); return x; }
@@ -1063,6 +1123,9 @@ window.Cricket3D = function (G) {
           if (/cuff/.test(o.name) || /cuff/.test(o.material.name)) { o.geometry.computeBoundingBox(); cuff = o.geometry.boundingBox.getCenter(new T.Vector3()); }
           if (GLOVE_CUFF === 'tube' ? /cuff|accent/.test(o.name) : /accent/.test(o.name)) o.visible = false; } });   // the loose strap flap ('accent') floats off a bent wrist   // the model's rigid cuff can't follow the forearm; Person draws its own (cuffG)
         const r = RIG.rest, anchor = new T.Vector3().fromArray(s === 'l' ? window.GRIP.top : window.GRIP.bottom);
+        // Scale across the handle's axis. Scaling around the off-center palm
+        // alone moves the finger wrap sideways by almost one handle radius.
+        anchor.x *= GRIP3.size;
         // the hand inside the glove: wrist to knuckles runs from the cuff through the palm; knuckle line (index - pinky) toward the blade
         const dB = cuff ? cuff.clone().negate().normalize() : new T.Vector3(s === 'l' ? 1 : -1, -1, 0).normalize();
         const aB = new T.Vector3(0, -1, 0);
@@ -1152,7 +1215,7 @@ window.Cricket3D = function (G) {
   // Rendering constraints only: gameplay contact/scoring still use people().
   // Project the blade outside body/equipment capsules, then the two cuffs into
   // arm reach. Both arm IK chains are solved to the corrected bat below.
-  function clearBat(O, Bq, pos, rest, padded, grippedSides = ['l','r'], cuffOffsets = null) {
+  function clearBat(O, Bq, pos, rest, padded, grippedSides = ['l','r'], cuffOffsets = null, reachScale = .985) {
     const spine=pos.neck_01.clone().sub(pos.pelvis).normalize();
     const capsules=[
       [pos.pelvis.clone().addScaledVector(spine,.08),pos.neck_01.clone().addScaledVector(spine,-.04),.18],
@@ -1187,7 +1250,7 @@ window.Cricket3D = function (G) {
       let reachError=0;
       for(const s of grippedSides) {
         const wrist=(cuffOffsets?.[s] || GRIP3.side[s].cuffB).clone().applyQuaternion(Bq).add(O),sh=pos['upperarm_'+s];
-        const reach=(rest['lowerarm_'+s].distanceTo(rest['upperarm_'+s])+rest['hand_'+s].distanceTo(rest['lowerarm_'+s]))*.985;
+        const reach=(rest['lowerarm_'+s].distanceTo(rest['upperarm_'+s])+rest['hand_'+s].distanceTo(rest['lowerarm_'+s]))*reachScale;
         delta.subVectors(wrist,sh);const distance=delta.length();
         if(distance>reach){reachError=Math.max(reachError,distance-reach);O.addScaledVector(delta,-(distance-reach)/distance);}
       }
@@ -1251,7 +1314,7 @@ window.Cricket3D = function (G) {
     }
     attachGrip() {
       if (!this.bones || this.gripG || !GRIP3.ready) return;
-      this.gripG = {}; this.gripRel = {};
+      this.gripG = {};
       // a mirrored (left-handed) batter's top hand is his right: it wears the top glove's mirror image, and the left the bottom's
       this.gripGm = {}; this.gloveCuffM = {};
       for (const s of ['l', 'r']) for (const mir of [false, true]) {
@@ -1278,8 +1341,17 @@ window.Cricket3D = function (G) {
         GRIP3.cuffGeo = [body, band];
         GRIP3.cuffMat = [new T.MeshStandardMaterial({ color: 0xd6d4cc, roughness: 0.85, side: T.DoubleSide }), new T.MeshStandardMaterial({ color: 0x23262c, roughness: 0.7, side: T.DoubleSide })];
       }
-      this.cuffG = {};
+      this.cuffG = {}; this.cuffBridge = {};
       for (const s of ['l', 'r']) {
+        if (GLOVE_CUFF === 'model') {
+          // The flexible fabric under the wrist guard spans the seam when
+          // the cuff bends away from the glove's rigid finger padding.
+          GRIP3.bridgeGeo ??= new T.CylinderGeometry(0.033, 0.029, 1, 16, 1, true);
+          const bridge = new T.Mesh(GRIP3.bridgeGeo, GRIP3.cuffMat[0]);
+          bridge.visible = false;
+          this.g.add(bridge);
+          this.cuffBridge[s] = bridge;
+        }
         const c = new T.Group(); GRIP3.cuffGeo.forEach((geo, i) => { const m = new T.Mesh(geo, GRIP3.cuffMat[i]); m.castShadow = true; m.frustumCulled = false; c.add(m); });
         c.matrixAutoUpdate = false; c.visible = false; this.g.add(c); this.cuffG[s] = c;
       }
@@ -1397,13 +1469,52 @@ window.Cricket3D = function (G) {
       }
       if(G3 && pr.bat.carry) {
         const s=pr.bat.carryHand || (A(pr.bat.hands).distanceTo(pos.hand_l)<A(pr.bat.hands).distanceTo(pos.hand_r)?'l':'r'),S3=GRIP3.side[s];
-        const Y=A(pr.bat.hands).sub(A(pr.bat.tip)).normalize(),X=pr.bat.width?A(pr.bat.width):side.clone();
+        const Y=A(pr.bat.hands).sub(A(pr.bat.tip)).normalize(),
+          blendWidth=pr.bat.carryWidthWeight ?? 1,
+          naturalGrip=!pr.bat.width || blendWidth < 1, X=naturalGrip?side.clone():A(pr.bat.width);
         X.addScaledVector(Y,-X.dot(Y));
-        if(X.lengthSq()<1e-8)X.set(1,0,0);X.normalize();
+        if(X.lengthSq()<1e-8)X.copy(Math.abs(Y.y)<.9?v1.set(0,1,0):v1.set(1,0,0)).cross(Y);
+        X.normalize();
         const Bq=new T.Quaternion().setFromRotationMatrix(new T.Matrix4().makeBasis(X,Y,new T.Vector3().crossVectors(X,Y)));
-        const O=pos['hand_'+s].clone().sub(S3.cuffB.clone().applyQuaternion(Bq));
-        clearBat(O,Bq,pos,r,pr.team==='bat' || pr.keeper,[s]);
-        const wrist=S3.cuffB.clone().applyQuaternion(Bq).add(O),palm=S3.anchor.clone().applyQuaternion(Bq).add(O),sh=pos['upperarm_'+s];
+        if (naturalGrip) {
+          // Roll the carry grip toward the forearm. A signed projection
+          // limits the roll continuously through axial or reversed poses.
+          const cuff=S3.cuffB.clone().sub(S3.anchor).applyQuaternion(Bq);
+          const forearm=pos['lowerarm_'+s].clone().sub(pos['hand_'+s]).normalize();
+          cuff.addScaledVector(Y,-cuff.dot(Y)).normalize();
+          Bq.premultiply(new T.Quaternion().setFromAxisAngle(Y,.5*Y.dot(cuff.cross(forearm))));
+        }
+        if (pr.bat.width && blendWidth > 0 && blendWidth < 1) {
+          // Roll from the fitted running grip to the filmed carry around the
+          // handle. Both orientations use the blade axis of this same frame.
+          const targetX = A(pr.bat.width);
+          targetX.addScaledVector(Y, -targetX.dot(Y));
+          if (targetX.lengthSq() > 1e-8) {
+            targetX.normalize();
+            const target = new T.Matrix4().makeBasis(targetX, Y, new T.Vector3().crossVectors(targetX, Y));
+            Bq.slerp(new T.Quaternion().setFromRotationMatrix(target), blendWidth);
+          }
+        }
+        const wristTarget = pos['hand_'+s].clone();
+        const shoulder = pos['upperarm_'+s];
+        const walkWeight = pr.bat.walkoff ? blendWidth : 0;
+        if (walkWeight > 0) {
+          const armLength = r['upperarm_'+s].distanceTo(r['lowerarm_'+s]) + r['lowerarm_'+s].distanceTo(r['hand_'+s]);
+          const relaxed = wristTarget.clone().sub(shoulder).setLength(armLength * .998).add(shoulder);
+          wristTarget.lerp(relaxed, walkWeight);
+        }
+        const O=wristTarget.sub(S3.cuffB.clone().applyQuaternion(Bq));
+        // A lowered bat hangs from the top of the handle in either hand.
+        // Preserve room above the grass as a runner lowers the toe.
+        const down = T.MathUtils.smoothstep(Y.y, .15, .60);
+        const edge = .058 * Math.sqrt(Math.max(0, 1 - Y.y * Y.y));
+        const room = Math.max(0, O.y - .86 * Y.y - edge - .006);
+        const slide = Math.min((GRIP3.side.l.anchor.y - S3.anchor.y) * down, room / Math.max(.15, Y.y));
+        const cuff = S3.cuffB.clone(), anchor = S3.anchor.clone();
+        cuff.y += slide; anchor.y += slide;
+        O.addScaledVector(Y, -slide);
+        clearBat(O,Bq,pos,r,pr.team==='bat' || pr.keeper,[s],{[s]:cuff}, .985 + .013 * walkWeight);
+        const wrist=cuff.applyQuaternion(Bq).add(O),palm=anchor.applyQuaternion(Bq).add(O),sh=pos['upperarm_'+s];
         const L1=r['lowerarm_'+s].distanceTo(r['upperarm_'+s]),L2=r['hand_'+s].distanceTo(r['lowerarm_'+s]);
         pos['lowerarm_'+s]=elbowForBat(sh,wrist,pos['lowerarm_'+s],L1,L2,O,Bq,palm);
         pos['hand_'+s]=pos['lowerarm_'+s].clone().add(wrist.clone().sub(pos['lowerarm_'+s]).normalize().multiplyScalar(L2));
@@ -1433,21 +1544,17 @@ window.Cricket3D = function (G) {
       const gloved3 = !!(G3 && pr.team === 'bat' && pr.gloves);
       if (this.gripG) {
         for (const s of ['l', 'r']) {
-          const hq = W['hand_' + s], hp = pos['hand_' + s], rel = this.gripRel[s];
-          if (gripQ && gripQ[s] && this.gloveMir) {}   // (a mirrored grip isn't remembered: one-handed, the gloves are the usual ones)
-          else if (gripQ && gripQ[s]) {   // remember where the glove sits on the hand, for when he lets go with one hand
-            const iq = hq.clone().invert(), gp = this['glovePose_' + s];
-            this.gripRel[s] = { q: iq.clone().multiply(gp.q), p: gp.p.clone().sub(hp).applyQuaternion(iq) };
-            if (!rig.closedGloveRel) rig.closedGloveRel = {};
-            rig.closedGloveRel[s] = this.gripRel[s];   // shared, for players who haven't gripped yet (the non-striker)
-          } else {
-            const R = rel || (rig.closedGloveRel && rig.closedGloveRel[s]) || { q: GRIP3.side[s].handInBat.clone().invert(), p: GRIP3.side[s].palm.clone() };
-            this['glovePose_' + s] = { q: hq.clone().multiply(R.q), p: R.p.clone().applyQuaternion(hq).add(hp) };
+          const hq = W['hand_' + s], hp = pos['hand_' + s];
+          if (!gripQ?.[s]) {
+            // The free glove follows this hand's bind frame. Reusing a
+            // previous grip pose makes a released cuff depend on replay order.
+            const S3 = GRIP3.side[s], q = S3.handInBat.clone().invert();
+            const fromWrist = S3.anchor.clone().sub(S3.cuffB).applyQuaternion(q);
+            this['glovePose_' + s] = { q: hq.clone().multiply(q), p: fromWrist.applyQuaternion(hq).add(hp) };
           }
           const mirG = this.gloveMir && gloved3, gp = this['glovePose_' + s], o = (mirG ? this.gripGm : this.gripG)[s], other = (mirG ? this.gripG : this.gripGm)[s];
           other.visible = false; const oc = (mirG ? this.gloveCuff : this.gloveCuffM); if (oc && oc[s]) oc[s].visible = false;
           o.visible = gloved3; o.matrix.compose(gp.p, gp.q, mirG && renderQuery.get('mirax') !== 'x' ? v3.set(GRIP3.size, GRIP3.size, -GRIP3.size) : v3.set(mirG ? -GRIP3.size : GRIP3.size, GRIP3.size, GRIP3.size)); o.matrixWorldNeedsUpdate = true;
-          B['hand_' + s].scale.setScalar(gloved3 ? GRIP3.handScale : 1);
           const gc = (mirG ? this.gloveCuffM : this.gloveCuff) && (mirG ? this.gloveCuffM : this.gloveCuff)[s];
           if (gc) { gc.visible = gloved3;
             if (gloved3) {   // turn the cuff about the wrist, part of the way from the glove's line to the forearm's
@@ -1457,6 +1564,17 @@ window.Cricket3D = function (G) {
               const ang = 2 * Math.acos(Math.min(1, Math.abs(qa.w))), cap = GRIP3.cuffMax; if (ang > cap) qa.slerp(qb.identity(), 1 - cap / ang);   // never so far it leaves the glove
               m4b.makeTranslation(-hp.x, -hp.y, -hp.z); m4a.makeRotationFromQuaternion(qa).premultiply(m4b.clone().invert()).multiply(m4b);
               gc.matrix.multiplyMatrices(m4a, o.matrix); gc.matrixWorldNeedsUpdate = true; } }
+          const bridge = this.cuffBridge[s];
+          if (bridge) {
+            bridge.visible = !!gc && gloved3;
+            if (bridge.visible) {
+              const seam = v1.copy(gp.p).lerp(hp, .34);
+              const span = v2.subVectors(hp, seam);
+              bridge.position.copy(seam).addScaledVector(span, .54);
+              bridge.scale.set(1, span.length() * 1.08, 1);
+              bridge.quaternion.setFromUnitVectors(v4.set(0, 1, 0), span.normalize());
+            }
+          }
           const cf = this.cuffG[s]; cf.visible = gloved3 && GLOVE_CUFF === 'tube';
           if (gloved3) { cf.matrix.compose(hp, qb.setFromUnitVectors(v1.set(0, 1, 0), v2.subVectors(hp, pos['lowerarm_' + s]).normalize()), v3.set(1, 1, 1)); cf.matrixWorldNeedsUpdate = true; }
         }
@@ -1465,7 +1583,7 @@ window.Cricket3D = function (G) {
       this.batFix = null;
       if (pr.bat && !G3) {
         const bh = A(pr.bat.hands), bt = A(pr.bat.tip), bd = bt.clone().sub(bh).normalize();
-        const grips = pr.bat.carry ? [bh.distanceTo(pos.hand_l) < bh.distanceTo(pos.hand_r) ? 'l' : 'r'] : ['l', 'r'];
+        const grips = pr.bat.carry ? [pr.bat.carryHand || (bh.distanceTo(pos.hand_l) < bh.distanceTo(pos.hand_r) ? 'l' : 'r')] : ['l', 'r'];
         let top = null;
         for (const s of grips) {
           // turn the hand so its fist lands on the handle: the wrist-to-fist line points at the handle, the knuckles along it
@@ -1539,11 +1657,20 @@ window.Cricket3D = function (G) {
       }
       // gloves on the hands (batters and the keeper); fingers tuck a little inside them
       const gloved = (pr.team === 'bat' && pr.gloves) || pr.keeper;
+      // Keep the skinned hand inside the closed keeper glove. Its equipment
+      // inherits the wrist transform, so compensate the glove once at attachment.
+      const keeperHandScale = .35;
       for (const s of ['l', 'r']) {
         const gl = pr.keeper ? this['eqK' + s] : this['eqG' + s], other = pr.keeper ? this['eqG' + s] : this['eqK' + s];
         if (other) other.visible = false;
+        const hand = B['hand_' + s];
+        hand.scale.setScalar(gloved3 ? GRIP3.handScale : pr.keeper && gl ? keeperHandScale : 1);
         if (gl) {
-          if (gl.parent !== B['hand_' + s]) { B['hand_' + s].add(gl); const f = rig.glove[s]; gl.position.copy(f.pos); gl.quaternion.copy(f.quat); gl.scale.set(f.sx, 1, 1); }
+          if (gl.parent !== hand) {
+            hand.add(gl);
+            const f = rig.glove[s], scale = pr.keeper ? 1 / keeperHandScale : 1;
+            gl.position.copy(f.pos).multiplyScalar(scale); gl.quaternion.copy(f.quat); gl.scale.set(f.sx * scale, scale, scale);
+          }
           gl.visible = !!gloved && !gloved3 && (EQUIP_OPT.gloves === 'model' || !this.kit || !!pr.keeper);   // the keeper always wears the keeping-glove model   // (the textured player has no painted-on gloves)
         }
         for (const f of ['index', 'middle', 'ring', 'pinky', 'thumb']) { const bn = B[f + '_01_' + s]; if (bn) bn.scale.setScalar(gloved3 ? 1 : gloved && gl && gl.visible ? 0.7 : 1); }

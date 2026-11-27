@@ -33,6 +33,19 @@
       {"pelvis":[-0.0982,0.9094,0.1496],"hipL":[-0.0152,0.9166,0.2215],"hipR":[-0.1811,0.9021,0.0778],"neck":[-0.1508,1.4567,0.1612],"shL":[-0.0378,1.412,0.3163],"shR":[-0.2542,1.4019,0.0041],"head":[-0.225,1.6191,0.1842],"kneeL":[0.0434,0.4704,0.2234],"footL":[0.2397,0.0,0.1632],"kneeR":[-0.2168,0.4555,0.0356],"footR":[-0.0866,0.0,-0.1566],"elL":[-0.2638,1.2917,0.4728],"handL":[-0.4869,1.4697,0.4212],"elR":[-0.4801,1.3287,0.1875],"handR":[-0.4419,1.5366,0.386],"footDirL":[-0.9447,0,0.3279],"footDirR":[-0.9868,0,0.1619],"bd":[0.511,0.761,-0.4],"footPitchL":-0.499,"footPitchR":-0.165},
     ],
   };
+  // The single-camera take leaves the blade depth ambiguous around impact.
+  // Bring its forward projection across point while preserving pickup and finish.
+  cut.frames.forEach((frame, i) => {
+    const weight = Math.exp(-Math.pow((i - cut.contact) / 4, 2));
+    const [x, y, z] = frame.bd;
+    const turn = -.63 * weight;
+    const across = x * Math.cos(turn) + z * Math.sin(turn);
+    const forward = z * Math.cos(turn) - x * Math.sin(turn);
+    const down = y * (1 - .32 * weight);
+    const length = Math.hypot(across, down, forward);
+    frame.bd = [across / length, down / length, forward / length];
+  });
+
   const hook = {
     fps: 25.0,
     contact: 19.1,
