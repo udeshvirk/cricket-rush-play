@@ -106,6 +106,48 @@
     }
     return {pose,time};
   }
+  function coverDriveKeys({start,target,aim=0,loft=false,stance,impact=.15}) {
+    const mix=(a,b,u)=>a+(b-a)*u;
+    const blend=(a,b,u)=>Object.fromEntries(Object.keys(a).map(k=>[k,
+      Array.isArray(a[k])?a[k].map((v,i)=>mix(v,(b[k]||a[k])[i],u))
+        :typeof a[k]==='number'?mix(a[k],b[k]??a[k],u):a[k]]));
+    const angle=clamp(aim,-100,35),rad=angle*Math.PI/180,dx=Math.sin(rad),dz=Math.max(.12,Math.cos(rad));
+    // angle, stride x, stride z, hip/shoulder contact, finish height, finish shoulder
+    // (strides shortened November 2026: from the side it was nearly the splits, hips low between the feet, back leg locked)
+    const profiles=[[-100,.12,1.02,-88,-108,1.08,-80],[-45,.20,1.18,-76,-94,1.36,-56],
+      [0,.34,1.29,-62,-78,1.62,-18],[35,.50,1.21,-44,-60,1.53,20]];
+    let i=0;while(i<profiles.length-2&&angle>profiles[i+1][0])i++;
+    const a=profiles[i],b=profiles[i+1],u=clamp((angle-a[0])/(b[0]-a[0]),0,1),p=a.map((v,k)=>mix(v,b[k],u));
+    const low=clamp((.5-target[1])*.35,0,.10),fr=[clamp(target[0]+p[1],-.18,.9),0,p[2]+.12];   // a long stride that reads from the bowler's end
+    const bd=unit([-.04+dx*.30,-1,-.08]);
+    // Low drives meet nearer the toe so the rendered blade clears the turf.
+    // The toe is about .72m from the hands; retain the middle on higher balls.
+    const contactAlong=clamp(.72-(target[1]-.045)/-bd[1],.48,.70);
+    const h=add(target,scale(bd,-contactAlong));
+    const pelvis=[mix(start.pel[0],fr[0],.7),.71-low*.5,1.0-.12*Math.max(0,(-angle-45)/55)];   // into the front knee
+    const contact={...start,fr,pel:pelvis,hy:p[3],sy:p[4],lean:29+low*50,side:4,h,bd,...(start.bk?{bk:add(start.bk,[0,0,.06])}:{}),
+      kpL:[dx*.65-.10,0,1],...(start.kpR?{kpR:[-.85,-.12,.5]}:{}),rearFootPitch:.5};   // the back knee softens toward the pitch, up on the back toe
+    const load={...start,pel:add(start.pel,[0,-.015,.025]),hy:start.hy+6,sy:start.sy-5,
+      h:add(start.h,[.01,.025,-.025]),bd:slerp(unit(start.bd),unit([-.4,.76,-.51]),.3)};
+    const slot={...blend(start,contact,.65),hy:mix(start.hy,contact.hy,.85),sy:mix(start.sy,contact.sy,.45),
+      h:[mix(start.h[0],h[0],.7),h[1]+.1,h[2]-.12],bd:unit([-.18+dx*.12,-.32,-.92])};
+    const through={...contact,pel:add(pelvis,[0,.005,.05]),hy:p[3]+12,sy:p[4]+12,lean:22+low*30,side:5,
+      h:add(h,[dx*.16,.035,dz*.20]),bd:unit([dx*.55-.04,-.65,.75*dz]),rearFootPitch:.55};
+    const extension={...contact,pel:add(pelvis,[0,loft?.04:.015,.08]),hy:p[3]+22,sy:p[4]+28,lean:loft?14:19,side:loft?2:5,
+      h:add(h,[dx*.24,.18+(loft?.15:0),.30*dz]),bd:unit([dx*.9-.04,loft?.4:.12,.96*dz]),rearFootPitch:.58};
+    // along the ground the drive is checked: the bat stops pointing up in front, at the shoulders; lofted, it goes right through
+    const height=loft?Math.max(1.60,p[5]+.15):p[5]-.1;
+    // weight stays on the bent front knee, head and front shoulder over it (a lofted drive comes up taller)
+    const finish={...contact,pel:[pelvis[0]+.015,loft?.83:.75,1.04-.12*Math.max(0,(-angle-45)/55)],
+      hy:p[3]+30,sy:p[6],lean:loft?10:16,side:loft?2:5,rearFootPitch:.38,
+      // hands up beside the head on its off side, not in front of the face (it hid the face from the bowler's end)
+      h:[pelvis[0]-.24+dx*.18,height,1.08-.1*Math.abs(dx)],
+      bd:loft?unit([dx*.9-.12,.86,.30]):unit([dx*.45-.2,mix(.55,.95,Math.max(0,1-Math.abs(angle)/100)),.3])};
+    const settle={...finish,pel:add(finish.pel,[0,.03,-.02]),h:add(finish.h,[0,-.06,loft?0:.06]),lean:loft?8:12,side:loft?1:3,rearFootPitch:.25};
+    return [[0,start],[impact*.26,load],[impact*.63,slot],[impact,contact],
+      [impact+.075,through],[impact+.18,extension],[impact+.42,finish],
+      [impact+.95,settle],[impact+1.6,stance]];
+  }
   // Drive direction changes the stride, body alignment and finish plane,
   // not just the exit angle. Profiles blend continuously between named shots.
   function driveKeys({start,target,aim=0,loft=false,stance,impact=.15}) {
@@ -586,6 +628,6 @@
     result.pose.fr=authored.fr;result.pose.kpL=authored.kpL;
     return result;
   }
-  const api={sampleUpperCut,prepare,sample,contactTime,sampleDrive,driveKeys,cutKeys,pullKeys,hookKeys,ucutKeys,sweepKeys,rsweepKeys,lcutKeys,glanceKeys,flickKeys,bdriveKeys,fdefKeys,bdefKeys,pushKeys,slogKeys,sampleCut,cutWidth,pathWidth,sweepWidth,blendDirection:slerp};root.CricketMotion=api;
+  const api={sampleUpperCut,prepare,sample,contactTime,sampleDrive,coverDriveKeys,driveKeys,cutKeys,pullKeys,hookKeys,ucutKeys,sweepKeys,rsweepKeys,lcutKeys,glanceKeys,flickKeys,bdriveKeys,fdefKeys,bdefKeys,pushKeys,slogKeys,sampleCut,cutWidth,pathWidth,sweepWidth,blendDirection:slerp};root.CricketMotion=api;
   if(typeof module!=='undefined')module.exports=api;
 })(typeof window==='undefined'?globalThis:window);

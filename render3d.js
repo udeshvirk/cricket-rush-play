@@ -1500,7 +1500,11 @@ window.Cricket3D = function (G) {
         const walkWeight = pr.bat.walkoff ? blendWidth : 0;
         if (walkWeight > 0) {
           const armLength = r['upperarm_'+s].distanceTo(r['lowerarm_'+s]) + r['lowerarm_'+s].distanceTo(r['hand_'+s]);
-          const relaxed = wristTarget.clone().sub(shoulder).setLength(armLength * .998).add(shoulder);
+          // Retarget the sampled elbow bend to the model's arm length.
+          const elbow = pos['lowerarm_'+s], hand = A(j['hand'+s.toUpperCase()]);
+          const span = shoulder.distanceTo(elbow) + elbow.distanceTo(hand);
+          const extension = Math.min(.998, shoulder.distanceTo(hand) / Math.max(span, 1e-6));
+          const relaxed = wristTarget.clone().sub(shoulder).setLength(armLength * extension).add(shoulder);
           wristTarget.lerp(relaxed, walkWeight);
         }
         const O=wristTarget.sub(S3.cuffB.clone().applyQuaternion(Bq));
@@ -1516,7 +1520,15 @@ window.Cricket3D = function (G) {
         clearBat(O,Bq,pos,r,pr.team==='bat' || pr.keeper,[s],{[s]:cuff}, .985 + .013 * walkWeight);
         const wrist=cuff.applyQuaternion(Bq).add(O),palm=anchor.applyQuaternion(Bq).add(O),sh=pos['upperarm_'+s];
         const L1=r['lowerarm_'+s].distanceTo(r['upperarm_'+s]),L2=r['hand_'+s].distanceTo(r['lowerarm_'+s]);
-        pos['lowerarm_'+s]=elbowForBat(sh,wrist,pos['lowerarm_'+s],L1,L2,O,Bq,palm);
+        // A hanging bat follows the walking elbow. Fitting the elbow to the
+        // rotating glove again can sweep it sideways during each step.
+        const sampledElbow = pos['lowerarm_'+s];
+        let bend = sampledElbow;
+        if (walkWeight < 1) {
+          bend = elbowForBat(sh,wrist,sampledElbow,L1,L2,O,Bq,palm);
+          if (walkWeight > 0) bend.lerp(sampledElbow,walkWeight);
+        }
+        pos['lowerarm_'+s] = walkWeight > 0 ? elbowFor(sh,wrist,bend,L1,L2) : bend;
         pos['hand_'+s]=pos['lowerarm_'+s].clone().add(wrist.clone().sub(pos['lowerarm_'+s]).normalize().multiplyScalar(L2));
         pos['handTip_'+s]=pos['hand_'+s].clone().add(palm.clone().sub(pos['hand_'+s]).multiplyScalar(2));
         gripQ={[s]:new T.Quaternion().setFromRotationMatrix(frame(palm.clone().sub(pos['hand_'+s]),new T.Vector3(0,-1,0).applyQuaternion(Bq),new T.Matrix4()).multiply(rig.grip[s].rest.clone().transpose()))};

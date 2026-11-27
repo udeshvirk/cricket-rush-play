@@ -2094,7 +2094,8 @@ function strokeFamily(a, loft, defend, push, short, spin, at, playerStroke = fal
 function strokeKeys(sw) {   // every stroke family has staged key poses in player-production/motion.js
   // (keep the random stream as it was, so deliveries play out the same)
   if (!sw.vary) sw.vary = { l: rand(-4, 4), y: rand(-7, 7), h: [rand(-0.08, 0.08), rand(-0.1, 0.1), rand(-0.06, 0.06)], f: rand(-0.03, 0.05), hold: rand(0.8, 1.3) };
-  return CricketMotion[sw.fam + 'Keys']({ start: sw.visualStart || PREPARE, target: sw.target, aim: sw.intent, loft: sw.loft, short: sw.short, stance: styled(STANCE, batStyle()), impact: SWING_LAG });
+  const family = isGroundCover(sw) ? 'coverDrive' : sw.fam;
+  return CricketMotion[family + 'Keys']({ start: sw.visualStart || PREPARE, target: sw.target, aim: sw.intent, loft: sw.loft, short: sw.short, stance: styled(STANCE, batStyle()), impact: SWING_LAG });
 }
 // The bat must never pass through the batter. Body parts as capsules (from, to, radius in metres, with pads, shirt and
 // helmet); if the blade would be inside one, it turns about the hands just far enough to pass outside it.
@@ -2306,7 +2307,9 @@ function deliveryGazeYaw(line) {
 // Align the recorded contact horizontally with the chosen delivery. A lower ball
 // also lowers the hips during the reach. The clip supplies the blade path and
 // joint bend directions throughout the swing. Use ?clip=0 for the authored pull.
-const CLIP = { blendIn: 0.1, reachIn: 0.12, reachOut: 0.3 };
+// Give the feet and torso most of the downswing to settle onto the recorded
+// ball line. Finish the transition before the 150 ms contact sample.
+const CLIP = { blendIn: 0.14, reachIn: 0.12, reachOut: 0.3 };
 const clipsOn = () => window.BATTING_CLIPS && new URLSearchParams(location.search).get('clip') !== '0';
 function clipFrame(c, ft) {   // the clip at frame time ft (frames, fractional): Catmull-Rom through the frames
   // Clamp before calculating u: repeating the last frame in Catmull-Rom otherwise
@@ -2352,9 +2355,12 @@ function recordedBladeCurve(c) {
   }
   return recordedBladeCurves.get(c);
 }
+function isGroundCover(sw) {
+  return sw.fam === 'drive' && !sw.loft && sw.intent >= -75 && sw.intent < -35;
+}
 function recordingFor(sw) {
   const clips = clipsOn() && window.BATTING_CLIPS;
-  if (!clips) return null;
+  if (!clips || isGroundCover(sw)) return null;
   const loft = sw.loft ? 'Loft' : '';
   if (sw.fam === 'drive') {
     const a = sw.intent || 0;
@@ -2408,11 +2414,11 @@ function recordingFor(sw) {
 }
 function recordedContactPlacement(sw, clip) {
   const lever = clip.contactLever ?? 0.48;
-  if (sw.fam === 'cut' && sw.target[1] < 0.71) {
+  if (sw.fam === 'cut' && sw.target[1] < 0.80) {
     // For a ball below the recorded cut, bend the knees and bring the stance
     // toward the grip. Meet the lowest balls farther down the same blade face.
-    const drop = 0.71 - sw.target[1];
-    return { lever: Math.min(0.72, lever + 0.4 * drop), crouch: 0.48 * drop,
+    const drop = 0.80 - sw.target[1];
+    return { lever: Math.min(0.72, lever + 0.4 * drop),
              stanceOffset: [-0.28 * drop, 0, 0.24 * drop] };
   }
   if (sw.fam !== 'glance' || sw.target[1] >= 0.375) return { lever };
@@ -2421,17 +2427,27 @@ function recordedContactPlacement(sw, clip) {
   const low = smooth(clamp((0.375 - sw.target[1]) / 0.03, 0, 1));
   return { lever: lerp(lever, 0.72, low), stanceOffset: [0.15 * low, 0, -0.08 * low] };
 }
-function clipBody(sw, motionTime) {
+function clipBody(sw, motionTime, frontLift = 0) {
   const c = recordingFor(sw);
   if (!c) return null;
   const tc = motionTime - SWING_LAG, ft = clipPlaybackFrame(c, tc);
   if (!sw.clipO) {   // placed once per shot: his hands at contact where the keys meet the ball (the ball's line moves his feet
     // into line, as a batter's would); only the height is left for the arms and knees to make up
-    const { lever, stanceOffset, crouch = 0 } = recordedContactPlacement(sw, c);
+    const { lever, stanceOffset } = recordedContactPlacement(sw, c);
     const fc = clipFrame(c, c.contact), keysAt = sub(sw.target, mul(norm(fc.bd), lever)), hc = mul(add(fc.handL, fc.handR), 0.5);
     sw.clipO = [keysAt[0] - hc[0], 0, keysAt[2] - hc[2]];
     sw.clipD = [0, keysAt[1] - hc[1], 0];
-    sw.clipBodyDrop = Math.min(0, sw.clipD[1]) * 0.3 - crouch;
+    sw.clipBodyDrop = Math.min(0, sw.clipD[1]) * 0.3;
+    if (sw.fam === 'cut') {
+      // Keep Roy's waist-high posture. For a lower ball, sink only as far
+      // as the two shoulders need to reach its grip on the flatter blade.
+      sw.clipBodyDrop = 0;
+      for (const side of ['L', 'R']) {
+        const d = sub(add(fc['sh' + side], stanceOffset || [0, 0, 0]), fc['hand' + side]);
+        const verticalReach = Math.sqrt(Math.max(0, .59 ** 2 - d[0] ** 2 - d[2] ** 2));
+        sw.clipBodyDrop = Math.min(sw.clipBodyDrop, sw.clipD[1] - d[1] + verticalReach);
+      }
+    }
     sw.clipStanceO = stanceOffset ? add(sw.clipO, stanceOffset) : sw.clipO;
   }
   const f = clipFrame(c, ft), O = sw.clipStanceO, D = sw.clipD;
@@ -2440,6 +2456,15 @@ function clipBody(sw, motionTime) {
   const j = {};
   for (const key of ['pelvis', 'hipL', 'hipR', 'neck', 'shL', 'shR', 'head']) j[key] = add(add(f[key], O), body);
   const leftFoot = clipFoot(f, 'L', O), rightFoot = clipFoot(f, 'R', O);
+  if (sw.fam === 'ucut' && frontLift > 0) {
+    // The video fit puts both shoes on the ground. Layer the earlier front-leg
+    // fold onto its blade path and keep the loaded rear shoe at contact.
+    leftFoot.foot = add(leftFoot.foot, [0, frontLift, -.55 * frontLift]);
+    const plant = smooth(clamp(frontLift / .045, 0, 1));
+    const support = clipFoot(clipFrame(c, c.contact), 'R', O);
+    rightFoot.foot = lerp3(rightFoot.foot, support.foot, plant);
+    rightFoot.pitch = lerp(rightFoot.pitch, support.pitch, plant);
+  }
   j.footL = leftFoot.foot; j.footR = rightFoot.foot;
   j.footDirL = f.footDirL; j.footDirR = f.footDirR;
   j.footPitchL = [leftFoot.pitch, 0, 0]; j.footPitchR = [rightFoot.pitch, 0, 0];
@@ -2523,9 +2548,9 @@ function batterPose(sw) {
         const r = smooth(clamp(after / 0.25, 0, 1)) * lateR;
         k = { ...k, h: add(k.h, [0, -0.28 * r, -0.12 * r]), lean: k.lean + 4 * r, pel: add(k.pel, [0, -0.02 * r, -0.04 * r]) };
       }
-      if (how.kind === 'hit' && attack && how.e > 0.3) {   // early: through the shot too soon, falling over toward the off side
+      if (how.kind === 'hit' && attack && how.e > 0.3) {   // early: a small shift onto the front foot as the bat gets ahead
         const r = smooth(clamp(after / 0.2, 0, 1)) * clamp((how.e - 0.3) / 0.5, 0, 1);
-        k = { ...k, lean: k.lean + 16 * r, side: (k.side || 0) + 10 * r, pel: add(k.pel, [-0.09 * r, -0.07 * r, 0.12 * r]) };
+        k = { ...k, lean: k.lean + 5 * r, side: (k.side || 0) + 3 * r, pel: add(k.pel, [-0.025 * r, -0.02 * r, 0.035 * r]) };
       }
       if (how.kind === 'edge' && after < 0.3) {   // the jar of an edge through the bat
         const b = norm(k.bd), p = norm(cross(b, [0, 1, 0])), amp = 0.2 * Math.exp(-after / 0.07) * Math.sin(after * 55);
@@ -2587,7 +2612,7 @@ function batterPose(sw) {
       k = mixPose(k, ball.atBat[1] > 1.45 ? DUCK : LEAVE, lk);
     }
   }
-  const cb = sw && clipBody(sw, motionTime);
+  const cb = sw && clipBody(sw, motionTime, sw.fam === 'ucut' && sw.short ? Math.max(0, k.fr[1]) : 0);
   // Join the guard actually displayed on input directly to the filmed downswing.
   if (cb && sw.visualStart && motionTime < CLIP.blendIn) k = sw.visualStart;
   let bd = norm(k.bd);
@@ -2610,7 +2635,8 @@ function batterPose(sw) {
   }
   bd = bladeClear(j, k.h, bd);
   const follow=sw?smooth(clamp((motionTime-SWING_LAG-.04)/.32,0,1)):0;
-  let gaze = facing(sw ? clamp(sw.intent || 0, -70, 70) * follow : 0);
+  const gazeLimit = sw?.fam === 'sweep' ? 32 : 70;
+  let gaze = facing(sw ? clamp(sw.intent || 0, -gazeLimit, gazeLimit) * follow : 0);
   const passAge = ball ? ball.t - ball.Tstar + (phase === 'result' ? phaseT : 0) : 0;
   if (sw?.how?.kind === 'miss') {
     const after = ball?.swing === sw ? passAge : sw.t - (sw.contactAge ?? SWING_LAG);
@@ -5735,7 +5761,7 @@ function tossButtons(list) {
 }
 // ---- the toss in 3D: both captains and an umpire in the middle of the pitch; your captain flips the coin, it lands on the pitch
 // and the camera looks down at it. Without 3D the card's own coin (CSS) is flipped instead.
-const TOSS_Z = PITCH / 2, TOSS_T = 1.25;   // where they stand; seconds the coin is in the air
+const TOSS_Z = PITCH / 2, TOSS_T = .92;   // where they stand; seconds the coin is in the air
 const TOSS_HOLD = [-0.34, 1.08, TOSS_Z - 0.04], COIN_LAND = [0.02, 0.006, TOSS_Z - 0.18];
 const COIN_ON_HAND = [0, 0.048, 0];   // the centre of the disc above the captain's knuckles
 // Hand targets are in pitch coordinates. The thumb releases partway through
@@ -5744,9 +5770,9 @@ const TOSS_FLICKS = [
   { name: 'Thumb pop', prep: .24, stroke: .19, recover: .52,
     load: [-.40, 1.00, TOSS_Z - .02], follow: [-.34, 1.36, TOSS_Z - .12] },
   { name: 'Side sweep', prep: .42, stroke: .29, recover: .68,
-    load: [-.68, 1.16, TOSS_Z - .18], follow: [-.12, 1.37, TOSS_Z - .11] },
+    load: [-.49, 1.02, TOSS_Z - .08], follow: [-.30, 1.34, TOSS_Z - .15] },
   { name: 'High flick', prep: .37, stroke: .24, recover: .78,
-    load: [-.51, 1.28, TOSS_Z + .02], follow: [-.45, 1.70, TOSS_Z - .13] },
+    load: [-.47, 1.09, TOSS_Z + .02], follow: [-.39, 1.45, TOSS_Z - .13] },
 ];
 const RELEASE_FRACTION = .72;
 let tossFx = null, lastTossFlick = -1;
@@ -5774,9 +5800,24 @@ function tossPeople() {
   const coin = tossCoin(), t = tossFx ? clock - tossFx.t0 : -1, list = [];
   const lookAt = (head, p) => p ? norm(sub(p, head)) : null;
   for (const [k, pos, face] of [[0, [-0.75, 0, TOSS_Z], 3 * Math.PI / 4], [1, [0.75, 0, TOSS_Z], -3 * Math.PI / 4]]) {
-    const j = figure(pos, face, { seed: 60 + k });
+    let j = figure(pos, face, { seed: 60 + k });
     const idleWeight = tossFx ? 1 - smooth(clamp(t / tossFx.flick.prep, 0, 1)) : 1;
-    if (CLIPS && idleWeight > 0) j.handL = mixJ(j, placeClip(clipAt('idle', clock * 0.8 + k), pos, face), 0.6 * idleWeight).handL;
+    if (CLIPS) {
+      const idle = placeClip(clipAt('idle', clock * .8 + k), pos, face);
+      if (k) j = mixJ(j, idle, .45);
+      else {
+        const load = tossFx && t > 0 ? 1 - idleWeight : 0;
+        const settle = tossFx ? smooth(clamp((t - tossFx.release) / tossFx.flick.recover, 0, 1)) : 0;
+        const dip = .035 * load * (1 - settle);
+        for (const key of ['head', 'neck', 'shL', 'shR', 'pelvis', 'hipL', 'hipR']) j[key][1] -= dip;
+        for (const side of ['L','R']) {
+          const ankle = add(j['foot' + side], [0,.07,0]);
+          j['knee' + side] = ik(j['hip' + side], ankle, LEG, LEG, sub(j['knee' + side], lerp3(j['hip' + side], ankle, .5)));
+        }
+        j.handL = lerp3(j.handL, idle.handL, .45);
+        j.elL = ik(j.shL, j.handL, UPARM, FOREARM, sub(idle.elL, lerp3(j.shL, j.handL, .5)));
+      }
+    }
     // two different builds: yours a little taller, theirs shorter and broader
     const [sy, sw] = k ? [0.95, 1.07] : [1.03, 0.98];
     for (const n in j) if (!/^foot(Dir|Pitch)/.test(n)) { const d = sub(j[n], pos); j[n] = add(pos, [d[0] * sw, d[1] * sy, d[2] * sw]); }
@@ -6991,19 +7032,16 @@ const walkOffClip = (() => {
   return { ...clip, frames: [frames[frames.length - 2], ...frames, frames[1]] };
 })();
 
+const walkOffCarry = (() => {
+  const frames = window.BATTING_WALK_OFF?.carryCycle;
+  return frames && { count: frames.length, frames: [frames.at(-1), ...frames, frames[0], frames[1]] };
+})();
+
 const walkOffGait = (() => {
   const clip = CLIPS?.walk;
   if (!clip) return null;
   const { cycle } = clip, count = clip.frames.length;
-  const frames = clip.frames.map((frame, i) => {
-    const opposite = clip.frames[(i + count / 2) % count];
-    const balanced = { ...frame, pelvis: lerp3(frame.pelvis, mx(opposite.pelvis), .5) };
-    for (const key of ['hip', 'knee', 'foot', 'toe']) {
-      balanced[key + 'L'] = lerp3(frame[key + 'L'], mx(opposite[key + 'R']), .5);
-      balanced[key + 'R'] = lerp3(frame[key + 'R'], mx(opposite[key + 'L']), .5);
-    }
-    return balanced;
-  });
+  const frames = clip.frames;
   // Mid-stance ankle position, expressed in metres along each planted step.
   const anchor = Object.fromEntries(['L', 'R'].map((side, index) => {
     const start = index * count / 2;
@@ -7031,11 +7069,24 @@ function walkOffLowerBody(phase) {
       smooth(clamp((12 - contactFrame) / 3, 0, 1));
     foot[0] = lerp(foot[0], anchor[side][0], plant);
     foot[2] = lerp(foot[2], anchor[side][2] - contactFrame * cycle / count, plant);
-    const pitch = clamp(Math.atan2(-toe[1], Math.hypot(toe[0], toe[2])) * .75, -.44, .55) * (1 - plant);
+    // Roll from heel strike onto a flat sole. The horizontal plant holds
+    // the shoe in place while the heel and knee can still move.
+    const heelStrike = 1 - smooth(clamp(contactFrame / 5, 0, 1));
+    const measuredPitch = Math.atan2(-toe[1], Math.hypot(toe[0], toe[2]));
+    let pitch = clamp(measuredPitch * .88, -.43, .69) * (1 - plant * (1 - heelStrike));
+    // The tracked toe passes behind the ankle in mid-swing. Unroll the
+    // padded boot continuously from push-off to the following heel strike.
+    const roll = smooth(clamp((contactFrame - 18) / 5, 0, 1)) *
+      (1 - smooth(clamp((contactFrame - 34) / 4, 0, 1)));
+    const swingPitch = lerp(.68, -.36, smooth(clamp((contactFrame - 27) / 11, 0, 1)));
+    pitch = lerp(pitch, swingPitch, roll);
     const pivot = Math.max(0, .14 * Math.sin(pitch) + .06 * (Math.cos(pitch) - 1),
       -.07 * Math.sin(pitch) + .06 * (Math.cos(pitch) - 1));
-    foot[1] = Math.max(Math.max(0, foot[1] * .65 - .006) * (1 - plant), pivot);
-    j['footDir' + side] = norm(lerp3(norm([toe[0], 0, toe[2]]), [0, 0, 1], plant));
+    foot[1] = Math.max(foot[1] * .88 * (1 - plant), pivot);
+    // At toe-off the toe can project behind the ankle. Pitch carries that
+    // roll; a sign change in its projection must not spin the shoe around.
+    const yaw = clamp(Math.atan2(toe[0], Math.max(.07, toe[2])), -.24, .24);
+    j['footDir' + side] = [Math.sin(yaw), 0, Math.cos(yaw)];
     j['footPitch' + side] = [pitch, 0, 0];
     const d = sub(j['hip' + side], add(foot, [0, .07, 0]));
     drop = Math.max(drop, d[1] - Math.sqrt(Math.max(0, .899 ** 2 - d[0] ** 2 - d[2] ** 2)));
@@ -7084,25 +7135,23 @@ function recordedWalkOff(at, face, distance, mirror = MIR) {
   const { blade, bw, look, ...joints } = frame;
   const carry = clip.carryHand === 'r' ? 'R' : 'L', sign = carry === 'L' ? 1 : -1;
   let bladeDirection = norm(blade);
-  if (walkOffGait) {
+  if (walkOffGait && walkOffCarry) {
     const gait = walkOffLowerBody(phase);
-    const lift = sub(gait.pelvis, joints.pelvis);
     const free = carry === 'R' ? 'L' : 'R';
-    for (const key of ['neck', 'head', 'shL', 'shR', 'elL', 'elR', 'handL', 'handR']) joints[key] = add(joints[key], lift);
-    const cuff = sub(joints['hand' + carry], joints['sh' + carry]);
-    // The footage's elbow also supports a helmet. Fit the wrist arc to a
-    // relaxed bat-only carry, with the cuff low and outside the pads.
-    const reach = [sign * .052 + cuff[0] * .12, -.576 + (cuff[1] + .34) * .12, cuff[2] * .58 + .025];
-    fitWalkoffArm(joints, carry, mul(norm(reach), UPARM + FOREARM), [sign * .12, -1, -.40]);
-    // Pad clearance keeps the renderer from moving the cuff mid-step.
-    bladeDirection = norm(add(bladeDirection, [sign * .29, 0, 0]));
-
-    const swing = sub(gait['hand' + free], gait['sh' + free]);
-    // Use the opposite-leg swing from the same gait phase, anchored to the
-    // filmed shoulder and fitted to the batter's upper arm and forearm.
-    const freeReach = [swing[0] * .24, -.566 + (swing[1] + .50) * .22, (swing[2] - .075) * .67];
-    const freePole = sub(gait['el' + free], lerp3(gait['sh' + free], gait['hand' + free], .5));
-    fitWalkoffArm(joints, free, mul(norm(freeReach), UPARM + FOREARM), add(mul(freePole, .5), [-sign * .025, -.10, -.02]));
+    const arms = clipFrame(walkOffCarry, 1 + phase * walkOffCarry.count);
+    const filmedNeck = sub(joints.neck, joints.pelvis), filmedHead = sub(joints.head, joints.neck);
+    const axis = norm(lerp3(sub(gait.neck, gait.pelvis), filmedNeck, .28));
+    joints.neck = add(gait.pelvis, mul(axis, .55));
+    joints.head = add(joints.neck, mul(norm(lerp3(sub(gait.head, gait.neck), filmedHead, .55)), .18));
+    const center = add(gait.pelvis, mul(axis, .50)), span = mul(norm(sub(gait.shL, gait.shR)), .19);
+    joints.shL = add(center, span); joints.shR = sub(center, span);
+    // The front view sets glove clearance. The side view supplies the swing
+    // along the walking direction. Both wrists follow the planted-foot clock.
+    const [cx, cy, cz] = arms.carry, [fx, fy, fz] = arms.free;
+    fitWalkoffArm(joints, carry, [sign * cx, cy, cz], [sign * .08, -.15, -.65]);
+    fitWalkoffArm(joints, free, [-sign * fx, fy, fz], [-sign * .08, -.15, -.65]);
+    const pitch = arms.pitch * deg;
+    bladeDirection = norm([sign * .19, -Math.cos(pitch), Math.sin(pitch)]);
     for (const key of ['pelvis', 'hipL', 'hipR', 'kneeL', 'kneeR', 'footL', 'footR',
       'footDirL', 'footDirR', 'footPitchL', 'footPitchR']) joints[key] = gait[key];
   }
@@ -7119,9 +7168,10 @@ function recordedWalkOff(at, face, distance, mirror = MIR) {
 }
 
 function walkoff(u, origin, carrySide) {
-  const turn = smooth(clamp(u / 0.45, 0, 1)), face = lerp(-Math.PI / 2, -2.2, turn);
-  const r = clamp(u / 0.45, 0, 1);
-  const distance = u < 0.45 ? 1.2 * 0.45 * (r ** 3 - 0.5 * r ** 4) : 1.2 * (u - 0.225);
+  const ramp = .38, pace = 1.45, r = clamp(u / ramp, 0, 1);
+  const face = lerp(-Math.PI / 2, -2.2, smooth(r));
+  // Integrate eased speed so footfalls stay tied to distance through the turn.
+  const distance = pace * (u < ramp ? ramp * (r ** 3 - .5 * r ** 4) : u - ramp / 2);
   const at = add(origin, mul([Math.sin(-2.2), 0, Math.cos(-2.2)], distance));
   const sourceHand = window.BATTING_WALK_OFF?.carryHand || 'l';
   const mirror = carrySide && carrySide !== sourceHand ? -1 : 1;
@@ -7223,7 +7273,6 @@ function livePeople() {
         } else {
           const release = smooth(clamp((u - releaseAt) / (.45 - releaseAt), 0, 1));
           const carrying = carry.carryHand.toUpperCase();
-          const across = norm(sub(j.shL, j.shR));
           const startAcross = norm(sub(base.shL, base.shR));
           const startFront = norm(cross(startAcross, [0, 1, 0]));
           const wrists = walkoffGripWrists(grip, direction, width);
@@ -7231,13 +7280,10 @@ function livePeople() {
             const shoulder = 'sh' + side, hand = 'hand' + side, elbow = 'el' + side;
             const sign = side === 'L' ? 1 : -1;
             const reach = lerp3(sub(wrists[side], base[shoulder]), sub(recorded[hand], recorded[shoulder]), release);
-            // Guide the spare glove around the outside of the hip as it lets go.
-            const escape = side === carrying ? 0 : .055 * 4 * release * (1 - release);
-            const target = add(reach, mul(across, sign * escape));
             const startPole = add(add(mul(startFront, .6), mul(startAcross, sign * .3)), [0, -1, 0]);
             const endPole = sub(recorded[elbow], lerp3(recorded[shoulder], recorded[hand], .5));
             const pole = CricketMotion.blendDirection(norm(startPole), norm(endPole), release);
-            fitWalkoffArm(j, side, target, pole);
+            fitWalkoffArm(j, side, reach, pole);
           }
           const hands = j['hand' + carrying];
           bat = { ...carry, hands, tip: add(hands, mul(direction, length)), width };
