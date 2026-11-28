@@ -368,6 +368,12 @@
   .nets-choices label:hover span { border-color:var(--pick); }
   .nets-choices input:checked + span { color:var(--night); background:var(--pick); border-color:var(--pick); box-shadow:inset 0 -3px rgba(0,0,0,.22); }
   .nets-choices input:focus-visible + span { outline:2px solid var(--chalk); outline-offset:2px; }
+  #netsReview { display:grid; gap:4px; }
+  #netsReview button { display:flex; align-items:center; gap:9px; padding:6px 10px; min-height:44px; text-align:left; cursor:pointer;
+    border:1px solid var(--line); border-radius:4px; background:#172139; color:var(--chalk); font:600 14px var(--ui); }
+  #netsReview button:hover, #netsReview button:focus-visible { border-color:var(--teal); }
+  #netsReview b { color:var(--amber); }
+  #netsReview small { margin-left:auto; color:var(--teal); }
   #netsResult:empty { display:none; }
   .opts { display: flex; flex-wrap: wrap; gap: 8px; }
   .opt { background: rgba(243, 239, 228, 0.06); border: 1px solid rgba(243, 239, 228, 0.25); color: var(--chalk);
@@ -1058,7 +1064,9 @@
           </div>
         </fieldset>
       </form>
+      <p class="how" id="netsStrokeHint" hidden></p>
       <p id="netsResult" aria-live="polite"></p>
+      <div id="netsReview" role="group" aria-label="Six-ball review" hidden></div>
       <div class="row"><button class="btn" id="netsNext" type="button">Start six balls</button><button class="btn ghost" id="netsRepeat" type="button" hidden>Repeat last ball</button><button class="btn ghost" id="netsExit" type="button">Main menu</button></div>
     </div>
   </div>
@@ -1199,6 +1207,7 @@
 <script src="player-production/slog-recordings.js"></script>
 <script src="player-production/stance-recordings.js"></script>
 <script src="player-production/sweep-recordings.js"></script>
+<script src="player-production/stokes-recordings.js"></script>
 <script src="player-production/walkoff-recordings.js"></script>
 <script src="player-production/diagnostics.js"></script>
 <script src="commentary.js"></script>
@@ -2444,6 +2453,7 @@ function isGroundCover(sw) {
 function recordingFor(sw) {
   const clips = clipsOn() && window.BATTING_CLIPS;
   if (!clips || isGroundCover(sw)) return null;
+  if (sw.stokesReverse) return clips.stokesReverse;
   const loft = sw.loft ? 'Loft' : '';
   if (sw.fam === 'drive') {
     const a = sw.intent || 0;
@@ -2497,6 +2507,11 @@ function recordingFor(sw) {
 }
 function recordedContactPlacement(sw, clip) {
   const lever = clip.contactLever ?? 0.48;
+  if (sw.stokesReverse) {
+    // Let a lower ball meet the blade nearer the toe while the knee is planted.
+    const hit = clipFrame(clip, clip.contact), gripY = (hit.handL[1] + hit.handR[1]) / 2;
+    return { lever: clamp((gripY - sw.target[1]) / -hit.bd[1], lever, .72) };
+  }
   if (sw.fam === 'cut' && sw.target[1] < 0.80) {
     // For a ball below the recorded cut, bend the knees and bring the stance
     // toward the grip. Meet the lowest balls farther down the same blade face.
@@ -4013,22 +4028,29 @@ function swing(loft, pressT, aim, w, you = false) {   // you: the player's own s
   const atBat = ball.atBat.slice(), high = atBat[1] > 1.75, low = atBat[1] < 0.16;
   if (inn && inn.userBats && !quiet) atBat[0] -= guard;   // moved across: the ball's line relative to the batter
   // where this ball "wants" to go: outside off to the off side, short balls pulled to the leg side
-  const natural = naturalAngle(atBat, ball.short);
+  // In batter coordinates outside off and a cover-drive aim are both negative.
+  const driveLength = ball.length === 'Full' || ball.length === 'Good length';
+  const natural = you && driveLength ? clamp(atBat[0] * 120, -70, 70) : naturalAngle(atBat, ball.short);
   const aimed = aim && aim.angle !== undefined && aim.angle !== null;
   if (aimed && !aim.defend && Math.abs(wrapA(aim.angle - natural)) > 75) w *= 0.72;   // playing across the line
   if (aim && aim.defend) w *= 1.35;                                                     // a block is easier to time
   // each stroke's own difficulty: the reverse sweep and hook are hard to time, the late cut and glance just use the pace
   const spinB = !!(BOWL_TYPES[ball.type] || {}).turn, isDef = !!(aim && aim.defend);
-  const preFam = aimed ? strokeFamily(wrapA(aim.angle), loft && !isDef, isDef, isDef, ball.short, spinB, atBat, you) : null;
+  const stokesReverse = you && M?.mode === 'nets' && aimed && loft && !isDef && spinB && ball.length === 'Full' &&
+    atBat[1] <= .7 && aim.angle >= -155 && aim.angle <= -115;
+  const preFam = stokesReverse ? 'rsweep' : aimed ? strokeFamily(wrapA(aim.angle), loft && !isDef, isDef, isDef, ball.short, spinB, atBat, you) : null;
   w *= { rsweep: 0.85, hook: 0.9, lcut: 1.1, glance: loft ? 1 : 1.1 }[preFam] || 1;
   if (you && !isDef && (M.mode === 'match' || M.mode === 'nets') && M.diff.plan > 0 && ball.length === 'Good length' && !SLOWER.has(ball.vname)) {
     w *= M.diff.plan === 2 ? .81 : .88;
-    if (loft) w *= .91;
+    if (loft) {
+      const reachingDrive = preFam === 'drive' && atBat[0] < -.18 && aim.angle < -10;
+      w *= reachingDrive ? .82 : .91;
+    }
   }
   if (ball.charge) w *= high ? 0.8 : 1.15;                                              // down the pitch: a half-volley, unless it's a bouncer
   const okW = 0.1 * w, edgeW = 0.15 * w;
   const visualStart=batterPose(null).pose;
-  ball.swing = { t: ball.t - pressT, startClock: clock - (ball.t - pressT), loft: loft && !(aim && aim.defend), angle: 0, tc, defend: !!(aim && aim.defend),...(visualStart?{visualStart}:{}) };
+  ball.swing = { stokesReverse, t: ball.t - pressT, startClock: clock - (ball.t - pressT), loft: loft && !(aim && aim.defend), angle: 0, tc, defend: !!(aim && aim.defend),...(visualStart?{visualStart}:{}) };
   let kind;
   const a = Math.abs(dtTiming) * (low ? 1.35 : 1);
   if (high && dtTiming > -0.02 && !(aim && aim.defend)) kind = 'miss';   // a bouncer you're late on goes over the bat
@@ -4746,7 +4768,7 @@ function beginBall(delay, announce) {
   if (idle) idleBalls = 0;
   if (M.mode === 'nets') {
     const n = M.nets;
-    if (n.repeat) n.current = n.last;
+    if (n.repeat) n.current = n.history[n.replayIndex].delivery;
     else {
       const type = btype(bowlerP()), range = BOWL_TYPES[type].speed;
       const length = n.length === 'Mixed' ? NETS_CYCLE[inn.balls % NETS_CYCLE.length] : n.length;
@@ -4994,9 +5016,18 @@ function finishBall(o, line) {
   const i = inn, chaseMode = M.mode === 'chase';
   if (M.mode === 'nets') {
     const n = M.nets;
-    n.result = (n.repeat ? 'Repeat' : 'Ball ' + (i.balls + 1)) + ' · ' + (line || (o.out ? 'Out' : plural(o.runs || 0, 'run')));
+    const sw = ball.swing, d = ball.decision;
+    const shot = sw && d ? shotName(sw.intent, sw.loft, sw.defend, sw.push, sw.fam)
+      : ball.left ? (ball.atBat[1] > 1.45 ? 'Duck' : 'Leave') : 'No shot';
+    const timing = d ? (Math.round(d.dtTiming * 1000) === 0 ? 'On time'
+      : Math.abs(Math.round(d.dtTiming * 1000)) + ' ms ' + (d.dtTiming < 0 ? 'early' : 'late')) : '';
+    const contact = d ? (d.kind === 'hit' ? (ball.perfect ? 'Middled' : 'Hit') : d.kind === 'edge' ? 'Edge' : sw?.reachable === false ? 'Out of reach' : 'Miss') : '';
+    const result = o.out ? 'Out' : o.wide ? 'Wide' : o.runs ? plural(o.runs, 'run') : 'Dot';
+    const summary = [n.current.length, shot, timing, contact, result].filter(Boolean).join(' · ');
+    n.result = n.repeat ? 'Replay of ball ' + (n.replayIndex + 1) + ' · ' + summary
+      : 'Ball ' + (i.balls + 1) + ' · ' + (line || result);
     if (!n.repeat) {
-      n.last = n.current;
+      n.history.push({delivery:n.current, summary});
       i.balls++; i.runs += o.runs || 0; if (o.out) i.wkts++;
       i.over.push(o.out ? 'W' : String(o.runs || 0));
     }
@@ -6102,25 +6133,46 @@ function beginMatch(userBatsFirst) {
 }
 const NETS_LENGTHS = { Yorker: [.9, 1.5], Full: [2.2, 3.6], 'Good length': [4.3, 6.3], Short: [7.3, 8.6] };
 const NETS_CYCLE = Object.keys(NETS_LENGTHS);
+function netsStrokeHint() {
+  const picks = $('netsOptions').elements, hint = $('netsStrokeHint');
+  hint.hidden = picks.netsStyle.value === 'F' || picks.netsLength.value !== 'Full';
+  const left = picks.netsHand.value === 'left';
+  hint.textContent = 'Lofted reverse sweep · ' + (touch
+    ? 'Select Loft and swipe ' + (left ? 'up-right' : 'up-left') + ' on the ball.'
+    : 'Hold ↑ + ' + (left ? '→' : '←') + ' and press Shift + S.');
+}
 function netsMenu(done) {
+  netsStrokeHint();
   $('netsNext').textContent = done ? 'Start another six' : 'Start six balls';
   $('netsRepeat').hidden = !done;
-  $('netsResult').textContent = done ? M.nets.result + ' · ' + inn.balls + '/6 completed' : '';
+  $('netsResult').textContent = done ? (M.nets.repeat ? M.nets.result : 'Six balls completed') : '';
+  const review = $('netsReview');
+  review.replaceChildren();
+  review.hidden = !done;
+  if (done) M.nets.history.forEach(({summary}, index) => {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.innerHTML = '<b>' + (index + 1) + '</b><span>' + esc(summary) + '</span><small>Replay</small>';
+    row.setAttribute('aria-label', 'Replay ball ' + (index + 1) + ', ' + summary);
+    row.onclick = () => netsDelivery(true, index);
+    review.appendChild(row);
+  });
   showScreen('nets');
 }
-function netsDelivery(repeat) {
+function netsDelivery(repeat, index) {
   if (M?.mode !== 'nets' || (!repeat && inn.balls >= 6)) {
     const choices = $('netsOptions').elements;
     const type = choices.netsStyle.value;
     const left = choices.netsHand.value === 'left';
     const bat = { ...YOU, players: YOU.players.map(p => ({ ...p, left })) };
     M = { mode: 'nets', overs: 1, cur: 0, teams: [bat, CHASE_OPP], diff: DIFFS[1], cond: {g: 0, t: 0, s: 0, p: 0},
-      nets: {type, length: choices.netsLength.value}, innings: [] };
+      nets: {type, length: choices.netsLength.value, history: []}, innings: [] };
     inn = newInnings(bat, CHASE_OPP, 6, 10, null, true);
     M.innings.push(inn);
     inn.bowler = CHASE_OPP.players.findIndex(p => p.type === type);
     setPace(); commentary.reset(); hideBatCard();
   }
+  if (repeat) M.nets.replayIndex = index ?? M.nets.history.length - 1;
   M.nets.repeat = repeat;
   paused = false; showScreen(null); beginBall(.5, false);
 }
@@ -6191,7 +6243,7 @@ function openPause() {
   $('pauseText').textContent = i.bat.name + ' ' + i.runs + '/' + i.wkts + ' after ' + ovStr(i.balls) + ' overs' +
     (i.target ? ', need ' + Math.max(0, i.target - i.runs) + ' off ' + (i.maxBalls - i.balls) + '.' : '.');
   const match = M.mode === 'match';
-  $('netsPauseRepeat').hidden = M.mode !== 'nets' || !M.nets.last;
+  $('netsPauseRepeat').hidden = M.mode !== 'nets' || !M.nets.history.length;
   $('autoOver').hidden = !match; $('autoInn').hidden = !match;
   $('autoInn').textContent = i.userBats ? 'Simulate the rest of your innings' : 'Simulate the rest of their innings';
   $('autoBowlToggle').hidden = !match;
@@ -8292,6 +8344,7 @@ $('goQuick').addEventListener('click', () => { audio(); setup.series = 0; setup.
 renderQuickLine();
 $('goMatch').addEventListener('click', () => { audio(); chalSetup = false; setup.series = 0; setup.tournament=false; cupReplaceArmed=false; renderSetup(); showScreen('setup'); });
 $('goNets').addEventListener('click', () => { audio(); netsMenu(false); });
+$('netsOptions').addEventListener('change', netsStrokeHint);
 $('netsNext').addEventListener('click', () => netsDelivery(false));
 $('netsRepeat').addEventListener('click', () => netsDelivery(true));
 $('netsPauseRepeat').addEventListener('click', () => netsDelivery(true));
