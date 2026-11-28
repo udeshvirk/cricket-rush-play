@@ -204,11 +204,11 @@
   #setup .card { gap: 12px; width: min(760px, 100%); }
   #setup .title { font-size: 38px; }
   .setup-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px; }
-  /* team cards: the kit, the name and the rating; the whole card is a native team picker (the select sits invisibly over it) */
+  /* Match setup shows the kit and ratings for each selected team. */
   .vsrow { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); gap:10px; align-items:end; }
   .vsrow:has(#opponentField[hidden]) { grid-template-columns:minmax(0,1fr); } .vsrow:has(#opponentField[hidden]) .vs { display:none; }
   .tcard { position:relative; display:block; cursor:pointer; }
-  .tcard .team-select { position:absolute; left:0; right:0; bottom:0; height:calc(100% - 22px); opacity:0; cursor:pointer; }
+  button.tc { width:100%; text-align:left; cursor:pointer; color:inherit; }
   .tc { display:flex; align-items:center; gap:12px; padding:10px 12px; border:1px solid var(--line); border-left:6px solid var(--kit,#3d7dff);
         background:linear-gradient(100deg, color-mix(in srgb, var(--kit,#3d7dff) 26%, #121a33) 0%, #121a33 70%); border-radius:4px; min-height:78px; }
   .tcard:hover .tc, .tcard:focus-within .tc { border-color:var(--amber); }
@@ -280,7 +280,21 @@
   .squad td:first-child { text-align:left; }
   .squad td.r { width:3.2em; }
   .squad .hi { color:var(--teal); }
-  .team-select { width:100%;padding:10px 8px;background:#18233a;color:var(--chalk);border:1px solid var(--line);border-radius:4px;font:600 16px var(--ui); }
+  #rosterPicker { box-sizing:border-box; width:min(440px,calc(100% - 24px)); max-height:85dvh; padding:16px; color:var(--chalk); background:#111e30; border:1px solid var(--line); border-radius:10px; }
+  #rosterPicker[open] { display:flex; flex-direction:column; gap:10px; }
+  #rosterPicker::backdrop { background:rgba(4,10,21,.78); }
+  .roster-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .roster-heading h2 { margin:0; text-transform:uppercase; font:900 28px var(--display); }
+  #rosterClose { background:transparent; border:0; color:var(--chalk); font:24px var(--ui); min-width:44px; min-height:44px; cursor:pointer; }
+  #rosterList { overflow:auto; overscroll-behavior:contain; min-height:0; }
+  #rosterList button { display:flex; align-items:center; gap:12px; width:100%; min-height:46px; padding:7px 10px; border:0; border-bottom:1px solid var(--line); background:transparent; color:var(--chalk); text-align:left; font:600 15px var(--ui); cursor:pointer; }
+  #rosterList button svg { width:25px; height:32px; flex:none; }
+  #rosterList button small { margin-left:auto; color:var(--muted); }
+  #rosterList button[aria-current=true] { background:#203843; box-shadow:inset 3px 0 var(--teal); }
+  #rosterList button:hover:enabled, #rosterList button:focus-visible { background:#293951; }
+  #rosterList button:disabled { opacity:.5; cursor:default; }
+  .roster-trigger { cursor:pointer; text-align:left; }
+  .roster-trigger::after { content:'⌄'; float:right; color:var(--amber); }
   #setup details summary { cursor:pointer;color:var(--muted);font-size:16px; }
   #setup details .how { margin-top:10px; }
   .setup-actions { position:sticky;bottom:-12px;background:#111c30;padding:10px 0;z-index:2; }
@@ -341,6 +355,20 @@
   .how { font-size: 16px; line-height: 1.45; color: var(--muted); max-width: 62ch; margin: 0; }
   .how b { color: var(--chalk); font-weight: 600; }
   .lbl2 { font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  #nets { align-items:safe center; }
+  #netsOptions { display:grid; gap:16px; }
+  #netsOptions fieldset { --pick:var(--amber); margin:0; padding:0; border:0; min-width:0; }
+  #netsOptions fieldset:first-child { --pick:var(--teal); }
+  #netsOptions legend { margin-bottom:6px; padding:0; font:700 12px var(--ui); letter-spacing:.12em; text-transform:uppercase; color:var(--muted); }
+  .nets-choices { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,96px),1fr)); gap:6px; }
+  .nets-choices label { position:relative; cursor:pointer; }
+  .nets-choices input { position:absolute; opacity:0; inset:0; width:100%; height:100%; margin:0; cursor:pointer; }
+  .nets-choices span { display:grid; place-items:center; min-height:44px; padding:0 5px; border:1px solid var(--line); border-radius:4px;
+    background:#172139; font:700 17px var(--display); letter-spacing:.04em; text-transform:uppercase; }
+  .nets-choices label:hover span { border-color:var(--pick); }
+  .nets-choices input:checked + span { color:var(--night); background:var(--pick); border-color:var(--pick); box-shadow:inset 0 -3px rgba(0,0,0,.22); }
+  .nets-choices input:focus-visible + span { outline:2px solid var(--chalk); outline-offset:2px; }
+  #netsResult:empty { display:none; }
   .opts { display: flex; flex-wrap: wrap; gap: 8px; }
   .opt { background: rgba(243, 239, 228, 0.06); border: 1px solid rgba(243, 239, 228, 0.25); color: var(--chalk);
          padding: 8px 12px; font: 600 16px var(--ui); border-radius: 4px; cursor: pointer; text-align: left; }
@@ -820,6 +848,7 @@
         <button class="level" type="button" id="goSeries"><span class="n">Mini series</span><span class="d">Best of 3 or 5 matches</span>
           <span class="s">One opponent · series trophy · player of the series</span><span class="best" id="seriesLine"></span></button>
         <button class="level" type="button" id="goTournament"><span class="n">Tournaments</span><span class="d">Nations Cup · Club League</span><span class="best" id="tournamentLine"></span></button>
+        <button class="level" type="button" id="goNets"><span class="n">Nets</span><span class="d">Practise six balls · repeat any delivery</span></button>
         <button class="level" type="button" id="goChase"><span class="n">Challenges</span><span class="d">Daily · challenge a friend</span>
           <span class="s">Quick chases: Gully · Club · Super Over</span><span class="best"></span></button>
       </div>
@@ -844,9 +873,9 @@
       <div><div class="lbl2">Teams</div><div class="opts" id="leaguePick"></div></div>
       <div><div class="lbl2">Format</div><div class="opts" id="formatPick"></div></div>
       <div class="vsrow" id="vsRow">
-        <label class="tcard"><span class="lbl2">Your team</span><span class="tc" id="cardA"></span><select class="team-select" id="teamA" aria-label="Your team"></select></label>
+        <div class="tcard"><span class="lbl2">Your team</span><button class="tc" id="cardA" type="button" aria-haspopup="dialog"></button></div>
         <div class="vs" id="vsMark">VS</div>
-        <label class="tcard" id="opponentField"><span class="lbl2">Opponent</span><span class="tc" id="cardB"></span><select class="team-select" id="teamB" aria-label="Opponent"></select></label>
+        <div class="tcard" id="opponentField"><span class="lbl2">Opponent</span><button class="tc" id="cardB" type="button" aria-haspopup="dialog"></button></div>
       </div>
       <details id="squadsBox"><summary>Squads &amp; player ratings</summary><div class="group-tables" id="squads"></div></details>
       <p class="how" id="competitionInfo" hidden></p>
@@ -941,8 +970,8 @@
       <div class="setsec">
         <div class="sechead">Team</div>
         <div class="myp-grid">
-          <label><span class="lbl2">Plays for</span><select id="mypTeam" class="myp-input"></select></label>
-          <label><span class="lbl2">In place of</span><select id="mypSlot" class="myp-input"></select></label>
+          <div><span class="lbl2">Plays for</span><button id="mypTeam" type="button" class="myp-input roster-trigger" aria-haspopup="dialog"></button></div>
+          <div><span class="lbl2">In place of</span><button id="mypSlot" type="button" class="myp-input roster-trigger" aria-haspopup="dialog"></button></div>
         </div>
       </div>
       <div class="setsec">
@@ -997,6 +1026,42 @@
     <details id="tournamentStatsBox" hidden><summary>Players in your matches</summary><div class="stats" id="tournamentAward"></div><div class="setup-grid" id="tournamentStats"></div></details>
     <details><summary>Fixtures &amp; results</summary><div class="fixture-list" id="tournamentFixtures"></div></details>
   </div></div>
+  <dialog id="rosterPicker" aria-labelledby="rosterTitle">
+    <div class="roster-heading"><h2 id="rosterTitle"></h2><button id="rosterClose" type="button" aria-label="Close">×</button></div>
+    <input id="rosterSearch" class="myp-input" type="search" aria-label="Filter list" placeholder="Filter by name" autocomplete="off">
+    <div id="rosterList"></div>
+  </dialog>
+  <div id="nets" class="screen" hidden>
+    <div class="card">
+      <div class="title sm">BATTING <span>NETS</span></div>
+      <form id="netsOptions">
+        <fieldset><legend>Batter</legend>
+          <div class="nets-choices">
+            <label><input type="radio" name="netsHand" value="right" checked><span>Right-handed</span></label>
+            <label><input type="radio" name="netsHand" value="left"><span>Left-handed</span></label>
+          </div>
+        </fieldset>
+        <fieldset><legend>Bowling style</legend>
+          <div class="nets-choices">
+            <label><input type="radio" name="netsStyle" value="F" checked><span>Fast</span></label>
+            <label><input type="radio" name="netsStyle" value="O"><span>Off-spin</span></label>
+            <label><input type="radio" name="netsStyle" value="L"><span>Leg-spin</span></label>
+          </div>
+        </fieldset>
+        <fieldset><legend>Length</legend>
+          <div class="nets-choices">
+            <label><input type="radio" name="netsLength" value="Good length" checked><span>Good length</span></label>
+            <label><input type="radio" name="netsLength" value="Full"><span>Full</span></label>
+            <label><input type="radio" name="netsLength" value="Short"><span>Short</span></label>
+            <label><input type="radio" name="netsLength" value="Yorker"><span>Yorker</span></label>
+            <label><input type="radio" name="netsLength" value="Mixed"><span>Mixed</span></label>
+          </div>
+        </fieldset>
+      </form>
+      <p id="netsResult" aria-live="polite"></p>
+      <div class="row"><button class="btn" id="netsNext" type="button">Start six balls</button><button class="btn ghost" id="netsRepeat" type="button" hidden>Repeat last ball</button><button class="btn ghost" id="netsExit" type="button">Main menu</button></div>
+    </div>
+  </div>
   <div id="chaseMenu" class="screen" hidden>
     <div class="card">
       <div class="title sm">CHALL<span>ENGES</span></div>
@@ -1065,6 +1130,7 @@
       <div class="tag" id="pauseText"></div>
       <div class="row">
         <button class="btn" id="resume" type="button">Resume</button>
+        <button class="btn ghost" id="netsPauseRepeat" type="button" hidden>Repeat last ball</button>
         <button class="btn ghost" id="autoOver" type="button">Auto-play this over</button>
         <button class="btn ghost" id="autoInn" type="button">Simulate this innings</button>
         <button class="btn ghost" id="autoBowlToggle" type="button">Computer bowls for me</button>
@@ -1407,10 +1473,11 @@ function fieldTrackingView(play, bp, aspect) {
     ? samplePath(play.fp.path,Math.min(play.t+.18,res.t??Infinity)) : bp;
   const lead=lerp3(bp,ahead,.65);
   let tgt=[lead[0],Math.max(.5,lead[1]*.7),lead[2]], focus=0;
-  if(f && res.t!=null && !['four','six'].includes(res.kind) && Math.hypot(f.pos[0],f.pos[2])>14) {
-    const release=res.kind==='caught'?Infinity:res.throwStart-.1;
-    focus=smooth(clamp((play.t-(res.t-.45))/.45,0,1))
-      *(1-smooth(clamp((play.t-release)/.55,0,1)));
+  if(f && res.t!=null && !['four','six'].includes(res.kind) && (res.kind==='runs' || Math.hypot(f.pos[0],f.pos[2])>14)) {
+    const release=res.kind==='caught'?Infinity:(res.throwStart ?? res.t);
+    const approach=res.kind==='runs' ? .9 : .45;
+    focus=smooth(clamp((play.t-(res.t-approach))/approach,0,1))
+      *(1-smooth(clamp((play.t-release)/.5,0,1)));
     // Keep both ball and fielder in view; never rush straight into a head close-up.
     tgt=lerp3(tgt,add(f.pos,[0,.95,0]),focus*.75);
   }
@@ -2699,12 +2766,12 @@ let lastStep = -1;
 const runupSteps = t => t < RUNUP - 0.38 ? Math.floor(t * 12 / Math.PI) : t < RUNUP - 0.13 ? 50 : t < RUNUP ? 100 : 101;
 function deliveryKeys(spin) {
   const j = spin ? 0.3 : 1, Z = PITCH - 0.6;   // release over the front foot, just behind the popping crease
-  const st = spin ? 0.7 : 1;                    // spinners: a shorter stride, more upright, a gentler follow-through
+  const st = spin ? 0.60 : 1;                    // spinners: a shorter stride, more upright, a gentler follow-through
   const fwd = [0, 0, -1];
   return [
     // the bound: up in the air, the front knee driven high, the back leg trailing
-    [-0.26, { fr: [0.05, 0.52 * j, Z + 2.08 * st], bk: [0.2, 0.45 * j, Z + 2.88 * st], pel: [0.12, lerp(0.95, 1.24, j), Z + 2.4 * st], hy: 160, sy: 140, lean: 7, side: 0,
-              hL: [0.02, 1.55, Z + 2.12 * st], hR: [0.22, 1.48, Z + 2.25 * st], kpL: fwd, kpR: fwd, epL: [0, -0.5, -1], epR: [0.5, -1, 0] }],
+    [-0.26, { fr: [0.05, 0.52 * j, Z + 2.08 * st], bk: [0.2, 0.45 * j, Z + 2.88 * st], pel: [0.12, lerp(0.95, 1.24, j), Z + 2.4 * st], hy: 160, sy: spin ? 150 : 140, lean: spin ? 3 : 10, side: 0,
+              hL: [0.02, spin ? 1.38 : 1.62, Z + 2.12 * st], hR: [0.22, spin ? 1.35 : 1.48, Z + 2.25 * st], kpL: fwd, kpR: fwd, epL: [0, -0.5, -1], epR: [0.5, -1, 0] }],
     [-0.13, { fr: [0.02, 0.3 * st, Z + 0.55 * st], bk: [0.22, 0, Z + 1.1 * st], pel: [0.12, 1.0, Z + 1.05 * st], hy: 110, sy: 95, lean: spin ? -4 : -12,
               hL: [0.05, 2.0, Z + 0.45 * st], hR: [0.32, spin ? 1.15 : 0.98, Z + 1.45 * st] }],
     [0, { fr: [0.0, 0, Z - 0.42 * st], bk: [0.25, 0.12, Z + 0.7 * st], pel: [0.08, 0.96 + (1 - st) * 0.1, Z + 0.1], hy: 150, sy: spin ? 150 : 160, lean: spin ? 8 : 12,
@@ -2774,7 +2841,7 @@ function bowlerState(deliveryTime) {
   const T = inn && inn.bowler !== null ? BOWL_TYPES[btype(bowlerP())] : BOWL_TYPES.F, spin = !!T.turn;
   const keys = spin ? DELIVERY.spin : DELIVERY.pace;
   const tr = deliveryTime ?? (phase === 'runup' ? phaseT - RUNUP : phase === 'flight' ? phaseT : phase === 'result' ? (ball?.t ?? 3) + phaseT : phase === 'play' ? 3 : null);
-  const speed = spin ? 4.6 : T.speed[0] > 130 ? 8.5 : 7.4;
+  const speed = spin ? 4.1 : T.speed[0] > 130 ? 9.0 : 7.4;
   const takeoff = -0.38, apex = keys[0][0], landing = keys[1][0];
   const bound = keys[0][1].pel[2] + speed * (apex - takeoff);
   // he builds up speed from his mark (from 40% of full pace, rising fastest early) and reaches full pace at the bound
@@ -2933,15 +3000,21 @@ function mypRemove(i) {
   ask('Remove ' + m.name + '?', m.replaced + ' goes back into ' + TEAMS.find(t => t.id === m.team).name + '. ' + m.name + '\'s records stay. The game reloads.', 'Remove', () => mypStore(MYPS.filter((_, k) => k !== i)));
 }
 function renderMyp() {
-  const f = mypForm, nations = TEAMS.length - (window.CricketFranchises || []).length;
-  const opt = t => '<option value="' + t.id + '">' + esc(t.name) + '</option>';
-  $('mypTeam').innerHTML = '<optgroup label="Nations">' + TEAMS.slice(0, nations).map(opt).join('') + '</optgroup><optgroup label="Clubs">' + TEAMS.slice(nations).map(opt).join('') + '</optgroup>';
-  $('mypTeam').value = f.team;
-  const t = TEAMS.find(t => t.id === f.team);
-  $('mypSlot').innerHTML = t.players.map((_, k) => { const p = mypOrig(t, k), mine = mypTakenBy(t.id, k);
-    return '<option value="' + k + '"' + (mine >= 0 ? ' disabled' : '') + '>' + (k + 1) + '. ' + esc(p.name) + (mine >= 0 ? ' · your ' + esc(MYPS[mine].name) + ' is here' : ' · bat ' + p.bat +
-      (p.type ? ' · ' + BOWL_TYPES[p.type].name.toLowerCase() + ' ' + p.bowl : '') + (k === t.wk ? ' · keeper' : '')) + '</option>'; }).join('');
-  $('mypSlot').value = f.slot;
+  const f = mypForm, t = TEAMS.find(team => team.id === f.team);
+  const slots = t.players.map((_, k) => {
+    const p = mypOrig(t, k), mine = mypTakenBy(t.id, k);
+    const detail = mine >= 0 ? 'your ' + MYPS[mine].name + ' is here' : 'bat ' + p.bat +
+      (p.type ? ' · ' + BOWL_TYPES[p.type].name.toLowerCase() + ' ' + p.bowl : '') + (k === t.wk ? ' · keeper' : '');
+    return {value:k, name:(k + 1) + '. ' + p.name, detail, disabled:mine >= 0};
+  });
+  $('mypTeam').textContent = t.name;
+  $('mypTeam').setAttribute('aria-label','Plays for: ' + t.name);
+  $('mypTeam').onclick = () => openRoster('Plays for', TEAMS.map(team => ({value:team.id, name:team.name, team, detail:team.league==='ipl'?'Club':'Nation'})), f.team, value => {
+    f.team = value; f.slot = mypFreeSlot(value, 5); renderMyp();
+  });
+  $('mypSlot').textContent = slots[f.slot]?.name || 'Choose player';
+  $('mypSlot').setAttribute('aria-label','In place of: ' + $('mypSlot').textContent);
+  $('mypSlot').onclick = () => openRoster('In place of', slots, f.slot, value => { f.slot = value; renderMyp(); });
   optButtons('mypHand', [{ v: false, html: 'Right-handed' }, { v: true, html: 'Left-handed' }], it => it.v === f.left, it => { f.left = it.v; renderMyp(); });
   optButtons('mypType', MYP_BOWL, it => it.v === f.type, it => { f.type = it.v; renderMyp(); });
   $('mypSkill').value = mypRatings(f).bat;
@@ -3135,8 +3208,6 @@ $('mypList').addEventListener('click', e => { const b = e.target.closest('button
   if (b.dataset.edit) openMyp(+b.dataset.edit); else if (b.dataset.remove) mypRemove(+b.dataset.remove); });
 $('mypBack').addEventListener('click', () => openMypList());
 $('mypName').addEventListener('input', () => { mypForm.name = $('mypName').value; });
-$('mypTeam').addEventListener('change', () => { mypForm.team = $('mypTeam').value; mypForm.slot = mypFreeSlot(mypForm.team, 5); renderMyp(); });
-$('mypSlot').addEventListener('change', () => { mypForm.slot = +$('mypSlot').value; });
 $('mypSkill').addEventListener('input', () => { mypForm.bat = +$('mypSkill').value; mypSkillText(); });
 $('mypFaces').addEventListener('click', e => { const b = e.target.closest('.myp-face'); if (b) { mypForm.face = +b.dataset.i; renderMyp(); } });
 $('mypNum').addEventListener('input', () => { mypForm.num = +$('mypNum').value; });
@@ -3675,7 +3746,12 @@ function adaptField(preset) {
   return f;
 }
 function newFielders() {
-  const preset = limitField(adaptField(limitField(FIELDS[inn ? inn.field : 'balanced'])));
+  let base = FIELDS[inn ? inn.field : 'balanced'];
+  if (inn?.userBats && M?.mode === 'match' && M.diff.plan > 0 && !PRACTICE) {
+    // Keep point square and move cover a little wider to guard the channel.
+    base = base.map(f => f[0] === 'cover' ? ['cover', -62, 25] : f);
+  }
+  const preset = limitField(adaptField(limitField(base)));
   const haveBowler = inn && inn.bowler !== null;
   const spin = haveBowler && isSpin(bowlerP());
   const team = inn ? inn.bowl : null;
@@ -3846,6 +3922,19 @@ function aiSpec(bp, mult) {
                 : (r < 0.12 ? rand(0.6, 1.6) : r < 0.36 ? rand(1.8, 3.6) : r < 0.78 ? rand(4.2, 6.8) : rand(7.2, 9.8));
   // how cleverly it bowls at you: 0 easy (the odd gift), 1 medium, 2 hard (yorkers at the death, an answer to a boundary)
   const plan = inn && inn.userBats && !chase ? (M.diff.plan ?? 1) : 1;
+  // The bowler and over determine when the three-ball setup begins, including
+  // after resuming a saved over. The other balls allow individual variations.
+  const overNo = Math.floor(inn.balls / 6);
+  const startSlot = Math.floor(nameFrac((bp.key || bp.name) + '/' + overNo) * 9973) % 4;
+  const slot = inn.balls % 6 - startSlot;
+  const sequence = M.mode === 'match' && inn.userBats && plan > 0 && !PRACTICE && slot >= 0 && slot <= 2;
+  let plannedLine, plannedVariation;
+  if (sequence) {
+    const payoff = slot === 2;
+    plannedLine = payoff ? rand(-.15, .02) : rand(-.46, -.27);
+    pz = payoff ? rand(3.2, 4.3) : spin ? rand(4.1, 5.4) : rand(4.9, 6.4);
+    plannedVariation = payoff ? (spin ? (type === 'O' ? 4 : 3) : 4) : 0;
+  }
   let gift = 0, quicker = false;
   if (plan === 2) {
     const last = String(inn.over[inn.over.length - 1]), hit = last === '4' || last === '6';
@@ -3854,6 +3943,7 @@ function aiSpec(bp, mult) {
   } else if (plan === 0 && Math.random() < 0.05) { gift = Math.random() < 0.5 ? 1 : 2; pz = gift === 1 ? rand(2.4, 3.4) : rand(7.5, 9); }
   pz += rand(-1, 1) * (1 - s) * 2.2;
   let line = [-0.5, -0.32, -0.15, 0, 0.12][(Math.random() * 5) | 0] + rand(-0.04, 0.04) + rand(-1, 1) * (1 - s) * 0.35;
+  if (sequence) line = plannedLine + rand(-.16, .16) * (1 - s);
   if (!chase && Math.random() < (1 - s) * 0.07) line = Math.random() < 0.6 ? rand(-1.3, -1.05) : rand(0.85, 1.05);   // a wide
   if (gift) line = gift === 1 ? rand(0.05, 0.2) : rand(-0.7, -0.5);   // a half-volley on the pads, or short and wide
   pz = clamp(pz, 0.3, 11);
@@ -3869,7 +3959,7 @@ function aiSpec(bp, mult) {
   // across the whole range felt like a slower ball every other ball)
   const own = T.speed[0] + (T.speed[1] - T.speed[0]) * nameFrac(bp.key || bp.name);
   const kmh = M.diff.speed ? rand(M.diff.speed[0], M.diff.speed[1]) : (own + rand(-1.5, 1.5)) * (0.95 + 0.05 * clamp(mult, 0, 1.2));
-  let vi = chase ? 0 : quicker ? 2 : Math.random() < [0.12, 0.25, 0.38][plan] ? 1 + ((Math.random() * (T.vars.length - 1)) | 0) : 0;
+  let vi = chase ? 0 : quicker ? 2 : plannedVariation !== undefined ? plannedVariation : Math.random() < [0.12, 0.25, 0.38][plan] ? 1 + ((Math.random() * (T.vars.length - 1)) | 0) : 0;
   // slower balls against YOU are rationed (slowerAllowed); other variations stay
   if (vi && SLOWER.has(T.vars[vi]) && inn && inn.userBats && !chase) {
     if (!slowerAllowed(plan)) { const others = T.vars.map((v, k) => k).filter(k => k && !SLOWER.has(T.vars[k])); vi = others.length ? others[(Math.random() * others.length) | 0] : 0; }
@@ -3931,6 +4021,10 @@ function swing(loft, pressT, aim, w, you = false) {   // you: the player's own s
   const spinB = !!(BOWL_TYPES[ball.type] || {}).turn, isDef = !!(aim && aim.defend);
   const preFam = aimed ? strokeFamily(wrapA(aim.angle), loft && !isDef, isDef, isDef, ball.short, spinB, atBat, you) : null;
   w *= { rsweep: 0.85, hook: 0.9, lcut: 1.1, glance: loft ? 1 : 1.1 }[preFam] || 1;
+  if (you && !isDef && (M.mode === 'match' || M.mode === 'nets') && M.diff.plan > 0 && ball.length === 'Good length' && !SLOWER.has(ball.vname)) {
+    w *= M.diff.plan === 2 ? .81 : .88;
+    if (loft) w *= .91;
+  }
   if (ball.charge) w *= high ? 0.8 : 1.15;                                              // down the pitch: a half-volley, unless it's a bouncer
   const okW = 0.1 * w, edgeW = 0.15 * w;
   const visualStart=batterPose(null).pose;
@@ -4650,7 +4744,17 @@ function beginBall(delay, announce) {
   idle = phase === 'wait' && -phaseT >= 2.4 && (new URLSearchParams(location.search).get('idle') === '1' || (idleBalls >= 5 && Math.random() < 0.33))
     ? { t0: clock, len: -phaseT, w: 0, last: clock } : null;
   if (idle) idleBalls = 0;
-  if (inn.userBats) { preBall = buildDelivery(aiSpec(bowlerP(), M.diff.aiBowl)); preBall.noBall = overstepped(bowlerP()); }   // so its bounce mark shows before the run-up
+  if (M.mode === 'nets') {
+    const n = M.nets;
+    if (n.repeat) n.current = n.last;
+    else {
+      const type = btype(bowlerP()), range = BOWL_TYPES[type].speed;
+      const length = n.length === 'Mixed' ? NETS_CYCLE[inn.balls % NETS_CYCLE.length] : n.length;
+      const pz = rand(...NETS_LENGTHS[length]);
+      n.current = buildDelivery({ type, kmh: rand(...range), pz, px: lineToPitch(rand(-.38, .04), pz), vi: 0 });
+    }
+    preBall = structuredClone(n.current);
+  } else if (inn.userBats) { preBall = buildDelivery(aiSpec(bowlerP(), M.diff.aiBowl)); preBall.noBall = overstepped(bowlerP()); }   // so its bounce mark shows before the run-up
   showControls();
   updateScore();
 }
@@ -4659,6 +4763,10 @@ function beginBall(delay, announce) {
 function afterBall() {
   // the non-striker walks back in, unless they ran (he is in a crease already) or the over is done (the ends change)
   nsBackNext = ball && !(ball.play && ball.play.res.kind === 'runs' && ball.play.res.runs > 0) && !(inn && inn.overDone) ? NS_BACK : 0;
+  if (M.mode === 'nets') {
+    if (inn.balls < inn.maxBalls) { M.nets.repeat = false; return beginBall(.5, false); }
+    phase = 'break'; showControls(); netsMenu(true); return;
+  }
   if (M.autoplay) { const m = M.autoplay; M.autoplay = null; return autoRun(m); }
   if (inningsOver()) return endInnings();
   if (inn.overDone) return startOver();
@@ -4770,6 +4878,13 @@ function updateScore() {
       $('bowlerLine').textContent = bowlerP().name + ' ' + b.wkts + '–' + b.runs + ' (' + ovStr(b.balls) + ')';
     } else $('bowlerLine').textContent = '';
     $('batline').hidden = false;
+  } else if (M.mode === 'nets') {
+    $('levelName').textContent = 'Batting nets';
+    $('targetText').textContent = M.nets.length === 'Mixed' && M.nets.current
+      ? 'Mixed · ' + M.nets.current.length : M.nets.length;
+    $('targetSub').textContent = BOWL_TYPES[M.nets.type].name;
+    nt.textContent = i.balls + ' of 6';
+    $('batline').hidden = true;
   } else {
     $('levelName').textContent = level.name;
     $('targetText').textContent = 'Target ' + level.target;
@@ -4877,6 +4992,17 @@ function lockFeedback(e) {
 function finishBall(o, line) {
   if (ff && !(M.watchFast && autoBowling()) && !M.autoplay) setFF(false);   // a tap sped up the fielding only: the result, its cards and moments play normally
   const i = inn, chaseMode = M.mode === 'chase';
+  if (M.mode === 'nets') {
+    const n = M.nets;
+    n.result = (n.repeat ? 'Repeat' : 'Ball ' + (i.balls + 1)) + ' · ' + (line || (o.out ? 'Out' : plural(o.runs || 0, 'run')));
+    if (!n.repeat) {
+      n.last = n.current;
+      i.balls++; i.runs += o.runs || 0; if (o.out) i.wkts++;
+      i.over.push(o.out ? 'W' : String(o.runs || 0));
+    }
+    updateScore(); showBanner(n.result, '', 'small');
+    phase = 'result'; phaseT = 0; return;
+  }
   o = lawful(o);
   const k = o.out && o.out.how === 'run out' && o.runs % 2 === 0 ? i.non : i.striker;   // (a run out can be the non-striker)
   if (o.notOut) line = { bowled: 'Bowled', caught: 'Caught', stumped: 'Stumped' }[o.notOut] + (o.noBall ? ', but not out' : ' off the free hit');
@@ -5410,7 +5536,7 @@ function renderTabs(tabsId, cardId, sel) {
 }
 
 // ----------------------------------------------------------------------- screens
-const SCREENS = ['menu', 'setup', 'chaseMenu', 'chalIn', 'toss', 'break', 'pause', 'end', 'stats', 'tournament', 'settings', 'myplayers', 'myplayer', 'mypview'];
+const SCREENS = ['menu', 'setup', 'nets', 'chaseMenu', 'chalIn', 'toss', 'break', 'pause', 'end', 'stats', 'tournament', 'settings', 'myplayers', 'myplayer', 'mypview'];
 function showScreen(id) { if (id !== 'end') $('winningBall').hidden = true; for (const s of SCREENS) $(s).hidden = s !== id; if (id === 'menu') renderQuickLine(); syncWake(id); }
 // Keep the screen awake while a match is on (owner, 22 November 2026: phones dimmed and locked mid-chase): during play, the toss
 // and the innings break; let go on the menus, the pause menu and the end screen. The browser lets go by itself when the page is
@@ -5451,6 +5577,32 @@ function optButtons(boxId, items, isOn, onPick) {
     box.appendChild(b);
   });
 }
+function openRoster(title, entries, selected, choose) {
+  const dialog = $('rosterPicker'), search = $('rosterSearch'), list = $('rosterList');
+  $('rosterTitle').textContent = title;
+  search.value = '';
+  function filter() {
+    const query = search.value.trim().toLowerCase();
+    list.replaceChildren();
+    for (const entry of entries) {
+      if (!entry.name.toLowerCase().includes(query)) continue;
+      const row = document.createElement('button');
+      row.type = 'button'; row.disabled = !!entry.disabled;
+      row.setAttribute('aria-current', String(entry.value === selected));
+      row.innerHTML = (entry.team ? kitSVG(entry.team) : '') + '<span>' + esc(entry.name) + '</span><small>' + esc(entry.detail) + '</small>';
+      row.onclick = () => { dialog.close(); choose(entry.value); };
+      list.appendChild(row);
+    }
+    if (!list.childElementCount) list.textContent = 'No matches';
+  }
+  search.oninput = filter;
+  filter();
+  dialog.showModal();
+  const current = list.querySelector('[aria-current="true"]:enabled');
+  if (current) { current.focus(); current.scrollIntoView({block:'nearest'}); }
+}
+$('rosterClose').onclick = () => $('rosterPicker').close();
+$('rosterPicker').addEventListener('keydown', e => e.stopPropagation());
 function teamPool(league) { return TEAMS.map((t,id)=>({t,id})).filter(x=>(x.t.league==='ipl')===(league==='ipl')); }
 function renderSetup() {
   const pool=teamPool(setup.league);
@@ -5463,11 +5615,14 @@ function renderSetup() {
   $('toToss').textContent=chalSetup?'Start batting':setup.tournament?'Start tournament':setup.series?'Start series':'Go to toss';
   $('setupTitle').innerHTML=chalSetup?'CHALLENGE <span>A FRIEND</span>':(setup.tournament?'TOURNAMENT':setup.series?'SERIES':'MATCH')+' <span>SETUP</span>';
   $('formatPick').parentElement.hidden=chalSetup; $('chalNameRow').hidden=!chalSetup; if(chalSetup&&!$('chalName').value)$('chalName').value=chalMyName();
-  for(const [id,key,other] of [['teamA','a','b'],['teamB','b','a']]){
-    const el=$(id);el.innerHTML=pool.map(({t,id})=>'<option value="'+id+'">'+esc(t.name)+' · '+teamRating(t).overall+'</option>').join('');el.value=setup[key];
-    const t=TEAMS[setup[key]],r=teamRating(t),card=$(id==='teamA'?'cardA':'cardB');card.style.setProperty('--kit',t.col);
-    card.innerHTML=kitSVG(t)+'<span><div class="nm">'+esc(t.name)+'</div><div class="rt"><b>'+r.overall+'</b><span class="sub">bat '+r.bat+' · bowl '+r.bowl+'</span></div></span><span class="chev">▼</span>';
-    el.onchange=()=>{const next=+el.value;if(next===setup[other])setup[other]=setup[key];setup[key]=next;saveSetup();renderSetup();};
+  for(const [id,key,other,title] of [['cardA','a','b','Your team'],['cardB','b','a','Opponent']]){
+    const t=TEAMS[setup[key]],r=teamRating(t),card=$(id);card.style.setProperty('--kit',t.col);
+    card.innerHTML=kitSVG(t)+'<span><span class="nm">'+esc(t.name)+'</span><span class="rt" style="display:block"><b>'+r.overall+'</b><span class="sub">bat '+r.bat+' · bowl '+r.bowl+'</span></span></span><span class="chev">▾</span>';
+    card.setAttribute('aria-label',title+': '+t.name);
+    card.onclick=()=>openRoster(title,pool.map(({t,id})=>({value:id,name:t.name,team:t,detail:'OVR '+teamRating(t).overall})),setup[key],next=>{
+      if(next===setup[other])setup[other]=setup[key];
+      setup[key]=next;saveSetup();renderSetup();
+    });
   }
   $('opponentField').hidden=!!setup.tournament;
   // both XIs with each player's batting and bowling ratings (a bowler's only if he bowls); 85 and over stand out
@@ -5773,6 +5928,7 @@ function finishSeriesNow() {
 // can only be rematched outside the series, so its recorded result is never duplicated.
 function rematch(standalone = false) {
   if (!M) return;
+  if (M.mode === 'nets') { toMenu(); netsMenu(false); return; }
   const keepCup=!standalone&&phase!=='over';
   const previous = M, chase = M.mode === 'chase', sr = !standalone && phase !== 'over' ? M.series : null;
   const cfg = !chase && {a:TEAMS.indexOf(M.teams[0]),b:TEAMS.indexOf(M.teams[1]),overs:M.overs,
@@ -5944,6 +6100,30 @@ function beginMatch(userBatsFirst) {
   M.innings = [userBatsFirst ? newInnings(U, O, mb, 10, null, true) : newInnings(O, U, mb, 10, null, false)];
   startInnings(0);
 }
+const NETS_LENGTHS = { Yorker: [.9, 1.5], Full: [2.2, 3.6], 'Good length': [4.3, 6.3], Short: [7.3, 8.6] };
+const NETS_CYCLE = Object.keys(NETS_LENGTHS);
+function netsMenu(done) {
+  $('netsNext').textContent = done ? 'Start another six' : 'Start six balls';
+  $('netsRepeat').hidden = !done;
+  $('netsResult').textContent = done ? M.nets.result + ' · ' + inn.balls + '/6 completed' : '';
+  showScreen('nets');
+}
+function netsDelivery(repeat) {
+  if (M?.mode !== 'nets' || (!repeat && inn.balls >= 6)) {
+    const choices = $('netsOptions').elements;
+    const type = choices.netsStyle.value;
+    const left = choices.netsHand.value === 'left';
+    const bat = { ...YOU, players: YOU.players.map(p => ({ ...p, left })) };
+    M = { mode: 'nets', overs: 1, cur: 0, teams: [bat, CHASE_OPP], diff: DIFFS[1], cond: {g: 0, t: 0, s: 0, p: 0},
+      nets: {type, length: choices.netsLength.value}, innings: [] };
+    inn = newInnings(bat, CHASE_OPP, 6, 10, null, true);
+    M.innings.push(inn);
+    inn.bowler = CHASE_OPP.players.findIndex(p => p.type === type);
+    setPace(); commentary.reset(); hideBatCard();
+  }
+  M.nets.repeat = repeat;
+  paused = false; showScreen(null); beginBall(.5, false);
+}
 function startChase(lv) {
   level = lv;
   M = { mode: 'chase', overs: lv.balls / 6, teams: [YOU, CHASE_OPP], innings: [], cur: 0, autoplay: null,
@@ -6011,6 +6191,7 @@ function openPause() {
   $('pauseText').textContent = i.bat.name + ' ' + i.runs + '/' + i.wkts + ' after ' + ovStr(i.balls) + ' overs' +
     (i.target ? ', need ' + Math.max(0, i.target - i.runs) + ' off ' + (i.maxBalls - i.balls) + '.' : '.');
   const match = M.mode === 'match';
+  $('netsPauseRepeat').hidden = M.mode !== 'nets' || !M.nets.last;
   $('autoOver').hidden = !match; $('autoInn').hidden = !match;
   $('autoInn').textContent = i.userBats ? 'Simulate the rest of your innings' : 'Simulate the rest of their innings';
   $('autoBowlToggle').hidden = !match;
@@ -8048,7 +8229,7 @@ const DIR_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'Ke
 window.addEventListener('keydown', e => {
   if (e.target && e.target.closest && e.target.closest('input, select, textarea')) return;   // typing (My player's name)
   if (e.code === 'Escape' || e.code === 'KeyP') { if (paused) resume(); else openPause(); return; }
-  if (!M || paused) return;
+  if (!M || paused || (M.mode === 'nets' && phase === 'break')) return;
   if (phase === 'pick') { if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); pickGo(); } return; }
   if (['Space', 'Enter', 'KeyS'].includes(e.code) && !e.repeat && skipGap()) { e.preventDefault(); return; }
   const batting = inn && inn.userBats;
@@ -8110,6 +8291,11 @@ function renderQuickLine() { const a = TEAMS[setup.a], b = TEAMS[setup.b]; if (a
 $('goQuick').addEventListener('click', () => { audio(); setup.series = 0; setup.tournament = false; cupReplaceArmed = false; startTossOne(); });
 renderQuickLine();
 $('goMatch').addEventListener('click', () => { audio(); chalSetup = false; setup.series = 0; setup.tournament=false; cupReplaceArmed=false; renderSetup(); showScreen('setup'); });
+$('goNets').addEventListener('click', () => { audio(); netsMenu(false); });
+$('netsNext').addEventListener('click', () => netsDelivery(false));
+$('netsRepeat').addEventListener('click', () => netsDelivery(true));
+$('netsPauseRepeat').addEventListener('click', () => netsDelivery(true));
+$('netsExit').addEventListener('click', toMenu);
 $('goChase').addEventListener('click', () => { audio(); renderLevels(); showScreen('chaseMenu'); });
 renderDailyLine();
 chalFromHash();   // opened from a challenge or result link
@@ -8148,7 +8334,7 @@ $('autoBowlToggle').addEventListener('click', () => { const on = !M.autoBowl; re
 $('resume').addEventListener('click', resume);
 $('autoOver').addEventListener('click', () => requestAuto('over'));
 $('autoInn').addEventListener('click', () => requestAuto('innings'));
-$('quit').addEventListener('click', () => ask('Quit this match?', M && M.mode === 'match' ? 'You can carry on later from the menu (it continues from the start of this over).' : 'This chase will end.', 'Quit', toMenu));
+$('quit').addEventListener('click', () => ask('Quit this match?', M && M.mode === 'match' ? 'You can carry on later from the menu (it continues from the start of this over).' : M?.mode === 'nets' ? 'This practice session will end.' : 'This chase will end.', 'Quit', toMenu));
 // ask(question, why, yes label, then): a yes/cancel box over the menu (Escape or Cancel closes it)
 let askThen = null;
 function ask(q, why, yes, then) { $('askQ').textContent = q; $('askWhy').textContent = why; $('askYes').textContent = yes; askThen = then; $('ask').hidden = false; $('askYes').focus(); }
