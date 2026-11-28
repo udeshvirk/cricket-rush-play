@@ -1210,6 +1210,7 @@
 <script src="player-production/stokes-recordings.js"></script>
 <script src="player-production/brook-recordings.js"></script>
 <script src="player-production/helicopter-recordings.js"></script>
+<script src="player-production/inside-out-recordings.js"></script>
 <script src="player-production/walkoff-recordings.js"></script>
 <script src="player-production/diagnostics.js"></script>
 <script src="commentary.js"></script>
@@ -2188,7 +2189,7 @@ function strokeFamily(a, loft, defend, push, short, spin, at, playerStroke = fal
 function strokeKeys(sw) {   // every stroke family has staged key poses in player-production/motion.js
   // (keep the random stream as it was, so deliveries play out the same)
   if (!sw.vary) sw.vary = { l: rand(-4, 4), y: rand(-7, 7), h: [rand(-0.08, 0.08), rand(-0.1, 0.1), rand(-0.06, 0.06)], f: rand(-0.03, 0.05), hold: rand(0.8, 1.3) };
-  const family = isGroundCover(sw) ? 'coverDrive' : ({ scoop: 'sweep', helicopter: 'flick' }[sw.fam] || sw.fam);
+  const family = isGroundCover(sw) ? 'coverDrive' : ({ scoop: 'sweep', helicopter: 'flick', insideOut: 'drive' }[sw.fam] || sw.fam);
   return CricketMotion[family + 'Keys']({ start: sw.visualStart || PREPARE, target: sw.target, aim: sw.intent, loft: sw.loft, short: sw.short, stance: styled(STANCE, batStyle()), impact: SWING_LAG });
 }
 // The bat must never pass through the batter. Body parts as capsules (from, to, radius in metres, with pads, shirt and
@@ -4045,7 +4046,9 @@ function swing(loft, pressT, aim, w, you = false) {   // you: the player's own s
   const helicopter = you && M?.mode === 'nets' && aimed && loft && !isDef && ball.length === 'Yorker' &&
     aim.angle >= 35 && aim.angle <= 75 && atBat[0] >= -.12 && atBat[0] <= .35 && atBat[1] <= .38;
   let preFam = null;
-  if (helicopter) preFam = 'helicopter';
+  if (you && M?.mode === 'nets' && ball.charge && spinB && ball.length === 'Good length' &&
+      aimed && loft && !isDef && aim.angle >= -65 && aim.angle <= -25) preFam = 'insideOut';
+  else if (helicopter) preFam = 'helicopter';
   else if (scoop) preFam = 'scoop';
   else if (stokesReverse) preFam = 'rsweep';
   else if (aimed) preFam = strokeFamily(wrapA(aim.angle), loft && !isDef, isDef, isDef, ball.short, spinB, atBat, you);
@@ -4126,7 +4129,7 @@ function swing(loft, pressT, aim, w, you = false) {   // you: the player's own s
 const WRONG_LINE = { off: -0.50, leg: 0.45, missGap: 0.10 };
 function shotReach(family, at, intent) {
   const drive = family === 'drive' || family === 'bdrive';
-  const offSide = ['cut', 'lcut', 'ucut', 'rsweep'].includes(family) || (drive && intent < -10);
+  const offSide = ['cut', 'lcut', 'ucut', 'rsweep', 'insideOut'].includes(family) || (drive && intent < -10);
   const legSide = ['flick', 'glance', 'slog', 'pull', 'hook', 'sweep'].includes(family) || (drive && intent > 10);
   const [x, y] = at;
   if (offSide && x > WRONG_LINE.leg)
@@ -4159,7 +4162,7 @@ function shotName(a, loft, defend, push, family) {
   if (family === 'sweep') return loft ? 'Lofted sweep' : 'Sweep';
   if (family === 'rsweep' && loft) return 'Lofted reverse sweep';
   if (family === 'glance' && loft) return 'Flick over fine leg';
-  const names={helicopter:'Helicopter',scoop:'Scoop',rsweep:'Reverse sweep',glance:'Leg glance',lcut:'Late cut',ucut:'Upper cut',
+  const names={insideOut:'Inside-out loft',helicopter:'Helicopter',scoop:'Scoop',rsweep:'Reverse sweep',glance:'Leg glance',lcut:'Late cut',ucut:'Upper cut',
     cut:'Square cut',pull:'Pull',hook:'Hook',bdrive:'Back-foot drive',flick:'Flick',slog:'Slog',
     fdef:'Forward defence',bdef:'Back-foot defence',push:'Push'};
   if(names[family]) return loft && ['pull','hook','bdrive','flick'].includes(family)
@@ -6151,7 +6154,14 @@ const NETS_CYCLE = Object.keys(NETS_LENGTHS);
 function netsStrokeHint() {
   const picks = $('netsOptions').elements, hint = $('netsStrokeHint');
   const length = picks.netsLength.value, left = picks.netsHand.value === 'left';
-  hint.hidden = length !== 'Full' && length !== 'Yorker';
+  const insideOut = length === 'Good length' && picks.netsStyle.value !== 'F';
+  hint.hidden = length !== 'Full' && length !== 'Yorker' && !insideOut;
+  if (insideOut) {
+    hint.textContent = 'Inside-out loft · ' + (touch
+      ? 'Tap Step Out early, select Loft and swipe ' + (left ? 'down-right.' : 'down-left.')
+      : 'Press D early, then hold ↓ + ' + (left ? '→' : '←') + ' and press Shift + S.');
+    return;
+  }
   if (length === 'Yorker') {
     hint.textContent = 'Helicopter · On middle or leg, ' + (touch
       ? 'select Loft and swipe ' + (left ? 'down-left.' : 'down-right.')
