@@ -1209,6 +1209,7 @@
 <script src="player-production/sweep-recordings.js"></script>
 <script src="player-production/stokes-recordings.js"></script>
 <script src="player-production/brook-recordings.js"></script>
+<script src="player-production/helicopter-recordings.js"></script>
 <script src="player-production/walkoff-recordings.js"></script>
 <script src="player-production/diagnostics.js"></script>
 <script src="commentary.js"></script>
@@ -2187,7 +2188,7 @@ function strokeFamily(a, loft, defend, push, short, spin, at, playerStroke = fal
 function strokeKeys(sw) {   // every stroke family has staged key poses in player-production/motion.js
   // (keep the random stream as it was, so deliveries play out the same)
   if (!sw.vary) sw.vary = { l: rand(-4, 4), y: rand(-7, 7), h: [rand(-0.08, 0.08), rand(-0.1, 0.1), rand(-0.06, 0.06)], f: rand(-0.03, 0.05), hold: rand(0.8, 1.3) };
-  const family = isGroundCover(sw) ? 'coverDrive' : sw.fam === 'scoop' ? 'sweep' : sw.fam;
+  const family = isGroundCover(sw) ? 'coverDrive' : ({ scoop: 'sweep', helicopter: 'flick' }[sw.fam] || sw.fam);
   return CricketMotion[family + 'Keys']({ start: sw.visualStart || PREPARE, target: sw.target, aim: sw.intent, loft: sw.loft, short: sw.short, stance: styled(STANCE, batStyle()), impact: SWING_LAG });
 }
 // The bat must never pass through the batter. Body parts as capsules (from, to, radius in metres, with pads, shirt and
@@ -2577,7 +2578,7 @@ function clipBody(sw, motionTime, frontLift = 0) {
     ? smooth(clamp(tc / .14, 0, 1)) : 0;
   h[1] += .075 * carry;
   const bd = carry ? norm(add(f.bd, [0, .24 * carry, 0])) : f.bd;
-  return { j, h, bd, bladeCurve: recordedBladeCurve(c), bladeTime: SWING_LAG + (ft - c.contact) / c.fps, poleL: sub(f.elL, mul(add(f.shL, f.handL), 0.5)), poleR: sub(f.elR, mul(add(f.shR, f.handR), 0.5)) };
+  return { j, h, bd, batRoll: f.batRoll, bladeCurve: recordedBladeCurve(c), bladeTime: SWING_LAG + (ft - c.contact) / c.fps, poleL: sub(f.elL, mul(add(f.shL, f.handL), 0.5)), poleR: sub(f.elR, mul(add(f.shR, f.handR), 0.5)) };
 }
 function blendBody(a, b, w) {   // joints part way from a to b (the limbs re-solved so they keep their lengths)
   if (w >= 0.999) return b; const o = {};
@@ -2754,7 +2755,7 @@ function batterPose(sw) {
   if(sw?.loft)j.head[2]-=.035*follow;
   let width = sw && clipWeight < 1 ? CricketMotion.pathWidth(sw.curve, motionTime, bd, k.batRoll || 0) : null;
   if (clipWeight > 0) {
-    const recordedWidth = CricketMotion.pathWidth(cb.bladeCurve, cb.bladeTime, bd, k.batRoll || 0);
+    const recordedWidth = CricketMotion.pathWidth(cb.bladeCurve, cb.bladeTime, bd, cb.batRoll ?? k.batRoll ?? 0);
     if (width) {
       const rollAngle = Math.atan2(dot(bd, cross(width, recordedWidth)), dot(width, recordedWidth)) * clipWeight;
       width = add(mul(width, Math.cos(rollAngle)), mul(cross(bd, width), Math.sin(rollAngle)));
@@ -4041,11 +4042,14 @@ function swing(loft, pressT, aim, w, you = false) {   // you: the player's own s
     atBat[1] <= .7 && aim.angle >= -155 && aim.angle <= -115;
   const scoop = you && M?.mode === 'nets' && aimed && !isDef && Math.abs(wrapA(aim.angle)) >= 165 &&
     ball.length === 'Full' && atBat[1] <= .7;
+  const helicopter = you && M?.mode === 'nets' && aimed && loft && !isDef && ball.length === 'Yorker' &&
+    aim.angle >= 35 && aim.angle <= 75 && atBat[0] >= -.12 && atBat[0] <= .35 && atBat[1] <= .38;
   let preFam = null;
-  if (scoop) preFam = 'scoop';
+  if (helicopter) preFam = 'helicopter';
+  else if (scoop) preFam = 'scoop';
   else if (stokesReverse) preFam = 'rsweep';
   else if (aimed) preFam = strokeFamily(wrapA(aim.angle), loft && !isDef, isDef, isDef, ball.short, spinB, atBat, you);
-  w *= { rsweep: 0.85, hook: 0.9, lcut: 1.1, glance: loft ? 1 : 1.1 }[preFam] || 1;
+  w *= { helicopter: .82, rsweep: 0.85, hook: 0.9, lcut: 1.1, glance: loft ? 1 : 1.1 }[preFam] || 1;
   if (you && !isDef && (M.mode === 'match' || M.mode === 'nets') && M.diff.plan > 0 && ball.length === 'Good length' && !SLOWER.has(ball.vname)) {
     w *= M.diff.plan === 2 ? .81 : .88;
     if (loft) {
@@ -4155,7 +4159,7 @@ function shotName(a, loft, defend, push, family) {
   if (family === 'sweep') return loft ? 'Lofted sweep' : 'Sweep';
   if (family === 'rsweep' && loft) return 'Lofted reverse sweep';
   if (family === 'glance' && loft) return 'Flick over fine leg';
-  const names={scoop:'Scoop',rsweep:'Reverse sweep',glance:'Leg glance',lcut:'Late cut',ucut:'Upper cut',
+  const names={helicopter:'Helicopter',scoop:'Scoop',rsweep:'Reverse sweep',glance:'Leg glance',lcut:'Late cut',ucut:'Upper cut',
     cut:'Square cut',pull:'Pull',hook:'Hook',bdrive:'Back-foot drive',flick:'Flick',slog:'Slog',
     fdef:'Forward defence',bdef:'Back-foot defence',push:'Push'};
   if(names[family]) return loft && ['pull','hook','bdrive','flick'].includes(family)
@@ -4783,7 +4787,8 @@ function beginBall(delay, announce) {
       const type = btype(bowlerP()), range = BOWL_TYPES[type].speed;
       const length = n.length === 'Mixed' ? NETS_CYCLE[inn.balls % NETS_CYCLE.length] : n.length;
       const pz = rand(...NETS_LENGTHS[length]);
-      n.current = buildDelivery({ type, kmh: rand(...range), pz, px: lineToPitch(rand(-.38, .04), pz), vi: 0 });
+      const line = length === 'Yorker' ? rand(-.22, .24) : rand(-.38, .04);
+      n.current = buildDelivery({ type, kmh: rand(...range), pz, px: lineToPitch(line, pz), vi: 0 });
     }
     preBall = structuredClone(n.current);
   } else if (inn.userBats) { preBall = buildDelivery(aiSpec(bowlerP(), M.diff.aiBowl)); preBall.noBall = overstepped(bowlerP()); }   // so its bounce mark shows before the run-up
@@ -6145,8 +6150,14 @@ const NETS_LENGTHS = { Yorker: [.9, 1.5], Full: [2.2, 3.6], 'Good length': [4.3,
 const NETS_CYCLE = Object.keys(NETS_LENGTHS);
 function netsStrokeHint() {
   const picks = $('netsOptions').elements, hint = $('netsStrokeHint');
-  hint.hidden = picks.netsLength.value !== 'Full';
-  const left = picks.netsHand.value === 'left';
+  const length = picks.netsLength.value, left = picks.netsHand.value === 'left';
+  hint.hidden = length !== 'Full' && length !== 'Yorker';
+  if (length === 'Yorker') {
+    hint.textContent = 'Helicopter · On middle or leg, ' + (touch
+      ? 'select Loft and swipe ' + (left ? 'down-left.' : 'down-right.')
+      : 'hold ↓ + ' + (left ? '←' : '→') + ' and press Shift + S.');
+    return;
+  }
   hint.textContent = touch ? 'Scoop · Swipe straight up.' : 'Scoop · Hold ↑ and press S.';
   if (picks.netsStyle.value !== 'F') hint.textContent += '  Lofted reverse sweep · ' + (touch
     ? 'Select Loft and swipe ' + (left ? 'up-right' : 'up-left') + ' on the ball.'
@@ -6506,7 +6517,8 @@ function update(dt) {
 
   // camera
   const HC = homeCam(); let tp = HC.pos, tt = HC.tgt, tf = HC.fov, rate = 2.5;
-  const followDelay=.3;
+  // Keep the helicopter's wrist turn and shoulder wrap in the batting view.
+  const followDelay = ball?.swing?.fam === 'helicopter' && ball.decision?.kind === 'hit' ? .56 : .3;
   if (camMode === 'chase' && ball && ball.play && ball.play.t > followDelay) {
     const bp=RP?RP.ball:liveBallPos(),view=fieldTrackingView(ball.play,bp,W/H),end=view.end;
     tp=view.pos;tt=view.tgt;tf=view.fov;rate=5;
