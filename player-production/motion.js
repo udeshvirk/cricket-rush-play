@@ -327,6 +327,22 @@
   // Two low strokes, authored around their support leg and direction of travel.
   // The reverse is not a mirrored standing drive: hands cross to the off side,
   // the blade extends back toward the ball and the shoulders unwind oppositely.
+  // Paddle demonstration PQJgP2IbuvE, 220–223 s: stride across, kneel,
+  // present the angled face in front of the pad, then let the ball run fine.
+  function paddleKeys({start,target,stance,impact=.15}) {
+    const low=clamp((.65-target[1])/.55,0,1);
+    const bd=unit([-.70,-.20-.85*low,.57]), h=add(target,scale(bd,-(.60+.25*low)));
+    const pel=[h[0]+.19,clamp(h[1]-.04,.43,.60),h[2]-.33];
+    const contact={...start,pel,hy:-44,sy:-39,lean:32,side:2,h,bd,
+      fr:add(pel,[-.14,-pel[1],.31]),bk:add(pel,[.21,-pel[1],-.44]),
+      kpL:[-.2,.1,1],kpR:[.1,-.9,1],epL:[.8,-.45,.15],epR:[-.8,-.6,0],rearFootPitch:.62};
+    const set={...contact,pel:add(pel,[.02,.09,-.05]),lean:27,
+      h:add(h,[-.04,.13,-.10]),bd:unit([-.68,-.20,.70])};
+    const guide={...contact,sy:-32,h:add(h,[.075,.025,.045]),bd:unit([-.68,-.25,.69])};
+    const hold={...guide,h:add(guide.h,[.035,.035,0]),bd:unit([-.56,-.20,.80])};
+    return [[0,start],[impact*.50,set],[impact,contact],[impact+.10,guide],
+      [impact+.24,hold],[impact+.54,hold],[impact+1.10,stance]];
+  }
   function sweepKeys(args) { return lowSweepKeys(args,false); }
   function rsweepKeys(args) { return lowSweepKeys(args,true); }
   function lowSweepKeys({start,target,stance,loft=false,impact=.15},reverse) {
@@ -628,6 +644,6 @@
     result.pose.fr=authored.fr;result.pose.kpL=authored.kpL;
     return result;
   }
-  const api={sampleUpperCut,prepare,sample,contactTime,sampleDrive,coverDriveKeys,driveKeys,cutKeys,pullKeys,hookKeys,ucutKeys,sweepKeys,rsweepKeys,lcutKeys,glanceKeys,flickKeys,bdriveKeys,fdefKeys,bdefKeys,pushKeys,slogKeys,sampleCut,cutWidth,pathWidth,sweepWidth,blendDirection:slerp};root.CricketMotion=api;
+  const api={sampleUpperCut,prepare,sample,contactTime,sampleDrive,coverDriveKeys,driveKeys,cutKeys,pullKeys,hookKeys,ucutKeys,paddleKeys,sweepKeys,rsweepKeys,lcutKeys,glanceKeys,flickKeys,bdriveKeys,fdefKeys,bdefKeys,pushKeys,slogKeys,sampleCut,cutWidth,pathWidth,sweepWidth,blendDirection:slerp};root.CricketMotion=api;
   if(typeof module!=='undefined')module.exports=api;
 })(typeof window==='undefined'?globalThis:window);

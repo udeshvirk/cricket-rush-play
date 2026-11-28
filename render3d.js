@@ -468,7 +468,7 @@ window.Cricket3D = function (G) {
     return g;
   })();
   // A batting pad, in the space placeEq uses: the knee at 0, the ankle 0.44 below, the front of the leg along +z.
-  const PADGEAR = LOOK_PLAYER && window.CricketEquipmentPreview ? window.CricketEquipmentPreview.pad(T) : (() => {
+  function battingPad(fitted = false) {
     const V = (x, y, z) => new T.Vector3(x, y, z), parts = [], straps = [];
     const arc = (y, rx, rz, a0, a1, n, dz = 0) => { const p = []; for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; p.push(V(Math.sin(a) * rx, y, dz + Math.cos(a) * rz - 0.012)); } return p; };
     // the shell that wraps the front of the shin, flaring over the boot
@@ -486,12 +486,36 @@ window.Cricket3D = function (G) {
     for (const a of [-0.55, 0, 0.55]) { const p = []; for (let i = 0; i <= 5; i++) { const t = i / 5; p.push(V(Math.sin(a) * 0.08 * (1 - 0.12 * t), 0.06 + 0.125 * t, Math.cos(a) * 0.083 * (1 - 0.1 * t) - 0.012)); } parts.push(gTube(p, 0.014, 8, 6)); }
     // a wing on each side of the knee, and the straps round the back
     for (const sgn of [-1, 1]) { const w = new T.SphereGeometry(1, 10, 8); w.scale(0.012, 0.06, 0.034); w.translate(sgn * 0.08, -0.005, -0.004); parts.push(w); }
-    for (const y of [-0.11, -0.26, -0.41]) straps.push(gTube(arc(y, 0.058 - (y < -0.3 ? 0.008 : 0), 0.062, 1.7, 2 * Math.PI - 1.7, 12), 0.0065, 14, 5));
+    for (const y of [-0.11, -0.26, -0.41]) {
+      const rx = .058 - (y < -.3 ? .008 : 0);
+      if (fitted) {
+        // Flat webbing wraps the calf and meets the shell on either side.
+        const edge = h => arc(h, rx + .009, .071, 1.52, 2 * Math.PI - 1.52, 16);
+        straps.push(gLoft([edge(y - .013), edge(y + .013)], false));
+      } else straps.push(gTube(arc(y, rx, .062, 1.7, 2 * Math.PI - 1.7, 12), .0065, 14, 5));
+    }
     const g = new T.Group(), M = (geo, m) => { const x = new T.Mesh(geo, m); x.castShadow = true; x.frustumCulled = false; x.scale.set(1.26, 1, 1.34); g.add(x); };   // wide enough to cover the player's trouser leg
     M3.pads.side = T.DoubleSide; M3.pads.roughness = 0.7; M3.pads.color.set(0xdcd9cf);   // off-white, so the floodlights don't burn it out
-    M(gMerge(parts), M3.pads); M(gMerge(straps), new T.MeshStandardMaterial({ color: 0xd9d6cc, roughness: 0.9 }));
+    const shellMesh = gMerge(parts);
+    if (fitted) {
+      const pos = shellMesh.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+        // Round off the crown above the knee roll and scoop the lower
+        // side edges up around the boot, leaving the centre over the laces.
+        const wing = Math.min(1, Math.abs(x) / .07);
+        const ankle = T.MathUtils.smoothstep(-y, .365, .475);
+        pos.setXYZ(i, x, y - Math.max(0, y - .045) * (.23 + .29 * wing * wing)
+          + ankle * (.009 + .024 * wing * wing), z + .008 * ankle);
+      }
+      shellMesh.computeVertexNormals();
+    }
+    M(shellMesh, M3.pads);
+    M(gMerge(straps), new T.MeshStandardMaterial({ color: fitted ? 0x596273 : 0xd9d6cc, roughness: .9, side: fitted ? T.DoubleSide : T.FrontSide }));
     return g;
-  })();
+  }
+  const PADGEAR = LOOK_PLAYER && window.CricketEquipmentPreview ? window.CricketEquipmentPreview.pad(T) : battingPad();
+  let openerPads;
 
   // ---------------------------------------------------------------- helmet and cap, built in code to fit the head
   // Coordinates are metres from the head bone (the top of the neck), +z = the face. Brow 0.135 up, eyes 0.10, nose tip 0.06 (0.146 out),
@@ -1267,6 +1291,56 @@ window.Cricket3D = function (G) {
     obj.matrix.setPosition(at); obj.matrixWorldNeedsUpdate = true;
   }
 
+  // One opening batter in the local comparison. Shape the shirt and its printed
+  // chest/back panels in bind space so they deform together through the drive.
+  const openerFit = renderQuery.get('batterFit') === '1';
+  const fittedShirts = new WeakMap();
+  function fitShirt(source, shadeJersey) {
+    if (fittedShirts.has(source)) return fittedShirts.get(source);
+    const geometry = source.clone(), positions = geometry.attributes.position;
+    const smooth = T.MathUtils.smoothstep;
+    const colors = shadeJersey ? new Float32Array(positions.count * 3) : null;
+    for (let i = 0; i < positions.count; i++) {
+      const x = positions.getX(i), y = positions.getY(i), z = positions.getZ(i);
+      const torso = (1 - smooth(Math.abs(x), .23, .35)) * smooth(y, .89, 1.01) * (1 - smooth(y, 1.43, 1.52));
+      const chest = smooth(y, 1.10, 1.35);
+      // Pull the loose shirt in at the hips and give the ribcage depth
+      // in profile, where the bowler-end camera sees most of the batter.
+      positions.setXYZ(i, x * (1 + torso * (.34 * chest - .14)), y,
+        z * (1 + torso * (.37 * chest - .13)));
+      if (colors) {
+        // A dark shoulder yoke continues into the sleeve cap. Fade before
+        // the collar and cuff so the face, arms and team trim retain their colour.
+        const side = Math.abs(x);
+        const cap = smooth(side, .09, .16) * (1 - smooth(side, .26, .32));
+        const yoke = smooth(y, 1.32, 1.36) * (1 - smooth(y, 1.48, 1.53));
+        const shade = 1 - .72 * cap * yoke;
+        colors.fill(shade, i * 3, i * 3 + 3);
+      }
+    }
+    if (colors) geometry.setAttribute('color', new T.BufferAttribute(colors, 3));
+    geometry.computeBoundingSphere();
+    fittedShirts.set(source, geometry);
+    return geometry;
+  }
+
+  function makeForearmGuard() {
+    const guard = new T.Group();
+    guard.matrixAutoUpdate = false;
+    const rings = [[.032,.041], [.046,.051], [.090,.052], [.165,.044], [.188,.037]];
+    const shell = rings.map(([down, radius]) => Array.from({length: 15}, (_, i) => {
+      const angle = (i / 14 - .5) * 3.6;
+      return new T.Vector3(Math.sin(angle) * radius, -down, Math.cos(angle) * (radius + .009));
+    }));
+    guard.add(new T.Mesh(gLoft(shell, false), M3.pads));
+    for (const [down, radius] of [[.062,.050],[.159,.043]]) {
+      const band = new T.Mesh(new T.CylinderGeometry(radius, radius - .001, .016, 18, 1, true), M3.grip);
+      band.position.y = -down;
+      guard.add(band);
+    }
+    return guard;
+  }
+
   class Person {
     constructor() {
       const g = this.g = new T.Group(); scene.add(g);
@@ -1365,6 +1439,7 @@ window.Cricket3D = function (G) {
       this.kit = null; this.isProduction = !!useProduction; this.rig = useProduction ? PRODUCTION.rig : RIG;
       this.gripRel = {}; // A cached glove frame belongs to the previously attached skeleton.
       const root = T.SkeletonUtils.clone(useProduction ? PRODUCTION.template : RIG.tmpl);
+      this.openerFit = false;
       this.model = root; this.bones = {}; this.parts = {};
       root.traverse(o => {
         if (o.isBone) this.bones[o.name] = o;
@@ -1553,6 +1628,19 @@ window.Cricket3D = function (G) {
       if (gripQ) for (const s of Object.keys(gripQ)) {   // wrists turned to their gloves
         B['hand_' + s].quaternion.copy(qb.copy(W['lowerarm_' + s]).invert()).multiply(gripQ[s]); W['hand_' + s].copy(gripQ[s]);
       }
+      if (this.openerFit && !this.armGuard) {
+        this.armGuard = makeForearmGuard();
+        this.g.add(this.armGuard);
+      }
+      if (this.armGuard) {
+        this.armGuard.visible = !!(this.openerFit && pr.gloves && !pr.bare);
+        if (this.armGuard.visible) {
+          const s = pr.mirrored ? 'r' : 'l', elbow = pos['lowerarm_' + s];
+          const down = v1.subVectors(pos['hand_' + s], elbow);
+          const outer = v2.subVectors(elbow, pos.spine_03);
+          placeEq(this.armGuard, elbow, down, outer, down.length() / .27);
+        }
+      }
       const gloved3 = !!(G3 && pr.team === 'bat' && pr.gloves);
       if (this.gripG) {
         for (const s of ['l', 'r']) {
@@ -1624,7 +1712,8 @@ window.Cricket3D = function (G) {
       this.helmet.scale.set(fittedHeadgear ? .94 : 1,fittedHeadgear ? .80 : 1,fittedHeadgear ? .90 : 1);
       // a bigger head only where the head is small on screen (the long-lens match camera, under about 3% of the screen's height),
       // true size in close-ups (the toss, wicket close-ups, replays: over about 6%), so close up they don't look like bobbleheads
-      const headK = headSizeAt(pos.head);
+      const distanceScale = headSizeAt(pos.head);
+      const headK = this.openerFit ? 1 + (distanceScale - 1) * .45 : distanceScale;
       // his own head shape (width, length, depth: bone x, y, z); the helmet, cap or hat grows to the largest so nothing pokes through
       const hs = renderQuery.get('hshape') ? renderQuery.get('hshape').split(',').map(Number) : (ownOf(pr)?.shape ? [ownOf(pr).shape[0], ownOf(pr).shape[1], 1] : playerLook(pr.pid || '').shape);
       B.head.scale.set(headK * hs[0], headK * hs[1], headK * hs[2]); this.headG.scale.setScalar(headK * Math.max(1, hs[0], hs[1], hs[2]));
@@ -1692,6 +1781,22 @@ window.Cricket3D = function (G) {
     set(pr) {
       const j = pr.j, bat = pr.team === 'bat', keeper = !!pr.keeper;
       if (this.model) this.model.visible = true;
+      if (openerFit && this.parts?.RB_Body) {
+        const opener = G.inn?.bat?.players[0];
+        const fitted = !!(bat && opener && pr.pid === (opener.key || opener.name));
+        if (this.openerFit !== fitted) {
+          for (const key of ['RB_Body', 'RB_Chest', 'RB_Back']) {
+            const part = this.parts[key];
+            part.userData.originalGeometry ??= part.geometry;
+            part.geometry = fitted ? fitShirt(part.userData.originalGeometry, key === 'RB_Body') : part.userData.originalGeometry;
+            if (key === 'RB_Body') {
+              part.material.vertexColors = fitted;
+              part.material.needsUpdate = true;
+            }
+          }
+          this.openerFit = fitted;
+        }
+      }
       const ump = !!pr.umpire, shirt = bat ? M3.batShirt : ump ? M3.umpShirt : M3.bowlShirt, pants = bat ? M3.batPants : ump ? M3.umpPants : M3.bowlPants;
       const hs = hash(pr.pid || 'x'), skin = SKIN[hs % SKIN.length];
       this.g.visible = true;
@@ -1750,6 +1855,15 @@ window.Cricket3D = function (G) {
       if (this.model) this.fit(pr, fwd, side, hs, shirt, pants);
       const hasBat = !!pr.bat, eq = !!this.eqBat;
       if (eq) {   // the code-built bat and pads replace the simple shapes
+        if (openerFit && !!this.eqPadFit !== !!this.openerFit) {
+          if (this.openerFit && !openerPads) openerPads = battingPad(true);
+          const pad = this.openerFit ? openerPads : PADGEAR;
+          for (const leg of [this.eqPadL, this.eqPadR]) {
+            leg.clear();
+            for (const piece of pad.children) leg.add(piece.clone());
+          }
+          this.eqPadFit = this.openerFit;
+        }
         this.padL.visible = this.padR.visible = false;
         for (const [o, knee, foot, sx] of [[this.eqPadL, j.kneeL, j.footL, 1], [this.eqPadR, j.kneeR, j.footR, -1]]) {
           o.visible = padded;
@@ -1757,7 +1871,7 @@ window.Cricket3D = function (G) {
           const kn = new T.Vector3(knee[0], knee[1], knee[2]), an = new T.Vector3(foot[0], foot[1] + 0.07, foot[2]);
           const down = an.clone().sub(kn), L = down.length();
           const sf = this.wq && this.wq[sx > 0 ? 'calf_l' : 'calf_r'] ? v2.set(0, 0, 1).applyQuaternion(this.wq[sx > 0 ? 'calf_l' : 'calf_r']).clone() : fwd;
-          placeEq(o, kn, down, sf, L / 0.44, 1);
+          placeEq(o, kn, down, sf, L / 0.44, this.openerFit ? .92 : 1);
         }
         this.eqBat.visible = hasBat;
         if (hasBat && this.bat3) {   // the grip's one bat transform

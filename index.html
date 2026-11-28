@@ -2174,8 +2174,7 @@ function strokeFamily(a, loft, defend, push, short, spin, at, playerStroke = fal
     if (loft) return a < 120 ? 'slog' : 'glance';   // fine: lifted off the pads over fine leg (the glance keys, lofted)
     return 'flick'; // side-only leg aim stays a standing stroke
   }
-  // fine on the off side: the late cut. The reverse sweep (rsweep, spin) is switched off for now: the owner found it
-  // looked wrong after several attempts (November 2026); its keys are still in motion.js
+  // Grounded shots behind point use the late cut.
   if (a < -115 && a >= -155 && !loft) return 'lcut';
   // Use the filmed cut throughout the square off-side sector for player strokes.
   if (playerStroke && a >= -100 && a < -75) return 'cut';
@@ -4039,15 +4038,19 @@ function swing(loft, pressT, aim, w, you = false) {   // you: the player's own s
   if (aim && aim.defend) w *= 1.35;                                                     // a block is easier to time
   // each stroke's own difficulty: the reverse sweep and hook are hard to time, the late cut and glance just use the pace
   const spinB = !!(BOWL_TYPES[ball.type] || {}).turn, isDef = !!(aim && aim.defend);
-  const stokesReverse = you && M?.mode === 'nets' && aimed && loft && !isDef && spinB && ball.length === 'Full' &&
+  const aimedAttack = you && aimed && !isDef;
+  const stokesReverse = aimedAttack && loft && spinB && ball.length === 'Full' &&
     atBat[1] <= .7 && aim.angle >= -155 && aim.angle <= -115;
-  const scoop = you && M?.mode === 'nets' && aimed && !isDef && Math.abs(wrapA(aim.angle)) >= 165 &&
+  const scoop = aimedAttack && Math.abs(wrapA(aim.angle)) >= 165 &&
     ball.length === 'Full' && atBat[1] <= .7;
-  const helicopter = you && M?.mode === 'nets' && aimed && loft && !isDef && ball.length === 'Yorker' &&
+  const helicopter = aimedAttack && loft && ball.length === 'Yorker' &&
     aim.angle >= 35 && aim.angle <= 75 && atBat[0] >= -.12 && atBat[0] <= .35 && atBat[1] <= .38;
   let preFam = null;
-  if (you && M?.mode === 'nets' && ball.charge && spinB && ball.length === 'Good length' &&
-      aimed && loft && !isDef && aim.angle >= -65 && aim.angle <= -25) preFam = 'insideOut';
+  if (aimedAttack && ball.charge && spinB && ball.length === 'Good length' &&
+      loft && aim.angle >= -65 && aim.angle <= -25) preFam = 'insideOut';
+  else if (aimedAttack && spinB && ball.length === 'Full' && atBat[1] <= .80 &&
+           !loft && aim.angle >= 75 && aim.angle < 165)
+    preFam = aim.angle >= 120 ? 'paddle' : 'sweep';
   else if (helicopter) preFam = 'helicopter';
   else if (scoop) preFam = 'scoop';
   else if (stokesReverse) preFam = 'rsweep';
@@ -4077,7 +4080,8 @@ function swing(loft, pressT, aim, w, you = false) {   // you: the player's own s
     angle = aimed ? aim.angle + clamp(-dtTiming / okW, -1, 1) * 12 + rand(-6, 6) : clamp(-dtTiming / okW, -1, 1) * 35 + rand(-15, 15);
   } else if (aimed) {
     // your aim, pushed a little toward the leg side if early and the off side if late
-    angle = aim.angle + clamp(-dtTiming / okW, -1, 1) * 22 + rand(-5, 5);
+    const drift = clamp(-dtTiming / okW, -1, 1) * 22 + rand(-5, 5);
+    angle = aim.angle + (you && kind === 'hit' ? clamp(drift, -16, 16) : drift);
   } else {
     angle = clamp(-dtTiming / okW, -1.3, 1.3) * 70 + clamp(-atBat[0] * 55, -28, 28) + rand(-8, 8);
     if (ball.short && dtTiming < 0) angle += 22;          // pull or hook
@@ -4130,7 +4134,7 @@ const WRONG_LINE = { off: -0.50, leg: 0.45, missGap: 0.10 };
 function shotReach(family, at, intent) {
   const drive = family === 'drive' || family === 'bdrive';
   const offSide = ['cut', 'lcut', 'ucut', 'rsweep', 'insideOut'].includes(family) || (drive && intent < -10);
-  const legSide = ['flick', 'glance', 'slog', 'pull', 'hook', 'sweep'].includes(family) || (drive && intent > 10);
+  const legSide = ['flick', 'glance', 'slog', 'pull', 'hook', 'sweep', 'paddle'].includes(family) || (drive && intent > 10);
   const [x, y] = at;
   if (offSide && x > WRONG_LINE.leg)
     return { target: [WRONG_LINE.leg - WRONG_LINE.missGap, y, 1.02], reachable: false };
@@ -4162,7 +4166,7 @@ function shotName(a, loft, defend, push, family) {
   if (family === 'sweep') return loft ? 'Lofted sweep' : 'Sweep';
   if (family === 'rsweep' && loft) return 'Lofted reverse sweep';
   if (family === 'glance' && loft) return 'Flick over fine leg';
-  const names={insideOut:'Inside-out loft',helicopter:'Helicopter',scoop:'Scoop',rsweep:'Reverse sweep',glance:'Leg glance',lcut:'Late cut',ucut:'Upper cut',
+  const names={paddle:'Paddle sweep',insideOut:'Inside-out loft',helicopter:'Helicopter',scoop:'Scoop',rsweep:'Reverse sweep',glance:'Leg glance',lcut:'Late cut',ucut:'Upper cut',
     cut:'Square cut',pull:'Pull',hook:'Hook',bdrive:'Back-foot drive',flick:'Flick',slog:'Slog',
     fdef:'Forward defence',bdef:'Back-foot defence',push:'Push'};
   if(names[family]) return loft && ['pull','hook','bdrive','flick'].includes(family)
@@ -4184,6 +4188,7 @@ function showTiming(dtT, kind, shot, w) {
   if (kind === 'miss' && ball?.swing?.reachable === false) { txt = 'Out of reach'; col = 'var(--red)'; }
   else if (kind === 'miss' && a > 0.2 * w) { txt = dtT < 0 ? 'Way too early' : 'Too late'; col = 'var(--red)'; }
   else if (kind === 'miss') { txt = 'Missed'; col = 'var(--red)'; }
+  else if (kind === 'edge') { txt = dtT < 0 ? 'Early edge' : 'Late edge'; col = 'var(--amber)'; }
   else if (a < 0.03 * w) { txt = 'Perfect'; col = 'var(--teal)'; }
   else if (dtT < 0) { txt = 'Early'; col = 'var(--amber)'; }
   else { txt = 'Late'; col = 'var(--amber)'; }
@@ -4507,7 +4512,12 @@ function strike() {
   } else if (d.kind === 'hit') {
     angle = d.angle;
     const pace = (ball.kmh / 3.6 - 35) * 0.25;
-    if (d.fam === 'scoop') {
+    if (d.fam === 'paddle') {
+      angle = lerp(157, clamp(d.angle,115,175), .60);
+      v = (7 + 7 * d.q) * pw + .12 * (ball.kmh / 3.6 - 22);
+      elev = 1;
+      airborne = false;
+    } else if (d.fam === 'scoop') {
       v = (13 + 14 * d.q) * pw + pace + rand(-1, 1);
       elev = lerp(57, 36, d.q);
       airborne = true;
@@ -6169,6 +6179,9 @@ function netsStrokeHint() {
     return;
   }
   hint.textContent = touch ? 'Scoop · Swipe straight up.' : 'Scoop · Hold ↑ and press S.';
+  if (picks.netsStyle.value !== 'F') hint.textContent += touch
+    ? '  Paddle sweep · Select Shot and swipe ' + (left ? 'up-left' : 'up-right') + '. Swipe sideways to leg for a full sweep.'
+    : '  Paddle sweep · Hold ↑ + ' + (left ? '←' : '→') + ' and press S. Hold only ' + (left ? '←' : '→') + ' with S for a full sweep.';
   if (picks.netsStyle.value !== 'F') hint.textContent += '  Lofted reverse sweep · ' + (touch
     ? 'Select Loft and swipe ' + (left ? 'up-right' : 'up-left') + ' on the ball.'
     : 'Hold ↑ + ' + (left ? '→' : '←') + ' and press Shift + S.');
@@ -6413,7 +6426,7 @@ function update(dt) {
 
   if (phase === 'flight') {
     ball.t += dt;
-    if (pending && ball.t >= pending.t + SWIPE_WINDOW) finishPress(pending.keys ? keyAim() : null);
+    if (pending && ball.t >= pending.t + SWIPE_WINDOW) finishPress(pending.keys ? keyAim() : pending.dir);
     if (ball.charge) ball.charge.t += dt;
     if (wantCharge && !ball.charge) { wantCharge = false; applyCharge(); }
     if (ball.aiPress && !ball.swing && ball.t >= ball.aiPress.t) { const a = ball.aiPress; swing(a.loft, a.t, a.aim, 1); }
@@ -8051,6 +8064,7 @@ function recFrame(dt) {
 function recMark(o, line) {
   rec.end = rec.t;
   rec.kind = o.out ? (o.out.how === 'caught' ? 'catch' : o.out.how === 'run out' ? 'runout' : 'stumps') : o.runs === 6 ? 'six' : /^Dropped/.test(line) ? 'catch' : null;
+  if (!rec.kind && o.runs === 4 && rec.hit !== null && ball?.decision?.kind === 'hit' && ball.swing && isGroundCover(ball.swing)) rec.kind = 'cover';
 }
 const canReplay = () => replaysOn && R3D && R3D.active() && !quiet && !ff && !M.autoplay && rec.frames.length > 20;
 function replayWindow(requireFinish = false) {
@@ -8115,7 +8129,10 @@ function replayPose() {
 }
 function replayCam() {
   const bp = RP.ball;
-  if (RP.kind === 'runout') {   // high from the bowler's end, down the pitch with the batter, then the same low side-on view as live
+  if (RP.kind === 'cover' && RP.t <= RP.pivot + .55) {
+    // Render mirrors these batter-relative coordinates for a left-hander.
+    cam.pos = [-3.5, 1.12, 4.8]; cam.tgt = [.23, .98, 1.02]; cam.fov = 32;
+  } else if (RP.kind === 'runout') {   // high from the bowler's end, down the pitch with the batter, then the same low side-on view as live
     const a = RP.t < RP.pivot - 0.8 ? { pos: [1.2, 3.6, 25], tgt: [-0.5, 0.7, 3], fov: 24 } : RO_CAM;
     cam.pos = a.pos.slice(); cam.tgt = a.tgt.slice(); cam.fov = a.fov;
   } else if (RP.t < RP.pivot + (RP.kind === 'stumps' ? -0.32 : 0.32)) {
@@ -8184,14 +8201,14 @@ function update0(dt) {   // behind the menus: slow drift of the camera (the toss
 // is the moment of the touch); the direction is where you swipe, in screen terms: down = straight back past the bowler,
 // left = off side, right = leg side, up = behind you. A tap with no swipe lets the timing choose. Keyboard: held arrows + Space.
 let pending = null;
-const SLIDE = 18;            // pixels of movement that count as a swipe
+const SLIDE = 9;            // pixels of movement that count as a swipe
 const SWIPE_WINDOW = 0.14;   // seconds after the touch to make the swipe
 function canvasXY(e) { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
 function press(e) {
   audio();
   if (paused || !inn || !inn.userBats) return;
   if (phase !== 'flight' || !ball || ball.swing || ball.left || pending) return;
-  pending = { t: ball.t, x: e ? e.clientX : 0, y: e ? e.clientY : 0, id: e ? e.pointerId : null, keys: !e };
+  pending = { t: ball.t, x: e ? e.clientX : 0, y: e ? e.clientY : 0, id: e ? e.pointerId : null, keys: !e, dir: null };
   if (e) { const [x, y] = canvasXY(e); swipeVis = { x0: x, y0: y, x1: x, y1: y, t0: clock, label: '', keys: false }; }
   else {
     swipeVis = { keys: true, t0: clock, label: '' };
@@ -8253,13 +8270,16 @@ function keyAim() {
 function onMove(e) {
   if (!pending || pending.keys || e.pointerId !== pending.id) return;
   if (swipeVis) { const [x, y] = canvasXY(e); swipeVis.x1 = x; swipeVis.y1 = y; }
-  const a = slideAim(e.clientX - pending.x, e.clientY - pending.y);
-  if (a !== null) finishPress(a);
+  const dx = e.clientX - pending.x, dy = e.clientY - pending.y;
+  pending.dir = slideAim(dx, dy);
+  // Let the gesture develop before committing its direction mid-swipe.
+  if (Math.hypot(dx, dy) >= 36) finishPress(pending.dir);
 }
 function onUp(e) {
   if (!pending || pending.keys || e.pointerId !== pending.id) return;
   // A quick drag can deliver its first displacement with the release event.
-  finishPress(e.type === 'pointerup' ? slideAim(e.clientX - pending.x, e.clientY - pending.y) : null);
+  if (e.type === 'pointercancel') { pending = null; swipeVis = null; return; }
+  finishPress(slideAim(e.clientX - pending.x, e.clientY - pending.y));
 }
 for (const b of $('shotSel').querySelectorAll('button')) {
   b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); audio(); setShot(b.dataset.k); });
