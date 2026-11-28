@@ -1208,6 +1208,7 @@
 <script src="player-production/stance-recordings.js"></script>
 <script src="player-production/sweep-recordings.js"></script>
 <script src="player-production/stokes-recordings.js"></script>
+<script src="player-production/brook-recordings.js"></script>
 <script src="player-production/walkoff-recordings.js"></script>
 <script src="player-production/diagnostics.js"></script>
 <script src="commentary.js"></script>
@@ -2186,7 +2187,7 @@ function strokeFamily(a, loft, defend, push, short, spin, at, playerStroke = fal
 function strokeKeys(sw) {   // every stroke family has staged key poses in player-production/motion.js
   // (keep the random stream as it was, so deliveries play out the same)
   if (!sw.vary) sw.vary = { l: rand(-4, 4), y: rand(-7, 7), h: [rand(-0.08, 0.08), rand(-0.1, 0.1), rand(-0.06, 0.06)], f: rand(-0.03, 0.05), hold: rand(0.8, 1.3) };
-  const family = isGroundCover(sw) ? 'coverDrive' : sw.fam;
+  const family = isGroundCover(sw) ? 'coverDrive' : sw.fam === 'scoop' ? 'sweep' : sw.fam;
   return CricketMotion[family + 'Keys']({ start: sw.visualStart || PREPARE, target: sw.target, aim: sw.intent, loft: sw.loft, short: sw.short, stance: styled(STANCE, batStyle()), impact: SWING_LAG });
 }
 // The bat must never pass through the batter. Body parts as capsules (from, to, radius in metres, with pads, shirt and
@@ -2507,7 +2508,7 @@ function recordingFor(sw) {
 }
 function recordedContactPlacement(sw, clip) {
   const lever = clip.contactLever ?? 0.48;
-  if (sw.stokesReverse) {
+  if (sw.stokesReverse || sw.fam === 'scoop') {
     // Let a lower ball meet the blade nearer the toe while the knee is planted.
     const hit = clipFrame(clip, clip.contact), gripY = (hit.handL[1] + hit.handR[1]) / 2;
     return { lever: clamp((gripY - sw.target[1]) / -hit.bd[1], lever, .72) };
@@ -4038,7 +4039,12 @@ function swing(loft, pressT, aim, w, you = false) {   // you: the player's own s
   const spinB = !!(BOWL_TYPES[ball.type] || {}).turn, isDef = !!(aim && aim.defend);
   const stokesReverse = you && M?.mode === 'nets' && aimed && loft && !isDef && spinB && ball.length === 'Full' &&
     atBat[1] <= .7 && aim.angle >= -155 && aim.angle <= -115;
-  const preFam = stokesReverse ? 'rsweep' : aimed ? strokeFamily(wrapA(aim.angle), loft && !isDef, isDef, isDef, ball.short, spinB, atBat, you) : null;
+  const scoop = you && M?.mode === 'nets' && aimed && !isDef && Math.abs(wrapA(aim.angle)) >= 165 &&
+    ball.length === 'Full' && atBat[1] <= .7;
+  let preFam = null;
+  if (scoop) preFam = 'scoop';
+  else if (stokesReverse) preFam = 'rsweep';
+  else if (aimed) preFam = strokeFamily(wrapA(aim.angle), loft && !isDef, isDef, isDef, ball.short, spinB, atBat, you);
   w *= { rsweep: 0.85, hook: 0.9, lcut: 1.1, glance: loft ? 1 : 1.1 }[preFam] || 1;
   if (you && !isDef && (M.mode === 'match' || M.mode === 'nets') && M.diff.plan > 0 && ball.length === 'Good length' && !SLOWER.has(ball.vname)) {
     w *= M.diff.plan === 2 ? .81 : .88;
@@ -4075,7 +4081,7 @@ function swing(loft, pressT, aim, w, you = false) {   // you: the player's own s
   ball.swing.intent = wrapA(aimed ? aim.angle : angle);
   ball.swing.push = !!(aim && aim.defend && aimed);
   ball.swing.fam = preFam || strokeFamily(ball.swing.intent, ball.swing.loft, ball.swing.defend, ball.swing.push, ball.short, spinB, atBat, you);
-  if (ball.swing.fam === 'ucut') ball.swing.loft = true;   // an upper cut always goes in the air
+  if (ball.swing.fam === 'ucut' || scoop) ball.swing.loft = true;
   ball.swing.short = !!ball.short;   // (looks: up on the toes for the upper cut to a short ball)
   const reach = shotReach(ball.swing.fam, atBat, ball.swing.intent);
   ball.swing.target = reach.target;
@@ -4149,7 +4155,7 @@ function shotName(a, loft, defend, push, family) {
   if (family === 'sweep') return loft ? 'Lofted sweep' : 'Sweep';
   if (family === 'rsweep' && loft) return 'Lofted reverse sweep';
   if (family === 'glance' && loft) return 'Flick over fine leg';
-  const names={rsweep:'Reverse sweep',glance:'Leg glance',lcut:'Late cut',ucut:'Upper cut',
+  const names={scoop:'Scoop',rsweep:'Reverse sweep',glance:'Leg glance',lcut:'Late cut',ucut:'Upper cut',
     cut:'Square cut',pull:'Pull',hook:'Hook',bdrive:'Back-foot drive',flick:'Flick',slog:'Slog',
     fdef:'Forward defence',bdef:'Back-foot defence',push:'Push'};
   if(names[family]) return loft && ['pull','hook','bdrive','flick'].includes(family)
@@ -4494,7 +4500,11 @@ function strike() {
   } else if (d.kind === 'hit') {
     angle = d.angle;
     const pace = (ball.kmh / 3.6 - 35) * 0.25;
-    if (d.fam === 'ucut') {   // over the slips with the ball's own pace: a four or a one-bounce four, or a catch at third man
+    if (d.fam === 'scoop') {
+      v = (13 + 14 * d.q) * pw + pace + rand(-1, 1);
+      elev = lerp(57, 36, d.q);
+      airborne = true;
+    } else if (d.fam === 'ucut') {   // over the slips with the ball's own pace: a four or a one-bounce four, or a catch at third man
       if (d.q < 0.3) { v = rand(13, 18); elev = rand(48, 62); }
       else { v = (15 + 15 * d.q) * pw + pace + rand(-1.2, 1.2); elev = rand(28, 40); }
       airborne = true;
@@ -6135,9 +6145,10 @@ const NETS_LENGTHS = { Yorker: [.9, 1.5], Full: [2.2, 3.6], 'Good length': [4.3,
 const NETS_CYCLE = Object.keys(NETS_LENGTHS);
 function netsStrokeHint() {
   const picks = $('netsOptions').elements, hint = $('netsStrokeHint');
-  hint.hidden = picks.netsStyle.value === 'F' || picks.netsLength.value !== 'Full';
+  hint.hidden = picks.netsLength.value !== 'Full';
   const left = picks.netsHand.value === 'left';
-  hint.textContent = 'Lofted reverse sweep · ' + (touch
+  hint.textContent = touch ? 'Scoop · Swipe straight up.' : 'Scoop · Hold ↑ and press S.';
+  if (picks.netsStyle.value !== 'F') hint.textContent += '  Lofted reverse sweep · ' + (touch
     ? 'Select Loft and swipe ' + (left ? 'up-right' : 'up-left') + ' on the ball.'
     : 'Hold ↑ + ' + (left ? '→' : '←') + ' and press Shift + S.');
 }
